@@ -1,0 +1,11 @@
+work/
+*.log
+*.tmp
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+.ui-feedback/
+test-results/

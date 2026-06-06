@@ -17,6 +17,7 @@ export interface VernierSession {
     devicePixelRatio: number;
   };
   createdAt: string;
+  issueCount: number;
   issues: VernierIssue[];
   fullPageScreenshotName: string;
   fullPageScreenshotDataUrl: string;

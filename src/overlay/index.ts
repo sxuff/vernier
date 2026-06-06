@@ -11,6 +11,7 @@ export function startVernierOverlay(): void {
 
   const overlay = createOverlayRoot();
   const session = createSessionController(overlay.noteInput);
+  let selectedIssueId: number | null = null;
   const annotation = createAnnotationLayer(overlay.root, {
     onDraft(measurement) {
       renderMeasurementPanel(overlay.panel, measurement);
@@ -48,12 +49,69 @@ export function startVernierOverlay(): void {
 
         annotation.clear();
         picker.clear();
-        renderIssueList(overlay.issueList, session.getIssues());
+        selectedIssueId = issue.id;
+        renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
         overlay.status.textContent = `Added issue ${issue.id}`;
       })
       .catch((error: unknown) => {
         overlay.status.textContent = error instanceof Error ? error.message : "Add failed";
       });
+  });
+
+  overlay.issueList.addEventListener("click", (event) => {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const issueId = Number(target.dataset.vernierIssueId);
+    const issue = session.getIssues().find((candidate) => candidate.id === issueId);
+
+    if (!issue) {
+      return;
+    }
+
+    selectedIssueId = issue.id;
+    overlay.noteInput.value = issue.note;
+    renderMeasurementPanel(overlay.panel, issue.measured);
+    renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    overlay.status.textContent = `Selected issue ${issue.id}`;
+  });
+
+  overlay.saveIssueButton.addEventListener("click", () => {
+    if (selectedIssueId === null) {
+      overlay.status.textContent = "Select an issue first";
+      return;
+    }
+
+    const issue = session.updateIssueNote(selectedIssueId, overlay.noteInput.value);
+    overlay.status.textContent = issue ? `Saved issue ${issue.id}` : "Selected issue no longer exists";
+  });
+
+  overlay.deleteIssueButton.addEventListener("click", () => {
+    if (selectedIssueId === null) {
+      overlay.status.textContent = "Select an issue first";
+      return;
+    }
+
+    session.deleteIssue(selectedIssueId);
+    selectedIssueId = null;
+    overlay.noteInput.value = "";
+    renderMeasurementPanel(overlay.panel, "No issue selected");
+    renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    overlay.status.textContent = "Deleted issue";
+  });
+
+  overlay.clearIssuesButton.addEventListener("click", () => {
+    session.clearIssues();
+    selectedIssueId = null;
+    annotation.clear();
+    picker.clear();
+    overlay.noteInput.value = "";
+    renderMeasurementPanel(overlay.panel, "No queued issues");
+    renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    overlay.status.textContent = "Cleared issues";
   });
 
   overlay.exportButton.addEventListener("click", () => {

@@ -31,6 +31,9 @@ interface SessionController {
   setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void;
   setAnnotationDraft(measured: string): void;
   addDraftIssue(): Promise<SessionIssue | null>;
+  updateIssueNote(id: number, note: string): SessionIssue | null;
+  deleteIssue(id: number): void;
+  clearIssues(): void;
   getIssues(): SessionIssue[];
   exportSession(): Promise<void>;
 }
@@ -87,6 +90,34 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return [...issues];
   }
 
+  function updateIssueNote(id: number, note: string): SessionIssue | null {
+    const issue = issues.find((candidate) => candidate.id === id);
+
+    if (!issue) {
+      return null;
+    }
+
+    issue.note = note.trim();
+
+    return issue;
+  }
+
+  function deleteIssue(id: number): void {
+    const index = issues.findIndex((issue) => issue.id === id);
+
+    if (index < 0) {
+      return;
+    }
+
+    issues.splice(index, 1);
+    renumberIssues();
+  }
+
+  function clearIssues(): void {
+    issues.splice(0, issues.length);
+    draft = null;
+  }
+
   async function exportSession(): Promise<void> {
     if (issues.length === 0) {
       throw new Error("Add at least one issue before export");
@@ -104,6 +135,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
           devicePixelRatio: window.devicePixelRatio
         },
         createdAt: new Date().toISOString(),
+        issueCount: issues.length,
         issues,
         fullPageScreenshotName: "full-page.png",
         fullPageScreenshotDataUrl
@@ -127,6 +159,22 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return canvas.toDataURL("image/png");
   }
 
-  return { setMeasurementDraft, setAnnotationDraft, addDraftIssue, getIssues, exportSession };
-}
+  function renumberIssues(): void {
+    issues.forEach((issue, index) => {
+      const nextId = index + 1;
+      issue.id = nextId;
+      issue.screenshotName = `issue-${nextId}.png`;
+    });
+  }
 
+  return {
+    setMeasurementDraft,
+    setAnnotationDraft,
+    addDraftIssue,
+    updateIssueNote,
+    deleteIssue,
+    clearIssues,
+    getIssues,
+    exportSession
+  };
+}

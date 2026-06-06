@@ -81,6 +81,10 @@ try {
   await page.locator("[data-vernier-note]").fill("align these cards");
   await page.locator("[data-vernier-add-issue]").click();
   await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 2");
+  await page.locator("[data-vernier-issue-id='2']").click();
+  await page.locator("[data-vernier-note]").fill("edited delta note");
+  await page.locator("[data-vernier-save-issue]").click();
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Saved issue 2");
 
   await page.locator("[data-vernier-mode]").selectOption("pen");
   await page.mouse.move(160, 160);
@@ -102,6 +106,9 @@ try {
   }
   if (!sessionMarkdown.includes("Annotation: pen")) {
     throw new Error(`Expected proxy session to contain pen annotation:\n${sessionMarkdown}`);
+  }
+  if (!sessionMarkdown.includes("Issue count: 3") || !sessionMarkdown.includes("edited delta note")) {
+    throw new Error(`Expected cleaner edited session output:\n${sessionMarkdown}`);
   }
 
   console.log("proxy smoke verified");

@@ -28,18 +28,26 @@ export async function writeSession(root: string, session: VernierSession): Promi
 function renderSessionMarkdown(session: VernierSession): string {
   const lines = [
     "# UI Feedback Session - Vernier",
+    `Created: ${session.createdAt}`,
     `Route: ${session.route}`,
     `Viewport: ${session.viewport.width}x${session.viewport.height} @${session.viewport.devicePixelRatio}x`,
+    `Issue count: ${session.issues.length}`,
     ""
   ];
 
   for (const issue of session.issues) {
     lines.push(
-      `## Issue ${issue.id} - ${issue.kind}`,
-      issue.measured,
+      `## Issue ${issue.id} - ${titleCase(issue.kind)}`,
+      "Instruction:",
+      issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+      "",
+      "Measured:",
+      ...formatMeasured(issue.measured),
+      "",
+      "Target:",
       `Selector: ${issue.selector}`,
       `Source: ${issue.source}`,
-      `Note: ${issue.note}`,
+      "",
       `Screenshot: ./screenshots/${issue.screenshotName}`,
       ""
     );
@@ -53,6 +61,14 @@ function renderSessionMarkdown(session: VernierSession): string {
   );
 
   return lines.join("\n");
+}
+
+function formatMeasured(measured: string): string[] {
+  return measured.split("\n").map((line) => `- ${line}`);
+}
+
+function titleCase(value: string): string {
+  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
 async function updateLatestLink(root: string, targetDirectory: string): Promise<void> {
@@ -87,4 +103,3 @@ function slugify(value: string): string {
       .toLowerCase() || "root"
   );
 }
-

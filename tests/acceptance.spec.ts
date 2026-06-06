@@ -41,6 +41,13 @@ test("exports measured UI feedback session", async ({ page }) => {
   await page.locator("[data-vernier-note]").fill("should share left edge with the card above");
   await page.locator("[data-vernier-add-issue]").click();
   await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 1");
+  await page.locator("[data-vernier-issue-id='1']").click();
+  await page.locator("[data-vernier-note]").fill("edited exploratory note");
+  await page.locator("[data-vernier-save-issue]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Saved issue 1");
+  await page.locator("[data-vernier-delete-issue]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Deleted issue");
+  await expect(page.locator("[data-vernier-issue-list]")).toHaveAttribute("data-vernier-issue-count", "0");
 
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
@@ -48,13 +55,23 @@ test("exports measured UI feedback session", async ({ page }) => {
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.locator("[data-vernier-note]").fill("align these card edges");
   await page.locator("[data-vernier-add-issue]").click();
-  await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 2");
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 1");
   await page.locator("[data-vernier-export]").click();
 
   await expect(page.locator("[data-vernier-status]")).toHaveText("Exported");
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
+  const sessionJson = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")) as {
+    issueCount: number;
+    issues: Array<{ note: string }>;
+  };
 
   expect(sessionMarkdown).toContain("12px");
+  expect(sessionMarkdown).toContain("Instruction:");
+  expect(sessionMarkdown).toContain("Measured:");
+  expect(sessionMarkdown).toContain("Issue count: 1");
+  expect(sessionMarkdown).not.toContain("edited exploratory note");
   expect(sessionMarkdown).toMatch(/Source: (src\/.*RevenueCard\.tsx:\d+|unresolved)/);
+  expect(sessionJson.issueCount).toBe(1);
+  expect(sessionJson.issues[0]?.note).toBe("align these card edges");
 });

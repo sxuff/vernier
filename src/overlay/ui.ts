@@ -6,6 +6,9 @@ export interface OverlayRoot {
   noteInput: HTMLTextAreaElement;
   modeSelect: HTMLSelectElement;
   addIssueButton: HTMLButtonElement;
+  saveIssueButton: HTMLButtonElement;
+  deleteIssueButton: HTMLButtonElement;
+  clearIssuesButton: HTMLButtonElement;
   exportButton: HTMLButtonElement;
   issueList: HTMLOListElement;
   status: HTMLDivElement;
@@ -111,6 +114,10 @@ export function createOverlayRoot(): OverlayRoot {
   addIssueButton.style.color = "#172033";
   addIssueButton.style.font = "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
+  const saveIssueButton = createPanelButton("Save selected", "vernierSaveIssue");
+  const deleteIssueButton = createPanelButton("Delete selected", "vernierDeleteIssue");
+  const clearIssuesButton = createPanelButton("Clear all", "vernierClearIssues");
+
   const exportButton = document.createElement("button");
   exportButton.dataset.vernierExport = "true";
   exportButton.type = "button";
@@ -135,11 +142,49 @@ export function createOverlayRoot(): OverlayRoot {
   status.style.marginTop = "8px";
   status.style.color = "#5a667a";
 
-  panel.append(panelContent, noteInput, addIssueButton, issueList, exportButton, status);
+  const issueActions = document.createElement("div");
+  issueActions.style.display = "grid";
+  issueActions.style.gridTemplateColumns = "1fr 1fr";
+  issueActions.style.gap = "8px";
+  issueActions.style.margin = "0 0 8px";
+  issueActions.append(saveIssueButton, deleteIssueButton);
+
+  panel.append(panelContent, noteInput, addIssueButton, issueList, issueActions, clearIssuesButton, exportButton, status);
   toolbar.append(indicator, label, modeSelect);
   root.append(toolbar, panel);
 
-  return { root, toolbar, panel, panelContent, noteInput, modeSelect, addIssueButton, exportButton, issueList, status };
+  return {
+    root,
+    toolbar,
+    panel,
+    panelContent,
+    noteInput,
+    modeSelect,
+    addIssueButton,
+    saveIssueButton,
+    deleteIssueButton,
+    clearIssuesButton,
+    exportButton,
+    issueList,
+    status
+  };
+
+  function createPanelButton(text: string, dataKey: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.dataset[dataKey] = "true";
+    button.type = "button";
+    button.textContent = text;
+    button.style.width = "100%";
+    button.style.padding = "7px 8px";
+    button.style.margin = "0 0 8px";
+    button.style.border = "1px solid rgba(23, 32, 51, 0.2)";
+    button.style.borderRadius = "6px";
+    button.style.background = "#ffffff";
+    button.style.color = "#172033";
+    button.style.font = "600 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    return button;
+  }
 }
 
 export function renderMeasurementPanel(panel: HTMLElement, measurement: string): void {
@@ -151,12 +196,31 @@ export function renderMeasurementPanel(panel: HTMLElement, measurement: string):
   }
 }
 
-export function renderIssueList(list: HTMLElement, issues: Array<{ id: number; kind: string; selector: string }>): void {
+export function renderIssueList(
+  list: HTMLElement,
+  issues: Array<{ id: number; kind: string; selector: string }>,
+  selectedIssueId: number | null
+): void {
   list.textContent = "";
+  list.dataset.vernierIssueCount = String(issues.length);
 
   for (const issue of issues) {
     const item = document.createElement("li");
-    item.textContent = `${issue.id}. ${issue.kind} ${issue.selector}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.vernierIssueId = String(issue.id);
+    button.textContent = `${issue.id}. ${issue.kind} ${issue.selector}`;
+    button.style.width = "100%";
+    button.style.margin = "0 0 6px";
+    button.style.padding = "6px";
+    button.style.border = issue.id === selectedIssueId ? "1px solid #1f6feb" : "1px solid rgba(23, 32, 51, 0.14)";
+    button.style.borderRadius = "6px";
+    button.style.background = issue.id === selectedIssueId ? "#eef4ff" : "#ffffff";
+    button.style.color = "#172033";
+    button.style.textAlign = "left";
+    button.style.font = "12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    item.style.listStyle = "none";
+    item.append(button);
     list.append(item);
   }
 }

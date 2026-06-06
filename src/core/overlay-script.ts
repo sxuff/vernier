@@ -1,10 +1,11 @@
 import { startVernierOverlay } from "../overlay/index";
+import { createAnnotationLayer } from "../overlay/annotation";
 import { measureDelta, measureElement } from "../overlay/measure";
 import { createPicker } from "../overlay/picker";
 import { getStableSelector } from "../overlay/selector";
 import { createSessionController } from "../overlay/session";
 import { getSourceLocation } from "../overlay/source";
-import { createOverlayRoot, renderMeasurementPanel } from "../overlay/ui";
+import { createOverlayRoot, renderIssueList, renderMeasurementPanel } from "../overlay/ui";
 
 export interface OverlayScriptOptions {
   html2canvasImportPath: string;
@@ -23,8 +24,9 @@ export function createVernierOverlayScript(options: OverlayScriptOptions): strin
     createSessionController.toString(),
     createOverlayRoot.toString(),
     renderMeasurementPanel.toString(),
+    renderIssueList.toString(),
+    createAnnotationLayer.toString(),
     createPicker.toString(),
     `(${startVernierOverlay.toString()})();`
   ].join("\n");
 }
-

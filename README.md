@@ -43,10 +43,13 @@ The proxy injects Vernier into HTML responses and forwards everything else to yo
 ## Workflow
 
 1. Press `Ctrl+Shift+F`.
-2. Hover an element to see its measured box.
-3. Click one element to capture a single measurement.
-4. Click a second element to capture a delta measurement.
-5. Add a note.
+2. Choose a mode:
+   - **Measure**: hover elements, click one element for a single measurement, click a second element for a delta.
+   - **Pen**: draw a freehand annotation.
+   - **Box**: drag a rectangular annotation.
+3. Add a note.
+4. Click **Add issue** to queue the current measurement or annotation.
+5. Repeat for as many UI issues as you want.
 6. Click **Export**.
 
 Vernier writes:
@@ -57,6 +60,8 @@ Vernier writes:
 .ui-feedback/latest/screenshots/
 ```
 
+Annotations store viewport data and normalized relative points so future adapters can re-anchor or replay them across browser sizes.
+
 ## Development
 
 ```bash
@@ -65,4 +70,3 @@ npm run verify:m0
 npm run test:e2e
 npm run test:proxy
 ```
-

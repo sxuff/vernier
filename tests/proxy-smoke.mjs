@@ -70,8 +70,27 @@ try {
   await page.mouse.move(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.locator("[data-vernier-note]").fill("align these cards");
+  await page.locator("[data-vernier-add-issue]").click();
+  await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 1");
+
+  await page.mouse.move(usage.x + usage.width / 2, usage.y + usage.height / 2);
+  await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
+  await page.locator("[data-vernier-note]").fill("align these cards");
+  await page.locator("[data-vernier-add-issue]").click();
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 2");
+
+  await page.locator("[data-vernier-mode]").selectOption("pen");
+  await page.mouse.move(160, 160);
+  await page.mouse.down();
+  await page.mouse.move(220, 190);
+  await page.mouse.up();
+  await page.locator("[data-vernier-note]").fill("freehand annotation");
+  await page.locator("[data-vernier-add-issue]").click();
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 3");
+
   await page.locator("[data-vernier-export]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
   await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Exported");
@@ -80,6 +99,9 @@ try {
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
   if (!sessionMarkdown.includes("Left edge delta: +12px")) {
     throw new Error(`Expected proxy session to contain +12px delta:\n${sessionMarkdown}`);
+  }
+  if (!sessionMarkdown.includes("Annotation: pen")) {
+    throw new Error(`Expected proxy session to contain pen annotation:\n${sessionMarkdown}`);
   }
 
   console.log("proxy smoke verified");
@@ -130,4 +152,3 @@ function waitForOutput(process, text) {
     });
   });
 }
-

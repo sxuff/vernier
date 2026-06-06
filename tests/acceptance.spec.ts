@@ -39,8 +39,16 @@ test("exports measured UI feedback session", async ({ page }) => {
   await page.mouse.move(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.locator("[data-vernier-note]").fill("should share left edge with the card above");
+  await page.locator("[data-vernier-add-issue]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 1");
+
+  await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
+  await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
+  await page.locator("[data-vernier-note]").fill("align these card edges");
+  await page.locator("[data-vernier-add-issue]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 2");
   await page.locator("[data-vernier-export]").click();
 
   await expect(page.locator("[data-vernier-status]")).toHaveText("Exported");

@@ -6,9 +6,11 @@ declare const html2canvas: (
   options?: { backgroundColor?: string | null }
 ) => Promise<HTMLCanvasElement>;
 
+type IssueKind = "single" | "delta" | "annotation";
+
 interface SessionIssue {
   id: number;
-  kind: "single" | "delta";
+  kind: IssueKind;
   measured: string;
   selector: string;
   source: string;
@@ -17,34 +19,78 @@ interface SessionIssue {
   screenshotDataUrl: string;
 }
 
+interface DraftIssue {
+  kind: IssueKind;
+  measured: string;
+  selector: string;
+  source: string;
+  screenshotTarget: Element;
+}
+
 interface SessionController {
-  recordIssue(kind: "single" | "delta", element: Element, measured: string): void;
+  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void;
+  setAnnotationDraft(measured: string): void;
+  addDraftIssue(): Promise<SessionIssue | null>;
+  getIssues(): SessionIssue[];
   exportSession(): Promise<void>;
 }
 
 export function createSessionController(noteInput: HTMLTextAreaElement): SessionController {
   const issues: SessionIssue[] = [];
-  const pendingScreenshots: Promise<void>[] = [];
+  let draft: DraftIssue | null = null;
 
-  function recordIssue(kind: "single" | "delta", element: Element, measured: string): void {
-    const id = issues.length + 1;
-    const issue: SessionIssue = {
-      id,
+  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void {
+    draft = {
       kind,
       measured,
       selector: getStableSelector(element),
       source: getSourceLocation(element),
+      screenshotTarget: element
+    };
+  }
+
+  function setAnnotationDraft(measured: string): void {
+    draft = {
+      kind: "annotation",
+      measured,
+      selector: "viewport",
+      source: "unresolved",
+      screenshotTarget: document.documentElement
+    };
+  }
+
+  async function addDraftIssue(): Promise<SessionIssue | null> {
+    if (!draft) {
+      return null;
+    }
+
+    const id = issues.length + 1;
+    const issue: SessionIssue = {
+      id,
+      kind: draft.kind,
+      measured: draft.measured,
+      selector: draft.selector,
+      source: draft.source,
       note: noteInput.value.trim(),
       screenshotName: `issue-${id}.png`,
-      screenshotDataUrl: ""
+      screenshotDataUrl: await captureScreenshot(draft.screenshotTarget)
     };
 
     issues.push(issue);
-    pendingScreenshots.push(captureElementScreenshot(element, issue));
+    draft = null;
+    noteInput.value = "";
+
+    return issue;
+  }
+
+  function getIssues(): SessionIssue[] {
+    return [...issues];
   }
 
   async function exportSession(): Promise<void> {
-    await Promise.all(pendingScreenshots);
+    if (issues.length === 0) {
+      throw new Error("Add at least one issue before export");
+    }
 
     const fullPageScreenshotDataUrl = await captureFullPageScreenshot();
     const response = await fetch("/__vernier/session", {
@@ -69,9 +115,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
   }
 
-  async function captureElementScreenshot(element: Element, issue: SessionIssue): Promise<void> {
+  async function captureScreenshot(element: Element): Promise<string> {
     const canvas = await html2canvas(element as HTMLElement, { backgroundColor: null });
-    issue.screenshotDataUrl = canvas.toDataURL("image/png");
+
+    return canvas.toDataURL("image/png");
   }
 
   async function captureFullPageScreenshot(): Promise<string> {
@@ -80,5 +127,6 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return canvas.toDataURL("image/png");
   }
 
-  return { recordIssue, exportSession };
+  return { setMeasurementDraft, setAnnotationDraft, addDraftIssue, getIssues, exportSession };
 }
+

@@ -1,7 +1,8 @@
+import { createAnnotationLayer } from "./annotation";
 import { measureDelta, measureElement } from "./measure";
 import { createPicker } from "./picker";
 import { createSessionController } from "./session";
-import { createOverlayRoot, renderMeasurementPanel } from "./ui";
+import { createOverlayRoot, renderIssueList, renderMeasurementPanel } from "./ui";
 
 export function startVernierOverlay(): void {
   if (document.querySelector("[data-vernier-root]")) {
@@ -10,19 +11,50 @@ export function startVernierOverlay(): void {
 
   const overlay = createOverlayRoot();
   const session = createSessionController(overlay.noteInput);
+  const annotation = createAnnotationLayer(overlay.root, {
+    onDraft(measurement) {
+      renderMeasurementPanel(overlay.panel, measurement);
+      session.setAnnotationDraft(measurement);
+    }
+  });
   const picker = createPicker(overlay.root, {
     onSelect(element) {
       const measurement = measureElement(element);
       renderMeasurementPanel(overlay.panel, measurement);
-      session.recordIssue("single", element, measurement);
+      session.setMeasurementDraft("single", element, measurement);
     },
     onCompare(firstElement, secondElement) {
       const measurement = measureDelta(firstElement, secondElement);
       renderMeasurementPanel(overlay.panel, measurement);
-      session.recordIssue("delta", secondElement, measurement);
+      session.setMeasurementDraft("delta", secondElement, measurement);
     }
   });
   document.documentElement.append(overlay.root);
+
+  overlay.modeSelect.addEventListener("change", () => {
+    picker.clear();
+    annotation.setMode(overlay.modeSelect.value);
+  });
+
+  overlay.addIssueButton.addEventListener("click", () => {
+    overlay.status.textContent = "Adding...";
+    void session
+      .addDraftIssue()
+      .then((issue) => {
+        if (!issue) {
+          overlay.status.textContent = "Select or draw an issue first";
+          return;
+        }
+
+        annotation.clear();
+        picker.clear();
+        renderIssueList(overlay.issueList, session.getIssues());
+        overlay.status.textContent = `Added issue ${issue.id}`;
+      })
+      .catch((error: unknown) => {
+        overlay.status.textContent = error instanceof Error ? error.message : "Add failed";
+      });
+  });
 
   overlay.exportButton.addEventListener("click", () => {
     overlay.status.textContent = "Exporting...";
@@ -42,6 +74,7 @@ export function startVernierOverlay(): void {
 
     if (!isActive) {
       picker.clear();
+      annotation.clear();
     }
   }
 

@@ -1,6 +1,6 @@
 export interface VernierIssue {
   id: number;
-  kind: "single" | "delta";
+  kind: "single" | "delta" | "annotation";
   measured: string;
   selector: string;
   source: string;
@@ -21,4 +21,3 @@ export interface VernierSession {
   fullPageScreenshotName: string;
   fullPageScreenshotDataUrl: string;
 }
-

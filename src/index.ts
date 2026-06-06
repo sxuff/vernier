@@ -1,4 +1,8 @@
 export { vernier } from "./plugin";
 export type { VernierPluginOptions } from "./plugin";
 export { vernier as default } from "./plugin";
-
+export { injectVernierOverlay } from "./core/html";
+export { createVernierOverlayScript } from "./core/overlay-script";
+export { handleVernierSessionRequest } from "./core/session-handler";
+export { writeSession } from "./core/session-writer";
+export type { VernierIssue, VernierSession } from "./schema";

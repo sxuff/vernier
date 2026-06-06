@@ -1,12 +1,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
+import { injectVernierOverlay } from "./core/html";
+import { createVernierOverlayScript, vernierOverlayPath } from "./core/overlay-script";
 import { registerSessionMiddleware } from "./middleware";
-import { startVernierOverlay } from "./overlay/index";
-import { measureDelta, measureElement } from "./overlay/measure";
-import { createPicker } from "./overlay/picker";
-import { getStableSelector } from "./overlay/selector";
-import { createSessionController } from "./overlay/session";
-import { getSourceLocation } from "./overlay/source";
-import { createOverlayRoot, renderMeasurementPanel } from "./overlay/ui";
 
 const virtualOverlayId = "virtual:vernier-overlay";
 const resolvedVirtualOverlayId = `\0${virtualOverlayId}`;
@@ -40,18 +35,7 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
         return null;
       }
 
-      return [
-        'import html2canvas from "html2canvas";',
-        getStableSelector.toString(),
-        getSourceLocation.toString(),
-        measureElement.toString(),
-        measureDelta.toString(),
-        createSessionController.toString(),
-        createOverlayRoot.toString(),
-        renderMeasurementPanel.toString(),
-        createPicker.toString(),
-        `(${startVernierOverlay.toString()})();`
-      ].join("\n");
+      return createVernierOverlayScript({ html2canvasImportPath: "html2canvas" });
     },
     transformIndexHtml(html) {
       const isDevServer = config.command === "serve";
@@ -61,16 +45,9 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
         return html;
       }
 
-      return {
-        html,
-        tags: [
-          {
-            tag: "script",
-            attrs: { type: "module", src: servedVirtualOverlayId },
-            injectTo: "body"
-          }
-        ]
-      };
+      return injectVernierOverlay(html, servedVirtualOverlayId);
     }
   };
 }
+
+export { vernierOverlayPath };

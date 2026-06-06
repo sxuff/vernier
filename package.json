@@ -17,6 +17,9 @@
       "require": "./dist/index.cjs"
     }
   },
+  "bin": {
+    "vernier": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -24,6 +27,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit && tsc --noEmit -p examples/react-vite/tsconfig.json",
     "test:e2e": "playwright test",
+    "test:proxy": "node tests/proxy-smoke.mjs",
     "verify:m0": "npm run typecheck && npm run build && npm --prefix examples/react-vite run build"
   },
   "keywords": [

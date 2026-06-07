@@ -119,6 +119,39 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
   ].join("\n");
 }
 
+export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
+  if (issues.length === 0) {
+    return "No issues in latest Vernier session.";
+  }
+
+  const session = issues[0]!.session;
+
+  return [
+    "Fix the UI issues captured by Vernier.",
+    "",
+    `Target route: ${session.route}`,
+    `Captured viewport: ${formatViewport(session)}`,
+    `Issue count: ${issues.length}`,
+    "",
+    ...issues.flatMap((indexed) => [
+      `## ${indexed.stableId} - issue ${indexed.issue.id}`,
+      `Type: ${indexed.issue.kind}`,
+      "",
+      "User note:",
+      indexed.issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+      "",
+      "Evidence:",
+      ...indexed.issue.measured.split("\n").map((line) => `- ${line}`),
+      `- Selector: ${indexed.issue.selector}`,
+      `- Source: ${indexed.issue.source}`,
+      `- Screenshot: ${indexed.screenshotPath}`,
+      ""
+    ]),
+    "Please inspect the related UI code, make the smallest safe fixes, and verify at the captured viewport size.",
+    "In your summary, map each code change back to the relevant Vernier issue ID."
+  ].join("\n");
+}
+
 async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {
   const candidates = await findSessionFiles(root);
 

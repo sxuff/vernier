@@ -133,6 +133,7 @@ try {
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
   const sendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--print"]);
+  const sendAllOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
@@ -157,6 +158,9 @@ try {
   }
   if (!sendOutput.includes("Fix the UI issue captured by Vernier.") || !sendOutput.includes(stableIssueId)) {
     throw new Error(`Expected send --print to produce issue task:\n${sendOutput}`);
+  }
+  if (!sendAllOutput.includes("Fix the UI issues captured by Vernier.") || !sendAllOutput.includes(stableIssueId)) {
+    throw new Error(`Expected send --to codex --print to produce all-issues task:\n${sendAllOutput}`);
   }
 
   console.log("proxy smoke verified");

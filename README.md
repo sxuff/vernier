@@ -110,10 +110,13 @@ After exporting, you can also use:
 vernier issues
 vernier show <issue-id>
 vernier copy <issue-id>
+vernier send --to codex
 vernier send <issue-id> --to codex
-vernier send <issue-id> --to claude
+vernier send all --to claude
 vernier latest
 vernier open
 ```
 
 `vernier issues` prints short stable IDs like `i-8f3a12`, so you do not have to rely on fragile list positions when multiple issues are waiting.
+
+`vernier send --to codex` sends every issue in the latest session by default. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.

@@ -13,7 +13,8 @@ import {
   listLatestIssues,
   renderIssueDetail,
   renderIssueList,
-  renderIssueTask
+  renderIssueTask,
+  renderIssuesTask
 } from "./core/issues";
 import {
   createVernierOverlayScript,
@@ -116,7 +117,7 @@ async function main(): Promise<void> {
 }
 
 function readRequiredReference(args: string[], command: string): string {
-  const reference = args.find((arg) => !arg.startsWith("-"));
+  const reference = readPositionalArgs(args)[0];
 
   if (!reference) {
     throw new Error(`Usage: vernier ${command} <issue-id>`);
@@ -126,39 +127,54 @@ function readRequiredReference(args: string[], command: string): string {
 }
 
 async function sendIssueToAgent(args: string[]): Promise<void> {
-  const reference = readRequiredReference(args, "send");
+  const reference = readPositionalArgs(args)[0] ?? "all";
   const agent = readOption(args, "--to");
 
   if (agent !== "codex" && agent !== "claude") {
     throw new Error("Usage: vernier send <issue-id> --to codex|claude");
   }
 
-  const task = renderIssueTask(await findLatestIssue(process.cwd(), reference));
+  const task =
+    reference === "all"
+      ? renderIssuesTask(await listLatestIssues(process.cwd()))
+      : renderIssueTask(await findLatestIssue(process.cwd(), reference));
 
   if (args.includes("--print")) {
     console.log(task);
     return;
   }
 
-  await runAgent(agent, task);
+  const result = await runAgent(agent, task);
+
+  if (result === "started") {
+    return;
+  }
+
+  await copyToClipboard(task);
+  console.log(`Could not find the ${agent} CLI on PATH.`);
+  console.log("Copied the Vernier task to clipboard instead. Paste it into the Codex app or install the CLI.");
 }
 
-async function runAgent(agent: "codex" | "claude", task: string): Promise<void> {
+async function runAgent(agent: "codex" | "claude", task: string): Promise<"started" | "missing"> {
   const executable = agent === "codex" ? "codex" : "claude";
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(executable, [task], {
       cwd: process.cwd(),
-      stdio: "inherit",
-      shell: process.platform === "win32"
+      stdio: "inherit"
     });
 
     child.on("error", (error) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        resolve("missing");
+        return;
+      }
+
       reject(new Error(`Could not start ${executable}: ${error.message}`));
     });
     child.on("exit", (code) => {
       if (code === 0) {
-        resolve();
+        resolve("started");
         return;
       }
 
@@ -482,6 +498,28 @@ function readOption(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
+function readPositionalArgs(args: string[]): string[] {
+  const positional: string[] = [];
+  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to"]);
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+
+    if (arg.startsWith("--")) {
+      if (optionsWithValues.has(arg)) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (!arg.startsWith("-")) {
+      positional.push(arg);
+    }
+  }
+
+  return positional;
+}
+
 function readPositionalTarget(args: string[]): string | null {
   return args.find((arg) => !arg.startsWith("-") && isUrlLike(arg)) ?? null;
 }
@@ -520,7 +558,7 @@ function printHelp(): void {
       "  vernier issues",
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--print]",
-      "  vernier send <issue-id> --to codex|claude [--print]",
+      "  vernier send [all|<issue-id>] --to codex|claude [--print]",
       "  vernier latest",
       "  vernier open",
       "",

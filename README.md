@@ -43,6 +43,13 @@ vernier proxy --target http://localhost:3000 --port 3333
 vernier http://localhost:3000
 ```
 
+Find likely local apps without starting or owning them:
+
+```bash
+vernier detect
+vernier detect --ports 5173,3000,6006
+```
+
 From this repo during development, the default proxy command is:
 
 ```bash

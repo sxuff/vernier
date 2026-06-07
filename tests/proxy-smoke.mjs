@@ -29,6 +29,7 @@ const targetServer = createServer((request, response) => {
           <section class="usage-card card" data-testid="usage-card">Usage</section>
           <section class="revenue-card card" data-testid="revenue-card">Revenue</section>
         </main>
+        <script type="module" src="/@vite/client"></script>
       </body>
     </html>`);
 });
@@ -116,6 +117,7 @@ try {
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);
+  const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
@@ -125,6 +127,9 @@ try {
   }
   if (!helpOutput.includes("vernier [--target http://localhost:5173]") || !helpOutput.includes("vernier http://localhost:5173")) {
     throw new Error(`Expected help command to document CLI shorthand:\n${helpOutput}`);
+  }
+  if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
+    throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
 
   console.log("proxy smoke verified");

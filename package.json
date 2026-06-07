@@ -1,7 +1,7 @@
 {
   "name": "vernier",
   "version": "0.0.0",
-  "description": "A dev-time Vite overlay that measures UI problems and exports agent-readable sessions.",
+  "description": "A dev-time UI overlay that measures web app problems and exports agent-readable sessions.",
   "type": "module",
   "private": true,
   "workspaces": [

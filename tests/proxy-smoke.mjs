@@ -33,6 +33,8 @@ const targetServer = createServer((request, response) => {
     </html>`);
 });
 
+await verifyUnavailableTarget();
+
 await listen(targetServer, targetPort);
 
 const proxy = spawn(
@@ -191,4 +193,28 @@ function runNode(args) {
       reject(new Error(stderr || `Command failed with ${code}`));
     });
   });
+}
+
+async function verifyUnavailableTarget() {
+  const deadProxyPort = 4310;
+  const deadProxy = spawn(
+    process.execPath,
+    ["dist/cli.js", "proxy", "--target", "http://127.0.0.1:4311", "--port", String(deadProxyPort)],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+  );
+
+  try {
+    await waitForOutput(deadProxy, "proxy listening");
+    const response = await fetch(`http://127.0.0.1:${deadProxyPort}/`);
+    const html = await response.text();
+
+    if (response.status !== 502 || !html.includes("Vernier cannot reach the target app")) {
+      throw new Error(`Expected 502 dead target page, got ${response.status}: ${html}`);
+    }
+    if (deadProxy.exitCode !== null) {
+      throw new Error("Dead target should not terminate the proxy process.");
+    }
+  } finally {
+    deadProxy.kill();
+  }
 }

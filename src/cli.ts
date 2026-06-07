@@ -98,7 +98,11 @@ async function handleProxyRequest(
     return;
   }
 
-  await forwardRequest(options, request, response);
+  try {
+    await forwardRequest(options, request, response);
+  } catch (error) {
+    sendProxyError(response, options.target, error);
+  }
 }
 
 async function forwardRequest(
@@ -189,6 +193,42 @@ function sendJavaScript(response: ServerResponse, source: string): void {
   response.statusCode = 200;
   response.setHeader("Content-Type", "text/javascript");
   response.end(source);
+}
+
+function sendProxyError(response: ServerResponse, target: URL, error: unknown): void {
+  const message = error instanceof Error ? error.message : "Unknown proxy error";
+
+  response.statusCode = 502;
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.end(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Vernier proxy target unavailable</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f7f9; color: #172033; font-family: system-ui, sans-serif; }
+      main { max-width: 680px; padding: 32px; border: 1px solid #d8dde8; border-radius: 8px; background: #fff; box-shadow: 0 12px 32px rgba(23, 32, 51, 0.12); }
+      code { padding: 2px 5px; border-radius: 4px; background: #eef1f6; }
+      pre { overflow: auto; padding: 12px; border-radius: 6px; background: #172033; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Vernier cannot reach the target app</h1>
+      <p>The proxy is running, but <code>${escapeHtml(target.origin)}</code> refused the connection.</p>
+      <p>Start your app first, then refresh this proxy URL.</p>
+      <pre>${escapeHtml(message)}</pre>
+    </main>
+  </body>
+</html>`);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 async function sendFile(response: ServerResponse, filePath: string, contentType: string): Promise<void> {

@@ -10,6 +10,8 @@ export interface OverlayRoot {
   deleteIssueButton: HTMLButtonElement;
   clearIssuesButton: HTMLButtonElement;
   exportButton: HTMLButtonElement;
+  copyPromptButton: HTMLButtonElement;
+  copyMarkdownButton: HTMLButtonElement;
   issueList: HTMLOListElement;
   status: HTMLDivElement;
 }
@@ -130,6 +132,9 @@ export function createOverlayRoot(): OverlayRoot {
   exportButton.style.color = "#ffffff";
   exportButton.style.font = "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
+  const copyPromptButton = createPanelButton("Copy prompt", "vernierCopyPrompt");
+  const copyMarkdownButton = createPanelButton("Copy markdown", "vernierCopyMarkdown");
+
   const issueList = document.createElement("ol");
   issueList.dataset.vernierIssueList = "true";
   issueList.style.margin = "0 0 12px 18px";
@@ -149,7 +154,24 @@ export function createOverlayRoot(): OverlayRoot {
   issueActions.style.margin = "0 0 8px";
   issueActions.append(saveIssueButton, deleteIssueButton);
 
-  panel.append(panelContent, noteInput, addIssueButton, issueList, issueActions, clearIssuesButton, exportButton, status);
+  const handoffActions = document.createElement("div");
+  handoffActions.style.display = "grid";
+  handoffActions.style.gridTemplateColumns = "1fr 1fr";
+  handoffActions.style.gap = "8px";
+  handoffActions.style.margin = "8px 0 0";
+  handoffActions.append(copyPromptButton, copyMarkdownButton);
+
+  panel.append(
+    panelContent,
+    noteInput,
+    addIssueButton,
+    issueList,
+    issueActions,
+    clearIssuesButton,
+    exportButton,
+    handoffActions,
+    status
+  );
   toolbar.append(indicator, label, modeSelect);
   root.append(toolbar, panel);
 
@@ -165,6 +187,8 @@ export function createOverlayRoot(): OverlayRoot {
     deleteIssueButton,
     clearIssuesButton,
     exportButton,
+    copyPromptButton,
+    copyMarkdownButton,
     issueList,
     status
   };

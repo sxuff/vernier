@@ -126,6 +126,14 @@ export function startVernierOverlay(): void {
       });
   });
 
+  overlay.copyPromptButton.addEventListener("click", () => {
+    copyText(session.createAgentPrompt(), "Copied prompt", overlay.status);
+  });
+
+  overlay.copyMarkdownButton.addEventListener("click", () => {
+    copyText(session.createMarkdownPreview(), "Copied markdown", overlay.status);
+  });
+
   function setActive(isActive: boolean): void {
     overlay.root.hidden = !isActive;
     overlay.root.dataset.vernierActive = String(isActive);
@@ -152,4 +160,15 @@ export function startVernierOverlay(): void {
   });
 
   console.info("[vernier] active");
+
+  function copyText(text: string, successMessage: string, status: HTMLElement): void {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        status.textContent = successMessage;
+      })
+      .catch(() => {
+        status.textContent = "Clipboard unavailable";
+      });
+  }
 }

@@ -52,6 +52,11 @@ The proxy injects Vernier into HTML responses and forwards everything else to yo
 5. Repeat for as many UI issues as you want.
 6. Click **Export**.
 
+Use handoff buttons when you want to move the session into an agent:
+
+- **Copy prompt** copies a Codex/Claude-ready prompt with the queued issues.
+- **Copy markdown** copies the current session markdown preview.
+
 Vernier writes:
 
 ```text
@@ -69,4 +74,12 @@ npm install
 npm run verify:m0
 npm run test:e2e
 npm run test:proxy
+```
+
+After exporting, you can also use:
+
+```bash
+vernier latest
+vernier prompt
+vernier open
 ```

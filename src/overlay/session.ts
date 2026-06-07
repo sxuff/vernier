@@ -35,6 +35,8 @@ interface SessionController {
   deleteIssue(id: number): void;
   clearIssues(): void;
   getIssues(): SessionIssue[];
+  createMarkdownPreview(): string;
+  createAgentPrompt(): string;
   exportSession(): Promise<void>;
 }
 
@@ -147,6 +149,41 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
   }
 
+  function createMarkdownPreview(): string {
+    return [
+      "# UI Feedback Session - Vernier",
+      `Route: ${window.location.pathname}`,
+      `Viewport: ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}x`,
+      `Issue count: ${issues.length}`,
+      "",
+      ...issues.flatMap((issue) => [
+        `## Issue ${issue.id} - ${issue.kind}`,
+        "Instruction:",
+        issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+        "",
+        "Measured:",
+        ...issue.measured.split("\n").map((line) => `- ${line}`),
+        "",
+        "Target:",
+        `Selector: ${issue.selector}`,
+        `Source: ${issue.source}`,
+        ""
+      ])
+    ].join("\n");
+  }
+
+  function createAgentPrompt(): string {
+    return [
+      "Use the Vernier UI feedback session below.",
+      "Fix each issue with minimal changes.",
+      "Map each code change back to an issue number.",
+      "Run the smallest relevant checks and summarize verification.",
+      "",
+      createMarkdownPreview().trim(),
+      ""
+    ].join("\n");
+  }
+
   async function captureScreenshot(element: Element): Promise<string> {
     const canvas = await html2canvas(element as HTMLElement, { backgroundColor: null });
 
@@ -175,6 +212,8 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     deleteIssue,
     clearIssues,
     getIssues,
+    createMarkdownPreview,
+    createAgentPrompt,
     exportSession
   };
 }

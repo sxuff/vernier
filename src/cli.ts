@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
+import { access } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import { pipeline } from "node:stream/promises";
+import path from "node:path";
+import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
   createVernierOverlayScript,
@@ -22,21 +26,37 @@ const require = createRequire(import.meta.url);
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
-  if (command !== "proxy") {
-    printHelp();
-    process.exit(command ? 1 : 0);
+  if (command === "proxy") {
+    const options = parseProxyOptions(args);
+    const server = createServer((request, response) => {
+      void handleProxyRequest(options, request, response);
+    });
+
+    server.listen(options.port, "127.0.0.1", () => {
+      console.log(`[vernier] proxy listening on http://127.0.0.1:${options.port}`);
+      console.log(`[vernier] forwarding to ${options.target.origin}`);
+      console.log(`[vernier] sessions write to ${options.root}`);
+    });
+    return;
   }
 
-  const options = parseProxyOptions(args);
-  const server = createServer((request, response) => {
-    void handleProxyRequest(options, request, response);
-  });
+  if (command === "latest") {
+    console.log(await readLatestSessionMarkdown(process.cwd()));
+    return;
+  }
 
-  server.listen(options.port, "127.0.0.1", () => {
-    console.log(`[vernier] proxy listening on http://127.0.0.1:${options.port}`);
-    console.log(`[vernier] forwarding to ${options.target.origin}`);
-    console.log(`[vernier] sessions write to ${options.root}`);
-  });
+  if (command === "prompt") {
+    console.log(createAgentPrompt(await readLatestSessionMarkdown(process.cwd())));
+    return;
+  }
+
+  if (command === "open") {
+    await openLatestSessionDirectory(process.cwd());
+    return;
+  }
+
+  printHelp();
+  process.exit(command ? 1 : 0);
 }
 
 function parseProxyOptions(args: string[]): ProxyOptions {
@@ -187,8 +207,36 @@ function readOption(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
+async function openLatestSessionDirectory(root: string): Promise<void> {
+  const latestDirectory = path.join(root, ".ui-feedback", "latest");
+
+  await access(latestDirectory);
+
+  if (process.platform === "win32") {
+    spawn("explorer.exe", [latestDirectory], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+
+  if (process.platform === "darwin") {
+    spawn("open", [latestDirectory], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+
+  spawn("xdg-open", [latestDirectory], { detached: true, stdio: "ignore" }).unref();
+}
+
 function printHelp(): void {
-  console.log("Usage: vernier proxy --target <url> [--port 3333]");
+  console.log(
+    [
+      "Usage:",
+      "  vernier proxy --target <url> [--port 3333]",
+      "  vernier latest",
+      "  vernier prompt",
+      "  vernier open",
+      "",
+      `Latest session path: ${latestSessionMarkdownPath}`
+    ].join("\n")
+  );
 }
 
 main().catch((error) => {

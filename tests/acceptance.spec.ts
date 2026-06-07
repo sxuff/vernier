@@ -56,6 +56,25 @@ test("exports measured UI feedback session", async ({ page }) => {
   await page.locator("[data-vernier-note]").fill("align these card edges");
   await page.locator("[data-vernier-add-issue]").click();
   await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 1");
+  await page.evaluate(() => {
+    const clipboard = { value: "" };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: function () {
+          const value = String(arguments[0]);
+          clipboard.value = value;
+          window.localStorage.setItem("vernierClipboard", value);
+          return Promise.resolve();
+        }
+      }
+    });
+  });
+  await page.locator("[data-vernier-copy-prompt]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Copied prompt");
+  const copiedPrompt = await page.evaluate(() => window.localStorage.getItem("vernierClipboard") ?? "");
+  expect(copiedPrompt).toContain("Use the Vernier UI feedback session below.");
+  expect(copiedPrompt).toContain("align these card edges");
   await page.locator("[data-vernier-export]").click();
 
   await expect(page.locator("[data-vernier-status]")).toHaveText("Exported");

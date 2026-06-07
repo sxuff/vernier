@@ -111,6 +111,16 @@ try {
     throw new Error(`Expected cleaner edited session output:\n${sessionMarkdown}`);
   }
 
+  const latestOutput = await runNode(["dist/cli.js", "latest"]);
+  const promptOutput = await runNode(["dist/cli.js", "prompt"]);
+
+  if (!latestOutput.includes("Issue count: 3")) {
+    throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
+  }
+  if (!promptOutput.includes("Use the Vernier UI feedback session below.") || !promptOutput.includes("Issue count: 3")) {
+    throw new Error(`Expected prompt command to print handoff prompt:\n${promptOutput}`);
+  }
+
   console.log("proxy smoke verified");
 } finally {
   proxy.kill();
@@ -156,6 +166,29 @@ function waitForOutput(process, text) {
     process.on("exit", (code) => {
       clearTimeout(timeout);
       reject(new Error(`Proxy exited early with code ${code}`));
+    });
+  });
+}
+
+function runNode(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+
+      reject(new Error(stderr || `Command failed with ${code}`));
     });
   });
 }

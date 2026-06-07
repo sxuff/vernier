@@ -12,6 +12,7 @@ export interface OverlayRoot {
   exportButton: HTMLButtonElement;
   copyPromptButton: HTMLButtonElement;
   copyMarkdownButton: HTMLButtonElement;
+  copyFallback: HTMLTextAreaElement;
   issueList: HTMLOListElement;
   status: HTMLDivElement;
 }
@@ -135,6 +136,16 @@ export function createOverlayRoot(): OverlayRoot {
   const copyPromptButton = createPanelButton("Copy prompt", "vernierCopyPrompt");
   const copyMarkdownButton = createPanelButton("Copy markdown", "vernierCopyMarkdown");
 
+  const copyFallback = document.createElement("textarea");
+  copyFallback.dataset.vernierCopyFallback = "true";
+  copyFallback.hidden = true;
+  copyFallback.readOnly = true;
+  copyFallback.rows = 6;
+  copyFallback.style.width = "100%";
+  copyFallback.style.margin = "8px 0 0";
+  copyFallback.style.resize = "vertical";
+  copyFallback.style.font = "12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace";
+
   const issueList = document.createElement("ol");
   issueList.dataset.vernierIssueList = "true";
   issueList.style.margin = "0 0 12px 18px";
@@ -170,7 +181,8 @@ export function createOverlayRoot(): OverlayRoot {
     clearIssuesButton,
     exportButton,
     handoffActions,
-    status
+    status,
+    copyFallback
   );
   toolbar.append(indicator, label, modeSelect);
   root.append(toolbar, panel);
@@ -189,6 +201,7 @@ export function createOverlayRoot(): OverlayRoot {
     exportButton,
     copyPromptButton,
     copyMarkdownButton,
+    copyFallback,
     issueList,
     status
   };
@@ -209,6 +222,12 @@ export function createOverlayRoot(): OverlayRoot {
 
     return button;
   }
+}
+
+export function setButtonEnabled(button: HTMLButtonElement, enabled: boolean): void {
+  button.disabled = !enabled;
+  button.style.opacity = enabled ? "1" : "0.48";
+  button.style.cursor = enabled ? "pointer" : "not-allowed";
 }
 
 export function renderMeasurementPanel(panel: HTMLElement, measurement: string): void {

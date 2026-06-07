@@ -56,6 +56,9 @@ test("exports measured UI feedback session", async ({ page }) => {
   await page.locator("[data-vernier-note]").fill("align these card edges");
   await page.locator("[data-vernier-add-issue]").click();
   await expect(page.locator("[data-vernier-status]")).toHaveText("Added issue 1");
+  await page.locator("[data-vernier-copy-markdown]").click();
+  await expect(page.locator("[data-vernier-status]")).toHaveText("Copy from selected text");
+  await expect(page.locator("[data-vernier-copy-fallback]")).toBeVisible();
   await page.evaluate(() => {
     const clipboard = { value: "" };
     Object.defineProperty(navigator, "clipboard", {

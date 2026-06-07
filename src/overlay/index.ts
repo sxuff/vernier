@@ -2,7 +2,7 @@ import { createAnnotationLayer } from "./annotation";
 import { measureDelta, measureElement } from "./measure";
 import { createPicker } from "./picker";
 import { createSessionController } from "./session";
-import { createOverlayRoot, renderIssueList, renderMeasurementPanel } from "./ui";
+import { createOverlayRoot, renderIssueList, renderMeasurementPanel, setButtonEnabled } from "./ui";
 
 export function startVernierOverlay(): void {
   if (document.querySelector("[data-vernier-root]")) {
@@ -12,6 +12,8 @@ export function startVernierOverlay(): void {
   const overlay = createOverlayRoot();
   const session = createSessionController(overlay.noteInput);
   let selectedIssueId: number | null = null;
+
+  updateControls();
   const annotation = createAnnotationLayer(overlay.root, {
     onDraft(measurement) {
       renderMeasurementPanel(overlay.panel, measurement);
@@ -51,6 +53,7 @@ export function startVernierOverlay(): void {
         picker.clear();
         selectedIssueId = issue.id;
         renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+        updateControls();
         overlay.status.textContent = `Added issue ${issue.id}`;
       })
       .catch((error: unknown) => {
@@ -76,6 +79,7 @@ export function startVernierOverlay(): void {
     overlay.noteInput.value = issue.note;
     renderMeasurementPanel(overlay.panel, issue.measured);
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    updateControls();
     overlay.status.textContent = `Selected issue ${issue.id}`;
   });
 
@@ -100,6 +104,7 @@ export function startVernierOverlay(): void {
     overlay.noteInput.value = "";
     renderMeasurementPanel(overlay.panel, "No issue selected");
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    updateControls();
     overlay.status.textContent = "Deleted issue";
   });
 
@@ -111,6 +116,7 @@ export function startVernierOverlay(): void {
     overlay.noteInput.value = "";
     renderMeasurementPanel(overlay.panel, "No queued issues");
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+    updateControls();
     overlay.status.textContent = "Cleared issues";
   });
 
@@ -127,11 +133,11 @@ export function startVernierOverlay(): void {
   });
 
   overlay.copyPromptButton.addEventListener("click", () => {
-    copyText(session.createAgentPrompt(), "Copied prompt", overlay.status);
+    copyText(session.createAgentPrompt(), "Copied prompt");
   });
 
   overlay.copyMarkdownButton.addEventListener("click", () => {
-    copyText(session.createMarkdownPreview(), "Copied markdown", overlay.status);
+    copyText(session.createMarkdownPreview(), "Copied markdown");
   });
 
   function setActive(isActive: boolean): void {
@@ -161,14 +167,45 @@ export function startVernierOverlay(): void {
 
   console.info("[vernier] active");
 
-  function copyText(text: string, successMessage: string, status: HTMLElement): void {
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        status.textContent = successMessage;
-      })
-      .catch(() => {
-        status.textContent = "Clipboard unavailable";
-      });
+  function updateControls(): void {
+    const hasSelectedIssue = selectedIssueId !== null;
+    const hasIssues = session.getIssues().length > 0;
+
+    setButtonEnabled(overlay.saveIssueButton, hasSelectedIssue);
+    setButtonEnabled(overlay.deleteIssueButton, hasSelectedIssue);
+    setButtonEnabled(overlay.clearIssuesButton, hasIssues);
+    setButtonEnabled(overlay.exportButton, hasIssues);
+    setButtonEnabled(overlay.copyPromptButton, hasIssues);
+    setButtonEnabled(overlay.copyMarkdownButton, hasIssues);
+  }
+
+  function copyText(text: string, successMessage: string): void {
+    if (session.getIssues().length === 0) {
+      overlay.status.textContent = "Add an issue before copying";
+      return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          overlay.copyFallback.hidden = true;
+          overlay.status.textContent = successMessage;
+        })
+        .catch(() => {
+          showCopyFallback(text);
+        });
+      return;
+    }
+
+    showCopyFallback(text);
+  }
+
+  function showCopyFallback(text: string): void {
+    overlay.copyFallback.hidden = false;
+    overlay.copyFallback.value = text;
+    overlay.copyFallback.focus();
+    overlay.copyFallback.select();
+    overlay.status.textContent = "Copy from selected text";
   }
 }

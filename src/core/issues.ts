@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { VernierIssue, VernierSession } from "../schema";
 
@@ -7,21 +7,25 @@ export interface IndexedVernierIssue {
   stableId: string;
   session: VernierSession;
   issue: VernierIssue;
+  sessionDirectory: string;
   screenshotPath: string;
 }
 
 export const latestSessionJsonPath = path.join(".ui-feedback", "latest", "session.json");
 
 export async function readLatestSession(root: string): Promise<VernierSession> {
-  const raw = await readFile(path.join(root, latestSessionJsonPath), "utf8");
+  const latest = await findLatestSessionFile(root);
+  const raw = await readFile(latest.filePath, "utf8");
 
   return JSON.parse(raw) as VernierSession;
 }
 
 export async function listLatestIssues(root: string): Promise<IndexedVernierIssue[]> {
-  const session = await readLatestSession(root);
+  const latest = await findLatestSessionFile(root);
+  const raw = await readFile(latest.filePath, "utf8");
+  const session = JSON.parse(raw) as VernierSession;
 
-  return session.issues.map((issue) => indexIssue(root, session, issue));
+  return session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue));
 }
 
 export async function findLatestIssue(root: string, reference: string): Promise<IndexedVernierIssue> {
@@ -115,12 +119,89 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
   ].join("\n");
 }
 
-function indexIssue(root: string, session: VernierSession, issue: VernierIssue): IndexedVernierIssue {
+async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {
+  const candidates = await findSessionFiles(root);
+
+  if (candidates.length === 0) {
+    throw new Error(`No Vernier session found under ${root}`);
+  }
+
+  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  return {
+    filePath: candidates[0]!.filePath,
+    sessionDirectory: path.dirname(candidates[0]!.filePath)
+  };
+}
+
+async function findSessionFiles(
+  directory: string,
+  candidates: Array<{ filePath: string; mtimeMs: number }> = []
+): Promise<Array<{ filePath: string; mtimeMs: number }>> {
+  const entries = await readdir(directory, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    if (shouldSkipDirectory(entry.name)) {
+      continue;
+    }
+
+    const childDirectory = path.join(directory, entry.name);
+
+    if (entry.name === ".ui-feedback") {
+      await collectFeedbackSessions(childDirectory, candidates);
+      continue;
+    }
+
+    await findSessionFiles(childDirectory, candidates);
+  }
+
+  return candidates;
+}
+
+async function collectFeedbackSessions(
+  feedbackDirectory: string,
+  candidates: Array<{ filePath: string; mtimeMs: number }>
+): Promise<void> {
+  const sessionsDirectory = path.join(feedbackDirectory, "sessions");
+
+  let entries;
+  try {
+    entries = await readdir(sessionsDirectory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const filePath = path.join(sessionsDirectory, entry.name, "session.json");
+
+    try {
+      const fileStat = await stat(filePath);
+      candidates.push({ filePath, mtimeMs: fileStat.mtimeMs });
+    } catch {
+      // Ignore partially written or stale feedback directories.
+    }
+  }
+}
+
+function shouldSkipDirectory(name: string): boolean {
+  return [".git", "node_modules", "dist", "build", "test-results"].includes(name);
+}
+
+function indexIssue(sessionDirectory: string, session: VernierSession, issue: VernierIssue): IndexedVernierIssue {
   return {
     stableId: createStableIssueId(session, issue),
     session,
     issue,
-    screenshotPath: path.join(root, ".ui-feedback", "latest", "screenshots", issue.screenshotName)
+    sessionDirectory,
+    screenshotPath: path.join(sessionDirectory, "screenshots", issue.screenshotName)
   };
 }
 

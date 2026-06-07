@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { createServer } from "node:http";
-import { rm, readFile } from "node:fs/promises";
+import { mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -8,8 +8,10 @@ const root = process.cwd();
 const targetPort = 4187;
 const proxyPort = 4188;
 const feedbackRoot = path.join(root, ".ui-feedback");
+const nestedFeedbackRoot = path.join(root, "examples", "react-vite", ".ui-feedback");
 
 await rm(feedbackRoot, { recursive: true, force: true });
+await rm(nestedFeedbackRoot, { recursive: true, force: true });
 
 const targetServer = createServer((request, response) => {
   response.setHeader("Content-Type", "text/html");
@@ -118,6 +120,9 @@ try {
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
+
+  await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
+
   const issuesOutput = await runNode(["dist/cli.js", "issues"]);
   const stableIssueId = issuesOutput.match(/i-[a-f0-9]{6}/)?.[0];
 
@@ -141,8 +146,8 @@ try {
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
-  if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("edited delta note")) {
-    throw new Error(`Expected issues command to list latest issues:\n${issuesOutput}`);
+  if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("make it red")) {
+    throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);
   }
   if (!showOutput.includes(`ID: ${stableIssueId}`) || !showOutput.includes("Screenshot:")) {
     throw new Error(`Expected show command to print issue detail:\n${showOutput}`);
@@ -158,6 +163,27 @@ try {
 } finally {
   proxy.kill();
   await close(targetServer);
+}
+
+async function writeNestedSessionFixture(baseSession) {
+  const sessionDirectory = path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root");
+  const session = {
+    ...baseSession,
+    createdAt: new Date().toISOString(),
+    issueCount: 1,
+    issues: [
+      {
+        ...baseSession.issues[0],
+        id: 1,
+        note: "make it red",
+        screenshotName: "issue-1.png"
+      }
+    ]
+  };
+
+  await mkdir(path.join(sessionDirectory, "screenshots"), { recursive: true });
+  await writeFile(path.join(sessionDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
+  await writeFile(path.join(sessionDirectory, "session.md"), "# nested fixture\nmake it red\n");
 }
 
 function listen(server, port) {

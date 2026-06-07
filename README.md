@@ -80,7 +80,6 @@ Your target app must already be running. If the target app is down, Vernier keep
 
 Use handoff buttons when you want to move the session into an agent:
 
-- **Copy prompt** copies a Codex/Claude-ready prompt with the queued issues.
 - **Copy markdown** copies the current session markdown preview.
 
 Vernier writes:
@@ -108,7 +107,13 @@ npm run proxy:3000
 After exporting, you can also use:
 
 ```bash
+vernier issues
+vernier show <issue-id>
+vernier copy <issue-id>
+vernier send <issue-id> --to codex
+vernier send <issue-id> --to claude
 vernier latest
-vernier prompt
 vernier open
 ```
+
+`vernier issues` prints short stable IDs like `i-8f3a12`, so you do not have to rely on fragile list positions when multiple issues are waiting.

@@ -9,6 +9,13 @@ import path from "node:path";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
+  findLatestIssue,
+  listLatestIssues,
+  renderIssueDetail,
+  renderIssueList,
+  renderIssueTask
+} from "./core/issues";
+import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
   vernierOverlayPath
@@ -61,6 +68,34 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "issues") {
+    console.log(renderIssueList(await listLatestIssues(process.cwd())));
+    return;
+  }
+
+  if (command === "show") {
+    console.log(renderIssueDetail(await findLatestIssue(process.cwd(), readRequiredReference(args, "show"))));
+    return;
+  }
+
+  if (command === "copy") {
+    const task = renderIssueTask(await findLatestIssue(process.cwd(), readRequiredReference(args, "copy")));
+
+    if (args.includes("--print")) {
+      console.log(task);
+      return;
+    }
+
+    await copyToClipboard(task);
+    console.log("Copied Vernier issue task to clipboard.");
+    return;
+  }
+
+  if (command === "send") {
+    await sendIssueToAgent(args);
+    return;
+  }
+
   if (command === "latest") {
     console.log(await readLatestSessionMarkdown(process.cwd()));
     return;
@@ -78,6 +113,92 @@ async function main(): Promise<void> {
 
   printHelp();
   process.exit(command ? 1 : 0);
+}
+
+function readRequiredReference(args: string[], command: string): string {
+  const reference = args.find((arg) => !arg.startsWith("-"));
+
+  if (!reference) {
+    throw new Error(`Usage: vernier ${command} <issue-id>`);
+  }
+
+  return reference;
+}
+
+async function sendIssueToAgent(args: string[]): Promise<void> {
+  const reference = readRequiredReference(args, "send");
+  const agent = readOption(args, "--to");
+
+  if (agent !== "codex" && agent !== "claude") {
+    throw new Error("Usage: vernier send <issue-id> --to codex|claude");
+  }
+
+  const task = renderIssueTask(await findLatestIssue(process.cwd(), reference));
+
+  if (args.includes("--print")) {
+    console.log(task);
+    return;
+  }
+
+  await runAgent(agent, task);
+}
+
+async function runAgent(agent: "codex" | "claude", task: string): Promise<void> {
+  const executable = agent === "codex" ? "codex" : "claude";
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, [task], {
+      cwd: process.cwd(),
+      stdio: "inherit",
+      shell: process.platform === "win32"
+    });
+
+    child.on("error", (error) => {
+      reject(new Error(`Could not start ${executable}: ${error.message}`));
+    });
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`${executable} exited with code ${code}`));
+    });
+  });
+}
+
+async function copyToClipboard(value: string): Promise<void> {
+  const commands =
+    process.platform === "win32"
+      ? [["clip.exe"]]
+      : process.platform === "darwin"
+        ? [["pbcopy"]]
+        : [
+            ["wl-copy"],
+            ["xclip", "-selection", "clipboard"],
+            ["xsel", "--clipboard", "--input"]
+          ];
+
+  for (const command of commands) {
+    if (await tryClipboardCommand(command, value)) {
+      return;
+    }
+  }
+
+  throw new Error("No clipboard command available. Run with --print to write the task to stdout.");
+}
+
+function tryClipboardCommand(command: string[], value: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(command[0]!, command.slice(1), {
+      stdio: ["pipe", "ignore", "ignore"],
+      shell: process.platform === "win32"
+    });
+
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
+    child.stdin.end(value);
+  });
 }
 
 async function detectLocalApps(args: string[]): Promise<void> {
@@ -396,8 +517,11 @@ function printHelp(): void {
       "  vernier proxy [--target <url>] [--port 3333]",
       "  vernier http://localhost:5173",
       "  vernier detect [--ports 5173,3000,6006]",
+      "  vernier issues",
+      "  vernier show <issue-id>",
+      "  vernier copy <issue-id> [--print]",
+      "  vernier send <issue-id> --to codex|claude [--print]",
       "  vernier latest",
-      "  vernier prompt",
       "  vernier open",
       "",
       `Latest session path: ${latestSessionMarkdownPath}`

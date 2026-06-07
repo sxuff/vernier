@@ -118,6 +118,16 @@ try {
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
+  const issuesOutput = await runNode(["dist/cli.js", "issues"]);
+  const stableIssueId = issuesOutput.match(/i-[a-f0-9]{6}/)?.[0];
+
+  if (!stableIssueId) {
+    throw new Error(`Expected issues command to print stable IDs:\n${issuesOutput}`);
+  }
+
+  const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
+  const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
+  const sendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--print"]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
@@ -130,6 +140,18 @@ try {
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
+  }
+  if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("edited delta note")) {
+    throw new Error(`Expected issues command to list latest issues:\n${issuesOutput}`);
+  }
+  if (!showOutput.includes(`ID: ${stableIssueId}`) || !showOutput.includes("Screenshot:")) {
+    throw new Error(`Expected show command to print issue detail:\n${showOutput}`);
+  }
+  if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
+    throw new Error(`Expected copy --print to produce issue task:\n${copyOutput}`);
+  }
+  if (!sendOutput.includes("Fix the UI issue captured by Vernier.") || !sendOutput.includes(stableIssueId)) {
+    throw new Error(`Expected send --print to produce issue task:\n${sendOutput}`);
   }
 
   console.log("proxy smoke verified");

@@ -26,8 +26,9 @@
   "scripts": {
     "build": "tsup",
     "dev:example": "npm --prefix examples/react-vite run dev",
-    "dev:proxy": "npm run build && node dist/cli.js proxy --target http://localhost:3000 --port 3333",
-    "proxy:3000": "node dist/cli.js proxy --target http://localhost:3000 --port 3333",
+    "dev:proxy": "npm run build && node dist/cli.js",
+    "proxy:5173": "node dist/cli.js --target http://localhost:5173 --port 3333",
+    "proxy:3000": "node dist/cli.js --target http://localhost:3000 --port 3333",
     "typecheck": "tsc --noEmit && tsc --noEmit -p examples/react-vite/tsconfig.json",
     "test:e2e": "playwright test",
     "test:proxy": "node tests/proxy-smoke.mjs",

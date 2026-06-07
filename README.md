@@ -29,10 +29,21 @@ Ctrl+Shift+F
 Run your app on any local port, then start the Vernier proxy:
 
 ```bash
-vernier proxy --target http://localhost:3000 --port 3333
+vernier
 ```
 
-From this repo during development:
+By default, Vernier forwards to `http://localhost:5173` and opens its proxy on `http://127.0.0.1:3333`.
+
+Use an explicit target when your app runs somewhere else:
+
+```bash
+vernier --target http://localhost:3000
+vernier start --target http://localhost:3000 --port 3333
+vernier proxy --target http://localhost:3000 --port 3333
+vernier http://localhost:3000
+```
+
+From this repo during development, the default proxy command is:
 
 ```bash
 npm run dev:proxy
@@ -46,7 +57,7 @@ http://127.0.0.1:3333
 
 The proxy injects Vernier into HTML responses and forwards everything else to your target app.
 
-Your target app must already be running. If `http://localhost:3000` is down, Vernier keeps running and shows a 502 page explaining that the target app refused the connection.
+Your target app must already be running. If the target app is down, Vernier keeps running and shows a 502 page explaining that the target refused the connection.
 
 ## Workflow
 
@@ -84,6 +95,7 @@ npm run test:e2e
 npm run test:proxy
 npm run dev:example
 npm run dev:proxy
+npm run proxy:3000
 ```
 
 After exporting, you can also use:

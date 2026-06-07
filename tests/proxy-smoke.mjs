@@ -115,12 +115,16 @@ try {
 
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
+  const helpOutput = await runNode(["dist/cli.js", "--help"]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
   }
   if (!promptOutput.includes("Use the Vernier UI feedback session below.") || !promptOutput.includes("Issue count: 3")) {
     throw new Error(`Expected prompt command to print handoff prompt:\n${promptOutput}`);
+  }
+  if (!helpOutput.includes("vernier [--target http://localhost:5173]") || !helpOutput.includes("vernier http://localhost:5173")) {
+    throw new Error(`Expected help command to document CLI shorthand:\n${helpOutput}`);
   }
 
   console.log("proxy smoke verified");
@@ -199,7 +203,7 @@ async function verifyUnavailableTarget() {
   const deadProxyPort = 4310;
   const deadProxy = spawn(
     process.execPath,
-    ["dist/cli.js", "proxy", "--target", "http://127.0.0.1:4311", "--port", String(deadProxyPort)],
+    ["dist/cli.js", "--target", "http://127.0.0.1:4311", "--port", String(deadProxyPort)],
     { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
   );
 

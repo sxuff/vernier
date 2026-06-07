@@ -22,12 +22,21 @@ interface ProxyOptions {
 }
 
 const require = createRequire(import.meta.url);
+const defaultTarget = "http://localhost:5173";
+const defaultPort = "3333";
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
-  if (command === "proxy") {
-    const options = parseProxyOptions(args);
+  if (command === "help" || command === "--help" || command === "-h") {
+    printHelp();
+    return;
+  }
+
+  if (!command || command === "proxy" || command === "start" || isUrlLike(command) || command.startsWith("--")) {
+    const proxyArgs =
+      command && command !== "proxy" && command !== "start" ? [command, ...args] : args;
+    const options = parseProxyOptions(proxyArgs);
     const server = createServer((request, response) => {
       void handleProxyRequest(options, request, response);
     });
@@ -60,16 +69,17 @@ async function main(): Promise<void> {
 }
 
 function parseProxyOptions(args: string[]): ProxyOptions {
-  const targetValue = readOption(args, "--target");
-  const portValue = readOption(args, "--port") ?? "3333";
+  const targetValue = readOption(args, "--target") ?? readPositionalTarget(args) ?? defaultTarget;
+  const portValue = readOption(args, "--port") ?? defaultPort;
+  const port = Number(portValue);
 
-  if (!targetValue) {
-    throw new Error("Missing required --target <url>");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid --port value: ${portValue}`);
   }
 
   return {
     target: new URL(targetValue),
-    port: Number(portValue),
+    port,
     root: process.cwd()
   };
 }
@@ -247,6 +257,14 @@ function readOption(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
+function readPositionalTarget(args: string[]): string | null {
+  return args.find((arg) => !arg.startsWith("-") && isUrlLike(arg)) ?? null;
+}
+
+function isUrlLike(value: string): boolean {
+  return value.startsWith("http://") || value.startsWith("https://");
+}
+
 async function openLatestSessionDirectory(root: string): Promise<void> {
   const latestDirectory = path.join(root, ".ui-feedback", "latest");
 
@@ -269,7 +287,10 @@ function printHelp(): void {
   console.log(
     [
       "Usage:",
-      "  vernier proxy --target <url> [--port 3333]",
+      "  vernier [--target http://localhost:5173] [--port 3333]",
+      "  vernier start [--target <url>] [--port 3333]",
+      "  vernier proxy [--target <url>] [--port 3333]",
+      "  vernier http://localhost:5173",
       "  vernier latest",
       "  vernier prompt",
       "  vernier open",

@@ -17,6 +17,7 @@ import {
   renderIssueDetail,
   renderIssueList,
   renderIssueTask,
+  renderIssueVerification,
   renderIssuesTask
 } from "./core/issues";
 import {
@@ -105,6 +106,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "verify") {
+    await verifyIssue(args);
+    return;
+  }
+
   if (command === "latest") {
     console.log(await readLatestSessionMarkdown(process.cwd()));
     return;
@@ -122,6 +128,19 @@ async function main(): Promise<void> {
 
   printHelp();
   process.exit(command ? 1 : 0);
+}
+
+async function verifyIssue(args: string[]): Promise<void> {
+  const reference = readRequiredReference(args, "verify");
+  const issue = await findLatestIssue(process.cwd(), reference);
+  const targetUrl = createIssueTargetUrl(readOption(args, "--target") ?? defaultTarget, issue.session.route);
+  const verification = renderIssueVerification(issue, targetUrl);
+
+  console.log(verification);
+
+  if (args.includes("--open")) {
+    await openUrl(targetUrl);
+  }
 }
 
 async function markIssue(args: string[]): Promise<void> {
@@ -593,6 +612,24 @@ async function openLatestSessionDirectory(root: string): Promise<void> {
   spawn("xdg-open", [latestDirectory], { detached: true, stdio: "ignore" }).unref();
 }
 
+async function openUrl(url: string): Promise<void> {
+  if (process.platform === "win32") {
+    spawn("explorer.exe", [url], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+
+  if (process.platform === "darwin") {
+    spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+
+  spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+}
+
+function createIssueTargetUrl(target: string, route: string): string {
+  return new URL(route || "/", target).toString();
+}
+
 function printHelp(): void {
   console.log(
     [
@@ -606,6 +643,7 @@ function printHelp(): void {
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--print]",
       "  vernier mark <issue-id> todo|fixed",
+      "  vernier verify <issue-id> [--target <url>] [--open]",
       "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
       "  vernier latest",
       "  vernier open",

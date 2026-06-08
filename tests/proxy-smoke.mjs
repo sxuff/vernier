@@ -132,6 +132,13 @@ try {
 
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
+  const verifyOutput = await runNode([
+    "dist/cli.js",
+    "verify",
+    stableIssueId,
+    "--target",
+    `http://127.0.0.1:${targetPort}`
+  ]);
   const sendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--print"]);
   const sendAllOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
   const markOutput = await runNode(["dist/cli.js", "mark", stableIssueId, "fixed"]);
@@ -160,6 +167,13 @@ try {
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
     throw new Error(`Expected copy --print to produce issue task:\n${copyOutput}`);
+  }
+  if (
+    !verifyOutput.includes(`Verify Vernier issue ${stableIssueId}.`) ||
+    !verifyOutput.includes(`URL: http://127.0.0.1:${targetPort}/`) ||
+    !verifyOutput.includes(`vernier mark ${stableIssueId} fixed`)
+  ) {
+    throw new Error(`Expected verify command to produce inspection instructions:\n${verifyOutput}`);
   }
   if (!sendOutput.includes("Fix the UI issue captured by Vernier.") || !sendOutput.includes(stableIssueId)) {
     throw new Error(`Expected send --print to produce issue task:\n${sendOutput}`);

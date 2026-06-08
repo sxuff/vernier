@@ -111,6 +111,8 @@ vernier issues
 vernier issues --todo
 vernier issues --fixed
 vernier show <issue-id>
+vernier verify <issue-id>
+vernier verify <issue-id> --target http://localhost:3000 --open
 vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
@@ -124,3 +126,5 @@ vernier open
 `vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting.
 
 `vernier send --to codex` sends todo issues in the latest session by default. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
+
+`vernier verify <issue-id>` prints the captured viewport, original evidence, target URL, screenshot path, and the follow-up mark commands. Add `--open` to open the captured route in your browser.

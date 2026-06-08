@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { VernierIssue, VernierSession } from "../schema";
 
+export type IssueStatus = "todo" | "fixed";
+
 export interface IndexedVernierIssue {
   stableId: string;
+  status: IssueStatus;
   session: VernierSession;
   issue: VernierIssue;
   sessionDirectory: string;
@@ -24,8 +27,9 @@ export async function listLatestIssues(root: string): Promise<IndexedVernierIssu
   const latest = await findLatestSessionFile(root);
   const raw = await readFile(latest.filePath, "utf8");
   const session = JSON.parse(raw) as VernierSession;
+  const statuses = await readIssueStatuses(latest.sessionDirectory);
 
-  return session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue));
+  return session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
 }
 
 export async function findLatestIssue(root: string, reference: string): Promise<IndexedVernierIssue> {
@@ -41,6 +45,34 @@ export async function findLatestIssue(root: string, reference: string): Promise<
   return issue;
 }
 
+export async function markLatestIssue(root: string, reference: string, status: IssueStatus): Promise<IndexedVernierIssue> {
+  const issues = await listLatestIssues(root);
+  const issue = issues.find(
+    (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
+  );
+
+  if (!issue) {
+    throw new Error(`Unknown Vernier issue: ${reference}`);
+  }
+
+  const statuses = await readIssueStatuses(issue.sessionDirectory);
+  statuses[issue.stableId] = status;
+  await writeIssueStatuses(issue.sessionDirectory, statuses);
+
+  return { ...issue, status };
+}
+
+export function filterIssuesByStatus(
+  issues: IndexedVernierIssue[],
+  status: IssueStatus | "all"
+): IndexedVernierIssue[] {
+  if (status === "all") {
+    return issues;
+  }
+
+  return issues.filter((issue) => issue.status === status);
+}
+
 export function renderIssueList(issues: IndexedVernierIssue[]): string {
   if (issues.length === 0) {
     return "No issues in latest Vernier session.";
@@ -50,13 +82,14 @@ export function renderIssueList(issues: IndexedVernierIssue[]): string {
   const lines = [
     `Latest session: ${session.createdAt}  ${session.route}  ${formatViewport(session)}`,
     "",
-    "ID        No.  Page        Viewport   Type        Summary"
+    "ID        Status  No.  Page        Viewport   Type        Summary"
   ];
 
   for (const issue of issues) {
     lines.push(
       [
         issue.stableId.padEnd(9),
+        issue.status.padEnd(7),
         String(issue.issue.id).padEnd(4),
         issue.session.route.padEnd(11),
         viewportLabel(issue.session).padEnd(10),
@@ -78,6 +111,7 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     `Route: ${session.route}`,
     `Viewport: ${formatViewport(session)}`,
     `Type: ${issue.kind}`,
+    `Status: ${indexed.status}`,
     "",
     "Instruction:",
     issue.note || "Fix the measured UI issue. Prefer minimal changes.",
@@ -101,6 +135,7 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
     "",
     `Vernier issue ID: ${indexed.stableId}`,
     `Original issue number: ${issue.id}`,
+    `Status: ${indexed.status}`,
     `Target route: ${session.route}`,
     `Captured viewport: ${formatViewport(session)}`,
     `Issue type: ${issue.kind}`,
@@ -136,6 +171,7 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
     ...issues.flatMap((indexed) => [
       `## ${indexed.stableId} - issue ${indexed.issue.id}`,
       `Type: ${indexed.issue.kind}`,
+      `Status: ${indexed.status}`,
       "",
       "User note:",
       indexed.issue.note || "Fix the measured UI issue. Prefer minimal changes.",
@@ -228,9 +264,47 @@ function shouldSkipDirectory(name: string): boolean {
   return [".git", "node_modules", "dist", "build", "test-results"].includes(name);
 }
 
-function indexIssue(sessionDirectory: string, session: VernierSession, issue: VernierIssue): IndexedVernierIssue {
+async function readIssueStatuses(sessionDirectory: string): Promise<Record<string, IssueStatus>> {
+  try {
+    const raw = await readFile(issueStatusesPath(sessionDirectory), "utf8");
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const statuses: Record<string, IssueStatus> = {};
+
+    for (const [issueId, status] of Object.entries(parsed)) {
+      if (status === "todo" || status === "fixed") {
+        statuses[issueId] = status;
+      }
+    }
+
+    return statuses;
+  } catch {
+    return {};
+  }
+}
+
+async function writeIssueStatuses(
+  sessionDirectory: string,
+  statuses: Record<string, IssueStatus>
+): Promise<void> {
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(issueStatusesPath(sessionDirectory), `${JSON.stringify(statuses, null, 2)}\n`);
+}
+
+function issueStatusesPath(sessionDirectory: string): string {
+  return path.join(sessionDirectory, "issue-status.json");
+}
+
+function indexIssue(
+  sessionDirectory: string,
+  session: VernierSession,
+  issue: VernierIssue,
+  statuses: Record<string, IssueStatus>
+): IndexedVernierIssue {
+  const stableId = createStableIssueId(session, issue);
+
   return {
-    stableId: createStableIssueId(session, issue),
+    stableId,
+    status: statuses[stableId] ?? "todo",
     session,
     issue,
     sessionDirectory,

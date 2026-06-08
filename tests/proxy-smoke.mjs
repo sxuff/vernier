@@ -134,6 +134,11 @@ try {
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
   const sendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--print"]);
   const sendAllOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
+  const markOutput = await runNode(["dist/cli.js", "mark", stableIssueId, "fixed"]);
+  const todoIssuesOutput = await runNode(["dist/cli.js", "issues", "--todo"]);
+  const fixedIssuesOutput = await runNode(["dist/cli.js", "issues", "--fixed"]);
+  const sendTodoOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
+  const sendAllAfterFixedOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--all", "--print"]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
@@ -147,10 +152,10 @@ try {
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
-  if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("make it red")) {
+  if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("todo") || !issuesOutput.includes("make it red")) {
     throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);
   }
-  if (!showOutput.includes(`ID: ${stableIssueId}`) || !showOutput.includes("Screenshot:")) {
+  if (!showOutput.includes(`ID: ${stableIssueId}`) || !showOutput.includes("Status: todo") || !showOutput.includes("Screenshot:")) {
     throw new Error(`Expected show command to print issue detail:\n${showOutput}`);
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
@@ -161,6 +166,21 @@ try {
   }
   if (!sendAllOutput.includes("Fix the UI issues captured by Vernier.") || !sendAllOutput.includes(stableIssueId)) {
     throw new Error(`Expected send --to codex --print to produce all-issues task:\n${sendAllOutput}`);
+  }
+  if (!markOutput.includes(`Marked ${stableIssueId} fixed.`)) {
+    throw new Error(`Expected mark command to update issue status:\n${markOutput}`);
+  }
+  if (todoIssuesOutput.includes(stableIssueId)) {
+    throw new Error(`Expected fixed issue to be hidden from --todo filter:\n${todoIssuesOutput}`);
+  }
+  if (!fixedIssuesOutput.includes(stableIssueId) || !fixedIssuesOutput.includes("fixed")) {
+    throw new Error(`Expected fixed issue to appear in --fixed filter:\n${fixedIssuesOutput}`);
+  }
+  if (!sendTodoOutput.includes("No todo issues in latest Vernier session.")) {
+    throw new Error(`Expected default send to skip fixed issues:\n${sendTodoOutput}`);
+  }
+  if (!sendAllAfterFixedOutput.includes(stableIssueId) || !sendAllAfterFixedOutput.includes("Status: fixed")) {
+    throw new Error(`Expected send --all to include fixed issues:\n${sendAllAfterFixedOutput}`);
   }
 
   console.log("proxy smoke verified");

@@ -9,8 +9,11 @@ import path from "node:path";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
+  filterIssuesByStatus,
   findLatestIssue,
+  type IssueStatus,
   listLatestIssues,
+  markLatestIssue,
   renderIssueDetail,
   renderIssueList,
   renderIssueTask,
@@ -70,7 +73,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "issues") {
-    console.log(renderIssueList(await listLatestIssues(process.cwd())));
+    console.log(renderIssueList(filterIssuesByStatus(await listLatestIssues(process.cwd()), readIssueStatusFilter(args))));
     return;
   }
 
@@ -97,6 +100,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "mark") {
+    await markIssue(args);
+    return;
+  }
+
   if (command === "latest") {
     console.log(await readLatestSessionMarkdown(process.cwd()));
     return;
@@ -114,6 +122,30 @@ async function main(): Promise<void> {
 
   printHelp();
   process.exit(command ? 1 : 0);
+}
+
+async function markIssue(args: string[]): Promise<void> {
+  const [reference, status] = readPositionalArgs(args);
+
+  if (!reference || !isIssueStatus(status)) {
+    throw new Error("Usage: vernier mark <issue-id> todo|fixed");
+  }
+
+  const issue = await markLatestIssue(process.cwd(), reference, status);
+
+  console.log(`Marked ${issue.stableId} ${status}.`);
+}
+
+function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
+  if (args.includes("--todo")) {
+    return "todo";
+  }
+
+  if (args.includes("--fixed")) {
+    return "fixed";
+  }
+
+  return "all";
 }
 
 function readRequiredReference(args: string[], command: string): string {
@@ -134,10 +166,9 @@ async function sendIssueToAgent(args: string[]): Promise<void> {
     throw new Error("Usage: vernier send <issue-id> --to codex|claude");
   }
 
-  const task =
-    reference === "all"
-      ? renderIssuesTask(await listLatestIssues(process.cwd()))
-      : renderIssueTask(await findLatestIssue(process.cwd(), reference));
+  const task = reference === "all"
+    ? await createIssuesSendTask(args)
+    : renderIssueTask(await findLatestIssue(process.cwd(), reference));
 
   if (args.includes("--print")) {
     console.log(task);
@@ -153,6 +184,18 @@ async function sendIssueToAgent(args: string[]): Promise<void> {
   await copyToClipboard(task);
   console.log(`Could not find the ${agent} CLI on PATH.`);
   console.log("Copied the Vernier task to clipboard instead. Paste it into the Codex app or install the CLI.");
+}
+
+async function createIssuesSendTask(args: string[]): Promise<string> {
+  const issues = filterIssuesByStatus(await listLatestIssues(process.cwd()), args.includes("--all") ? "all" : "todo");
+
+  if (issues.length === 0) {
+    return args.includes("--all")
+      ? "No issues in latest Vernier session."
+      : "No todo issues in latest Vernier session. Use --all to include fixed issues.";
+  }
+
+  return renderIssuesTask(issues);
 }
 
 async function runAgent(agent: "codex" | "claude", task: string): Promise<"started" | "missing"> {
@@ -498,6 +541,10 @@ function readOption(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
+function isIssueStatus(value: string | undefined): value is IssueStatus {
+  return value === "todo" || value === "fixed";
+}
+
 function readPositionalArgs(args: string[]): string[] {
   const positional: string[] = [];
   const optionsWithValues = new Set(["--target", "--port", "--ports", "--to"]);
@@ -555,10 +602,11 @@ function printHelp(): void {
       "  vernier proxy [--target <url>] [--port 3333]",
       "  vernier http://localhost:5173",
       "  vernier detect [--ports 5173,3000,6006]",
-      "  vernier issues",
+      "  vernier issues [--todo|--fixed|--all]",
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--print]",
-      "  vernier send [all|<issue-id>] --to codex|claude [--print]",
+      "  vernier mark <issue-id> todo|fixed",
+      "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
       "  vernier latest",
       "  vernier open",
       "",

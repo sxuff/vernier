@@ -108,15 +108,19 @@ After exporting, you can also use:
 
 ```bash
 vernier issues
+vernier issues --todo
+vernier issues --fixed
 vernier show <issue-id>
+vernier mark <issue-id> fixed
+vernier mark <issue-id> todo
 vernier copy <issue-id>
 vernier send --to codex
 vernier send <issue-id> --to codex
-vernier send all --to claude
+vernier send all --to claude --all
 vernier latest
 vernier open
 ```
 
-`vernier issues` prints short stable IDs like `i-8f3a12`, so you do not have to rely on fragile list positions when multiple issues are waiting.
+`vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting.
 
-`vernier send --to codex` sends every issue in the latest session by default. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
+`vernier send --to codex` sends todo issues in the latest session by default. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.

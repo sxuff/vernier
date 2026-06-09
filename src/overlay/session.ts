@@ -1,4 +1,4 @@
-import type { ElementTarget } from "../schema";
+import type { ElementTarget, VernierMeasurement } from "../schema";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -16,6 +16,7 @@ interface SessionIssue {
   selector: string;
   source: string;
   target: ElementTarget;
+  measurement: VernierMeasurement;
   note: string;
   createdAt: string;
   screenshotName: string;
@@ -28,12 +29,13 @@ interface DraftIssue {
   selector: string;
   source: string;
   target: ElementTarget;
+  measurement: VernierMeasurement;
   screenshotTarget: Element;
 }
 
 interface SessionController {
-  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void;
-  setAnnotationDraft(measured: string): void;
+  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement): void;
+  setAnnotationDraft(measured: string, measurement: VernierMeasurement): void;
   addDraftIssue(): Promise<SessionIssue | null>;
   updateIssueNote(id: number, note: string): SessionIssue | null;
   deleteIssue(id: number): void;
@@ -48,7 +50,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   const issues: SessionIssue[] = [];
   let draft: DraftIssue | null = null;
 
-  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void {
+  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement): void {
     const target = createElementTarget(element);
 
     draft = {
@@ -57,17 +59,19 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       selector: target.selector,
       source: target.source,
       target,
+      measurement,
       screenshotTarget: element
     };
   }
 
-  function setAnnotationDraft(measured: string): void {
+  function setAnnotationDraft(measured: string, measurement: VernierMeasurement): void {
     draft = {
       kind: "annotation",
       measured,
       selector: "viewport",
       source: "unresolved",
       target: createViewportTarget(),
+      measurement,
       screenshotTarget: document.documentElement
     };
   }
@@ -87,6 +91,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       selector: draft.selector,
       source: draft.source,
       target: draft.target,
+      measurement: draft.measurement,
       note: noteInput.value.trim(),
       createdAt: new Date().toISOString(),
       screenshotName: `issue-${stableId}.png`,

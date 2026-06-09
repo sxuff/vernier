@@ -25,6 +25,78 @@ export interface ElementTarget {
   }>;
 }
 
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface AuthoredStyleHint {
+  selector: string;
+  property: string;
+  value: string;
+  source: string;
+}
+
+export interface SingleMeasurement {
+  kind: "single";
+  bbox: BoundingBox;
+  computedStyle: Record<string, string>;
+  text?: string;
+  role?: string;
+  accessibleName?: string;
+  inlineStyle?: Record<string, string>;
+  authoredHints: AuthoredStyleHint[];
+}
+
+export interface DeltaMeasurement {
+  kind: "delta";
+  reference: ElementTarget;
+  target: ElementTarget;
+  referenceBbox: BoundingBox;
+  targetBbox: BoundingBox;
+  delta: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    color?: [string, string];
+    backgroundColor?: [string, string];
+    fontSize?: [string, string];
+  };
+}
+
+export interface AnnotationMeasurement {
+  kind: "annotation";
+  mode: "pen" | "box";
+  viewport: {
+    width: number;
+    height: number;
+    devicePixelRatio: number;
+  };
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  relativeBounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  points: Array<{ x: number; y: number }>;
+  relativePoints: Array<{ x: number; y: number }>;
+}
+
+export type VernierMeasurement = SingleMeasurement | DeltaMeasurement | AnnotationMeasurement;
+
 export interface VernierIssue {
   id: number;
   stableId: string;
@@ -33,6 +105,7 @@ export interface VernierIssue {
   selector: string;
   source: string;
   target: ElementTarget;
+  measurement?: VernierMeasurement;
   note: string;
   createdAt: string;
   screenshotName: string;

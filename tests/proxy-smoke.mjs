@@ -247,8 +247,12 @@ try {
   }
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
+  const sessionJson = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8"));
   if (!sessionMarkdown.includes("Left edge delta: +12px")) {
     throw new Error(`Expected proxy session to contain +12px delta:\n${sessionMarkdown}`);
+  }
+  if (!sessionMarkdown.includes("Structured evidence:")) {
+    throw new Error(`Expected proxy session markdown to include structured evidence:\n${sessionMarkdown}`);
   }
   if (!sessionMarkdown.includes("Annotation: pen")) {
     throw new Error(`Expected proxy session to contain pen annotation:\n${sessionMarkdown}`);
@@ -258,6 +262,15 @@ try {
   }
   if (!sessionMarkdown.includes("Selector confidence:")) {
     throw new Error(`Expected session markdown to include target confidence:\n${sessionMarkdown}`);
+  }
+  if (sessionJson.issues[0]?.measurement?.kind !== "single" || !sessionJson.issues[0].measurement.bbox) {
+    throw new Error(`Expected single issue to include structured bbox measurement:\n${JSON.stringify(sessionJson, null, 2)}`);
+  }
+  if (sessionJson.issues[1]?.measurement?.kind !== "delta" || sessionJson.issues[1].measurement.delta.left !== 12) {
+    throw new Error(`Expected delta issue to include structured delta measurement:\n${JSON.stringify(sessionJson, null, 2)}`);
+  }
+  if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
+    throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
 
   const latestOutput = await runNode(["dist/cli.js", "latest"]);

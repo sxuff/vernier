@@ -128,6 +128,7 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     "",
     "Measured:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatStructuredMeasurement(issue),
     "",
     "Target:",
     `Selector: ${issue.selector}`,
@@ -160,6 +161,7 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
     "",
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatStructuredEvidence(issue),
     `- Selector: ${issue.selector}`,
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
@@ -198,6 +200,7 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
       "",
       "Evidence:",
       ...indexed.issue.measured.split("\n").map((line) => `- ${line}`),
+      ...formatStructuredEvidence(indexed.issue),
       `- Selector: ${indexed.issue.selector}`,
       `- Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}${indexed.issue.target?.selectorReason ? ` (${indexed.issue.target.selectorReason})` : ""}`,
       `- Source: ${indexed.issue.source}`,
@@ -229,6 +232,7 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     "",
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatStructuredEvidence(issue),
     `- Selector: ${issue.selector}`,
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
@@ -261,6 +265,22 @@ function formatTarget(indexed: IndexedVernierIssue): string {
   ].filter(Boolean);
 
   return parts.join(" ");
+}
+
+function formatStructuredMeasurement(issue: VernierIssue): string[] {
+  if (!issue.measurement) {
+    return [];
+  }
+
+  return ["", "Structured measurement:", JSON.stringify(issue.measurement, null, 2)];
+}
+
+function formatStructuredEvidence(issue: VernierIssue): string[] {
+  if (!issue.measurement) {
+    return [];
+  }
+
+  return [`- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`];
 }
 
 async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {

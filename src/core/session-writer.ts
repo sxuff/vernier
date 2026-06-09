@@ -48,6 +48,7 @@ function renderSessionMarkdown(session: VernierSession): string {
       "",
       "Measured:",
       ...formatMeasured(issue.measured),
+      ...formatStructuredMeasurement(issue),
       "",
       "Target:",
       `Selector: ${issue.selector}`,
@@ -93,6 +94,20 @@ function formatTarget(issue: VernierSession["issues"][number]): string {
 
 function formatMeasured(measured: string): string[] {
   return measured.split("\n").map((line) => `- ${line}`);
+}
+
+function formatStructuredMeasurement(issue: VernierSession["issues"][number]): string[] {
+  if (!issue.measurement) {
+    return [];
+  }
+
+  return [
+    "",
+    "Structured evidence:",
+    "```json",
+    JSON.stringify(issue.measurement, null, 2),
+    "```"
+  ];
 }
 
 function titleCase(value: string): string {

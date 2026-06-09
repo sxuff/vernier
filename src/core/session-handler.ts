@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { VernierSession } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, VernierSession } from "../schema";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -158,11 +158,139 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     selector: expectString(issue.selector, `issues[${index}].selector`),
     source: expectString(issue.source, `issues[${index}].source`),
     target: validateTarget(issue.target, `issues[${index}].target`),
+    measurement: issue.measurement === undefined ? undefined : validateMeasurement(issue.measurement, kind, `issues[${index}].measurement`),
     note: expectString(issue.note, `issues[${index}].note`),
     createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
     screenshotName: expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`),
     screenshotDataUrl: expectPngDataUrl(issue.screenshotDataUrl, `issues[${index}].screenshotDataUrl`)
   };
+}
+
+function validateMeasurement(
+  value: unknown,
+  issueKind: "single" | "delta" | "annotation",
+  field: string
+): VernierSession["issues"][number]["measurement"] {
+  const measurement = expectRecord(value, field);
+  const kind = expectString(measurement.kind, `${field}.kind`);
+
+  if (kind !== issueKind) {
+    throw badRequest(`${field}.kind must match issue kind`);
+  }
+
+  if (kind === "single") {
+    return {
+      kind,
+      bbox: validateBoundingBox(measurement.bbox, `${field}.bbox`),
+      computedStyle: expectStringRecord(measurement.computedStyle, `${field}.computedStyle`),
+      text: expectOptionalString(measurement.text, `${field}.text`),
+      role: expectOptionalString(measurement.role, `${field}.role`),
+      accessibleName: expectOptionalString(measurement.accessibleName, `${field}.accessibleName`),
+      inlineStyle: measurement.inlineStyle === undefined ? undefined : expectStringRecord(measurement.inlineStyle, `${field}.inlineStyle`),
+      authoredHints: expectArray(measurement.authoredHints, `${field}.authoredHints`).map((hint, index) =>
+        validateAuthoredHint(hint, `${field}.authoredHints[${index}]`)
+      )
+    };
+  }
+
+  if (kind === "delta") {
+    const delta = expectRecord(measurement.delta, `${field}.delta`);
+
+    return {
+      kind,
+      reference: validateTarget(measurement.reference, `${field}.reference`),
+      target: validateTarget(measurement.target, `${field}.target`),
+      referenceBbox: validateBoundingBox(measurement.referenceBbox, `${field}.referenceBbox`),
+      targetBbox: validateBoundingBox(measurement.targetBbox, `${field}.targetBbox`),
+      delta: {
+        left: expectFiniteNumber(delta.left, `${field}.delta.left`),
+        top: expectFiniteNumber(delta.top, `${field}.delta.top`),
+        width: expectFiniteNumber(delta.width, `${field}.delta.width`),
+        height: expectFiniteNumber(delta.height, `${field}.delta.height`),
+        color: validateStringPair(delta.color, `${field}.delta.color`),
+        backgroundColor: validateStringPair(delta.backgroundColor, `${field}.delta.backgroundColor`),
+        fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`)
+      }
+    };
+  }
+
+  const viewport = expectRecord(measurement.viewport, `${field}.viewport`);
+
+  return {
+    kind,
+    mode: expectAnnotationMode(measurement.mode, `${field}.mode`),
+    viewport: {
+      width: expectPositiveNumber(viewport.width, `${field}.viewport.width`),
+      height: expectPositiveNumber(viewport.height, `${field}.viewport.height`),
+      devicePixelRatio: expectPositiveNumber(viewport.devicePixelRatio, `${field}.viewport.devicePixelRatio`)
+    },
+    bounds: validateAnnotationBounds(measurement.bounds, `${field}.bounds`),
+    relativeBounds: validateAnnotationBounds(measurement.relativeBounds, `${field}.relativeBounds`),
+    points: validatePoints(measurement.points, `${field}.points`),
+    relativePoints: validatePoints(measurement.relativePoints, `${field}.relativePoints`)
+  };
+}
+
+function validateBoundingBox(value: unknown, field: string): BoundingBox {
+  const box = expectRecord(value, field);
+
+  return {
+    x: expectFiniteNumber(box.x, `${field}.x`),
+    y: expectFiniteNumber(box.y, `${field}.y`),
+    width: expectPositiveNumber(box.width, `${field}.width`),
+    height: expectPositiveNumber(box.height, `${field}.height`),
+    top: expectFiniteNumber(box.top, `${field}.top`),
+    right: expectFiniteNumber(box.right, `${field}.right`),
+    bottom: expectFiniteNumber(box.bottom, `${field}.bottom`),
+    left: expectFiniteNumber(box.left, `${field}.left`)
+  };
+}
+
+function validateAnnotationBounds(value: unknown, field: string): { x: number; y: number; width: number; height: number } {
+  const bounds = expectRecord(value, field);
+
+  return {
+    x: expectFiniteNumber(bounds.x, `${field}.x`),
+    y: expectFiniteNumber(bounds.y, `${field}.y`),
+    width: expectFiniteNumber(bounds.width, `${field}.width`),
+    height: expectFiniteNumber(bounds.height, `${field}.height`)
+  };
+}
+
+function validateAuthoredHint(value: unknown, field: string): AuthoredStyleHint {
+  const hint = expectRecord(value, field);
+
+  return {
+    selector: expectString(hint.selector, `${field}.selector`),
+    property: expectString(hint.property, `${field}.property`),
+    value: expectString(hint.value, `${field}.value`),
+    source: expectString(hint.source, `${field}.source`)
+  };
+}
+
+function validateStringPair(value: unknown, field: string): [string, string] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const pair = expectArray(value, field);
+
+  if (pair.length !== 2 || pair.some((item) => typeof item !== "string")) {
+    throw badRequest(`${field} must be a two-string array`);
+  }
+
+  return pair as [string, string];
+}
+
+function validatePoints(value: unknown, field: string): Array<{ x: number; y: number }> {
+  return expectArray(value, field).map((point, index) => {
+    const record = expectRecord(point, `${field}[${index}]`);
+
+    return {
+      x: expectFiniteNumber(record.x, `${field}[${index}].x`),
+      y: expectFiniteNumber(record.y, `${field}[${index}].y`)
+    };
+  });
 }
 
 function validateTarget(value: unknown, field: string): VernierSession["issues"][number]["target"] {
@@ -269,6 +397,21 @@ function expectStringArray(value: unknown, field: string): string[] {
   return items as string[];
 }
 
+function expectStringRecord(value: unknown, field: string): Record<string, string> {
+  const record = expectRecord(value, field);
+  const result: Record<string, string> = {};
+
+  for (const [key, item] of Object.entries(record)) {
+    if (typeof item !== "string") {
+      throw badRequest(`${field}.${key} must be a string`);
+    }
+
+    result[key] = item;
+  }
+
+  return result;
+}
+
 function expectConfidence(value: unknown, field: string): "high" | "medium" | "low" {
   if (value !== "high" && value !== "medium" && value !== "low") {
     throw badRequest(`${field} must be high, medium, or low`);
@@ -277,9 +420,25 @@ function expectConfidence(value: unknown, field: string): "high" | "medium" | "l
   return value;
 }
 
+function expectAnnotationMode(value: unknown, field: string): "pen" | "box" {
+  if (value !== "pen" && value !== "box") {
+    throw badRequest(`${field} must be pen or box`);
+  }
+
+  return value;
+}
+
 function expectPositiveNumber(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw badRequest(`${field} must be a positive number`);
+  }
+
+  return value;
+}
+
+function expectFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw badRequest(`${field} must be a finite number`);
   }
 
   return value;

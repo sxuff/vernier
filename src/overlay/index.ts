@@ -15,21 +15,21 @@ export function startVernierOverlay(): void {
 
   updateControls();
   const annotation = createAnnotationLayer(overlay.root, {
-    onDraft(measurement) {
-      renderMeasurementPanel(overlay.panel, measurement);
-      session.setAnnotationDraft(measurement);
+    onDraft(measured, measurement) {
+      renderMeasurementPanel(overlay.panel, measured);
+      session.setAnnotationDraft(measured, measurement);
     }
   });
   const picker = createPicker(overlay.root, {
     onSelect(element) {
       const measurement = measureElement(element);
-      renderMeasurementPanel(overlay.panel, measurement);
-      session.setMeasurementDraft("single", element, measurement);
+      renderMeasurementPanel(overlay.panel, measurement.text);
+      session.setMeasurementDraft("single", element, measurement.text, measurement.measurement);
     },
     onCompare(firstElement, secondElement) {
       const measurement = measureDelta(firstElement, secondElement);
-      renderMeasurementPanel(overlay.panel, measurement);
-      session.setMeasurementDraft("delta", secondElement, measurement);
+      renderMeasurementPanel(overlay.panel, measurement.text);
+      session.setMeasurementDraft("delta", secondElement, measurement.text, measurement.measurement);
     }
   });
   document.documentElement.append(overlay.root);

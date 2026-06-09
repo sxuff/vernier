@@ -1,6 +1,21 @@
 import { startVernierOverlay } from "../overlay/index";
 import { createAnnotationLayer } from "../overlay/annotation";
-import { measureDelta, measureElement } from "../overlay/measure";
+import {
+  accessibleName,
+  authoredStyleHints,
+  boundingBox,
+  formatNumber,
+  formatSigned,
+  inlineStyle,
+  measureDelta,
+  measureElement,
+  pickComputedStyles,
+  roundNumber,
+  stylePropertyNames,
+  textSummary as measurementTextSummary,
+  toHex,
+  toHexColor
+} from "../overlay/measure";
 import { createPicker } from "../overlay/picker";
 import { getStableSelector } from "../overlay/selector";
 import { createSessionController } from "../overlay/session";
@@ -49,6 +64,18 @@ export function createVernierOverlayScript(options: OverlayScriptOptions): strin
     findOwnerChain.toString(),
     resolveSource.toString(),
     getSourceLocation.toString(),
+    stylePropertyNames.toString(),
+    formatNumber.toString(),
+    formatSigned.toString(),
+    roundNumber.toString(),
+    toHex.toString(),
+    toHexColor.toString(),
+    boundingBox.toString(),
+    pickComputedStyles.toString(),
+    inlineStyle.toString(),
+    authoredStyleHints.toString(),
+    measurementTextSummary.toString(),
+    accessibleName.toString(),
     measureElement.toString(),
     measureDelta.toString(),
     selectorConfidence.toString(),

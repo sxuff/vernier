@@ -93,6 +93,21 @@ test("exports measured UI feedback session", async ({ page }) => {
     issues: Array<{
       stableId: string;
       note: string;
+      measurement?: {
+        kind: string;
+        delta?: {
+          left: number;
+          top: number;
+          width: number;
+          height: number;
+        };
+        reference?: {
+          selector: string;
+        };
+        target?: {
+          selector: string;
+        };
+      };
       target: {
         selectorConfidence: string;
         tag: string;
@@ -123,4 +138,8 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionJson.issues[0]?.target.sourceResolver).toBe("data-vernier-source");
   expect(Array.isArray(sessionJson.issues[0]?.target.ownerChain)).toBe(true);
   expect(sessionJson.issues[0]?.target.ancestry.length).toBeGreaterThan(0);
+  expect(sessionJson.issues[0]?.measurement?.kind).toBe("delta");
+  expect(sessionJson.issues[0]?.measurement?.delta?.left).toBe(12);
+  expect(sessionJson.issues[0]?.measurement?.reference?.selector).toContain("usage-card");
+  expect(sessionJson.issues[0]?.measurement?.target?.selector).toContain("revenue-card");
 });

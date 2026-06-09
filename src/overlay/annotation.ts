@@ -1,10 +1,12 @@
+import type { AnnotationMeasurement } from "../schema";
+
 export interface AnnotationLayer {
   setMode(mode: string): void;
   clear(): void;
 }
 
 interface AnnotationOptions {
-  onDraft(measured: string): void;
+  onDraft(measured: string, measurement: AnnotationMeasurement): void;
 }
 
 interface Point {
@@ -94,18 +96,41 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     }
 
     const bounds = getBounds(points);
+    const normalizedBounds = normalizeBounds(bounds);
     const relativePoints = points.map((point) => ({
       x: round(point.x / window.innerWidth),
       y: round(point.y / window.innerHeight)
     }));
+    const measurement: AnnotationMeasurement = {
+      kind: "annotation",
+      mode: mode === "box" ? "box" : "pen",
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio
+      },
+      bounds: normalizedBounds,
+      relativeBounds: {
+        x: round(normalizedBounds.x / window.innerWidth),
+        y: round(normalizedBounds.y / window.innerHeight),
+        width: round(normalizedBounds.width / window.innerWidth),
+        height: round(normalizedBounds.height / window.innerHeight)
+      },
+      points: points.map((point) => ({
+        x: round(point.x),
+        y: round(point.y)
+      })),
+      relativePoints
+    };
 
     options.onDraft(
       [
         `Annotation: ${mode}`,
         `Viewport: ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}x`,
-        `Region: x=${Math.round(bounds.x)}, y=${Math.round(bounds.y)}, w=${Math.round(bounds.w)}, h=${Math.round(bounds.h)}`,
+        `Region: x=${Math.round(normalizedBounds.x)}, y=${Math.round(normalizedBounds.y)}, w=${Math.round(normalizedBounds.width)}, h=${Math.round(normalizedBounds.height)}`,
         `Relative points: ${JSON.stringify(relativePoints)}`
-      ].join("\n")
+      ].join("\n"),
+      measurement
     );
   }
 
@@ -159,6 +184,15 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     const maxY = Math.max(...ys);
 
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+
+  function normalizeBounds(bounds: { x: number; y: number; w: number; h: number }): AnnotationMeasurement["bounds"] {
+    return {
+      x: round(bounds.w < 0 ? bounds.x + bounds.w : bounds.x),
+      y: round(bounds.h < 0 ? bounds.y + bounds.h : bounds.y),
+      width: round(Math.abs(bounds.w)),
+      height: round(Math.abs(bounds.h))
+    };
   }
 
   function round(value: number): number {

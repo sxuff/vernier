@@ -9,6 +9,7 @@ import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "./schema";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
@@ -38,6 +39,23 @@ interface ProxyOptions {
   root: string;
 }
 
+interface VernierConfig {
+  target?: string;
+  port?: number | "auto";
+  detectPorts?: number[];
+  verification?: {
+    bboxTolerancePx?: number;
+  };
+  agents?: {
+    default?: "codex" | "claude";
+  };
+}
+
+interface CliContext {
+  config: VernierConfig;
+  verbose: boolean;
+}
+
 interface DetectedApp {
   url: string;
   label: string;
@@ -51,6 +69,181 @@ const defaultDetectPorts = [5173, 3000, 3001, 4173, 4200, 4321, 5000, 5174, 6006
 const maxProxyBodyBytes = 30 * 1024 * 1024;
 const maxPortFallbackAttempts = 20;
 
+class VernierError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public hint?: string
+  ) {
+    super(message);
+  }
+}
+
+async function createCliContext(args: string[]): Promise<CliContext> {
+  const verbose = args.includes("--verbose") || process.env.VERNIER_DEBUG === "1" || process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true;
+  const config = await loadConfig(args, verbose);
+
+  return { config, verbose };
+}
+
+async function loadConfig(args: string[], verbose: boolean): Promise<VernierConfig> {
+  const configPath = await findConfigPath(args);
+
+  if (!configPath) {
+    debugLog(verbose, "config", "no config file found");
+    return {};
+  }
+
+  const loaded = await readConfigFile(configPath);
+  const config = validateConfig(loaded, configPath);
+  debugLog(verbose, "config", `loaded ${configPath}`);
+  return config;
+}
+
+async function findConfigPath(args: string[]): Promise<string | null> {
+  const explicit = readOption(args, "--config");
+
+  if (explicit) {
+    const resolved = path.resolve(process.cwd(), explicit);
+    await access(resolved).catch(() => {
+      throw new VernierError("VERNIER_CONFIG_NOT_FOUND", `Config file was not found: ${resolved}`, "Check the --config path or create vernier.config.json.");
+    });
+    return resolved;
+  }
+
+  for (const filename of ["vernier.config.json", "vernier.config.mjs", "vernier.config.js", "vernier.config.cjs"]) {
+    const candidate = path.join(process.cwd(), filename);
+
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Try the next supported config filename.
+    }
+  }
+
+  return null;
+}
+
+async function readConfigFile(configPath: string): Promise<unknown> {
+  const extension = path.extname(configPath);
+
+  if (extension === ".json") {
+    try {
+      return JSON.parse(await readFile(configPath, "utf8"));
+    } catch (error) {
+      throw new VernierError("VERNIER_INVALID_CONFIG", `Could not parse ${configPath}`, error instanceof Error ? error.message : undefined);
+    }
+  }
+
+  if (extension === ".cjs") {
+    return require(configPath);
+  }
+
+  if (extension === ".js" || extension === ".mjs") {
+    const module = await import(pathToFileURL(configPath).href);
+    return "default" in module ? module.default : module;
+  }
+
+  throw new VernierError("VERNIER_UNSUPPORTED_CONFIG", `Unsupported config file extension: ${extension}`, "Use vernier.config.json, .js, .mjs, or .cjs.");
+}
+
+function validateConfig(value: unknown, configPath: string): VernierConfig {
+  const config = expectOptionalRecord(value, configPath);
+  const result: VernierConfig = {};
+
+  if (config.target !== undefined) {
+    result.target = expectConfigString(config.target, "target");
+    parseUrlOption(result.target, "config target");
+  }
+
+  if (config.port !== undefined) {
+    result.port = expectConfigPort(config.port, "port");
+  }
+
+  if (config.detectPorts !== undefined) {
+    result.detectPorts = expectConfigPorts(config.detectPorts, "detectPorts");
+  }
+
+  if (config.verification !== undefined) {
+    const verification = expectOptionalRecord(config.verification, "verification");
+    result.verification = {};
+
+    if (verification.bboxTolerancePx !== undefined) {
+      result.verification.bboxTolerancePx = expectConfigNonNegativeNumber(verification.bboxTolerancePx, "verification.bboxTolerancePx");
+    }
+  }
+
+  if (config.agents !== undefined) {
+    const agents = expectOptionalRecord(config.agents, "agents");
+    result.agents = {};
+
+    if (agents.default !== undefined) {
+      result.agents.default = expectConfigAgent(agents.default, "agents.default");
+    }
+  }
+
+  return result;
+}
+
+function expectOptionalRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `${field} must export an object.`);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function expectConfigString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be a non-empty string.`);
+  }
+
+  return value;
+}
+
+function expectConfigPort(value: unknown, field: string): number | "auto" {
+  if (value === "auto") {
+    return value;
+  }
+
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 65535) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be a TCP port or "auto".`);
+  }
+
+  return value as number;
+}
+
+function expectConfigPorts(value: unknown, field: string): number[] {
+  if (!Array.isArray(value)) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be an array of TCP ports.`);
+  }
+
+  return [...new Set(value.map((port, index) => expectConfigPort(port, `${field}[${index}]`)).filter((port): port is number => port !== "auto"))];
+}
+
+function expectConfigNonNegativeNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be a non-negative number.`);
+  }
+
+  return value;
+}
+
+function expectConfigAgent(value: unknown, field: string): "codex" | "claude" {
+  if (value !== "codex" && value !== "claude") {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be codex or claude.`);
+  }
+
+  return value;
+}
+
+function debugLog(enabled: boolean, namespace: string, message: string): void {
+  if (enabled) {
+    console.error(`[vernier:${namespace}] ${message}`);
+  }
+}
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
@@ -59,21 +252,23 @@ async function main(): Promise<void> {
     return;
   }
 
+  const context = await createCliContext(process.argv.slice(2));
+
   if (!command || command === "proxy" || command === "start" || isUrlLike(command) || command.startsWith("--")) {
     const proxyArgs =
       command && command !== "proxy" && command !== "start" ? [command, ...args] : args;
-    const options = parseProxyOptions(proxyArgs);
+    const options = parseProxyOptions(proxyArgs, context.config);
     await startProxyServer(options, { open: false });
     return;
   }
 
   if (command === "attach") {
-    await attachToLocalApp(args);
+    await attachToLocalApp(args, context.config);
     return;
   }
 
   if (command === "detect") {
-    await detectLocalApps(args);
+    await detectLocalApps(args, context.config);
     return;
   }
 
@@ -101,7 +296,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "send") {
-    await sendIssueToAgent(args);
+    await sendIssueToAgent(args, context.config);
     return;
   }
 
@@ -111,7 +306,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "verify") {
-    await verifyIssue(args);
+    await verifyIssue(args, context.config);
     return;
   }
 
@@ -159,13 +354,13 @@ async function main(): Promise<void> {
   process.exit(command ? 1 : 0);
 }
 
-async function verifyIssue(args: string[]): Promise<void> {
+async function verifyIssue(args: string[], config: VernierConfig): Promise<void> {
   const reference = readRequiredReference(args, "verify");
   const issue = await findLatestIssue(process.cwd(), reference);
-  const targetUrl = createIssueTargetUrl(readOption(args, "--target") ?? defaultTarget, issue.session.route);
+  const targetUrl = createIssueTargetUrl(resolveTargetOption(args, config), issue.session.route);
 
   if (args.includes("--compare")) {
-    console.log(await compareIssue(issue, targetUrl, readTolerance(args)));
+    console.log(await compareIssue(issue, targetUrl, readTolerance(args, config)));
     return;
   }
 
@@ -1516,12 +1711,12 @@ function renderCompareReport(
   ].filter((line): line is string => line !== null).join("\n");
 }
 
-function readTolerance(args: string[]): number {
-  const value = readOption(args, "--tolerance") ?? "2";
+function readTolerance(args: string[], config: VernierConfig): number {
+  const value = readOption(args, "--tolerance") ?? String(config.verification?.bboxTolerancePx ?? 2);
   const tolerance = Number(value);
 
   if (!Number.isFinite(tolerance) || tolerance < 0) {
-    throw new Error(`Invalid --tolerance value: ${value}`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --tolerance value: ${value}`, "Use a non-negative number, for example --tolerance 2.");
   }
 
   return tolerance;
@@ -1569,12 +1764,12 @@ function readRequiredReference(args: string[], command: string): string {
   return reference;
 }
 
-async function sendIssueToAgent(args: string[]): Promise<void> {
+async function sendIssueToAgent(args: string[], config: VernierConfig): Promise<void> {
   const reference = readPositionalArgs(args)[0] ?? "all";
-  const agent = readOption(args, "--to");
+  const agent = readOption(args, "--to") ?? process.env.VERNIER_AGENT ?? config.agents?.default;
 
   if (agent !== "codex" && agent !== "claude") {
-    throw new Error("Usage: vernier send <issue-id> --to codex|claude");
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier send <issue-id> --to codex|claude", "Set agents.default in vernier.config.json or VERNIER_AGENT to avoid passing --to every time.");
   }
 
   const task = reference === "all"
@@ -1671,12 +1866,12 @@ function tryClipboardCommand(command: string[], value: string): Promise<boolean>
   });
 }
 
-async function detectLocalApps(args: string[]): Promise<void> {
-  const apps = await scanLocalApps(parseDetectPorts(args));
+async function detectLocalApps(args: string[], config: VernierConfig): Promise<void> {
+  const apps = await scanLocalApps(parseDetectPorts(args, config));
 
   if (apps.length === 0) {
     console.log("No local web apps found.");
-    console.log(`Try: vernier --target ${defaultTarget}`);
+    console.log(`Try: vernier --target ${resolveTargetOption([], config)}`);
     return;
   }
 
@@ -1690,24 +1885,32 @@ async function detectLocalApps(args: string[]): Promise<void> {
   console.log(`  vernier attach --target ${apps[0].url}`);
 }
 
-async function attachToLocalApp(args: string[]): Promise<void> {
-  const target = await resolveAttachTarget(args);
-  const options = parseProxyOptions(["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")]);
+async function attachToLocalApp(args: string[], config: VernierConfig): Promise<void> {
+  const target = await resolveAttachTarget(args, config);
+  const options = parseProxyOptions(["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")], config);
 
   await startProxyServer(options, { open: !args.includes("--no-open") });
 }
 
-async function resolveAttachTarget(args: string[]): Promise<string> {
+async function resolveAttachTarget(args: string[], config: VernierConfig): Promise<string> {
   const explicitTarget = readOption(args, "--target") ?? readPositionalTarget(args);
 
   if (explicitTarget) {
     return explicitTarget;
   }
 
-  const apps = await scanLocalApps(parseDetectPorts(args));
+  if (config.target || process.env.VERNIER_TARGET) {
+    return resolveTargetOption(args, config);
+  }
+
+  const apps = await scanLocalApps(parseDetectPorts(args, config));
 
   if (apps.length === 0) {
-    throw new Error(`No local web apps found. Start your app, or run: vernier attach --target ${defaultTarget}`);
+    throw new VernierError(
+      "VERNIER_NO_LOCAL_APP",
+      "No local web apps found.",
+      `Start your app, or run: vernier attach --target ${resolveTargetOption([], config)}`
+    );
   }
 
   console.log(`[vernier] detected ${apps[0].label} at ${apps[0].url}`);
@@ -1720,17 +1923,33 @@ async function scanLocalApps(ports: number[]): Promise<DetectedApp[]> {
   );
 }
 
-function parseDetectPorts(args: string[]): number[] {
+function parseDetectPorts(args: string[], config: VernierConfig): number[] {
   const portsValue = readOption(args, "--ports");
 
   if (!portsValue) {
-    return defaultDetectPorts;
+    return config.detectPorts ?? readEnvPorts() ?? defaultDetectPorts;
   }
 
   const ports = portsValue.split(",").map((value) => Number(value.trim()));
 
   if (ports.some((port) => !Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new Error(`Invalid --ports value: ${portsValue}`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --ports value: ${portsValue}`, "Use a comma-separated list of TCP ports, for example --ports 5173,3000,6006.");
+  }
+
+  return [...new Set(ports)];
+}
+
+function readEnvPorts(): number[] | null {
+  const portsValue = process.env.VERNIER_PORTS;
+
+  if (!portsValue) {
+    return null;
+  }
+
+  const ports = portsValue.split(",").map((value) => Number(value.trim()));
+
+  if (ports.some((port) => !Number.isInteger(port) || port < 1 || port > 65535)) {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid VERNIER_PORTS value: ${portsValue}`, "Use a comma-separated list of TCP ports, for example VERNIER_PORTS=5173,3000,6006.");
   }
 
   return [...new Set(ports)];
@@ -1790,26 +2009,42 @@ function classifyDetectedApp(port: number, body: string, server: string, powered
   return "HTTP app";
 }
 
-function parseProxyOptions(args: string[]): ProxyOptions {
-  const targetValue = readOption(args, "--target") ?? readPositionalTarget(args) ?? defaultTarget;
-  const port = parsePortOption(args, defaultPort);
+function parseProxyOptions(args: string[], config: VernierConfig = {}): ProxyOptions {
+  const targetValue = resolveTargetOption(args, config);
+  const port = parsePortOption(args, resolveDefaultPort(config));
 
   return {
-    target: new URL(targetValue),
+    target: parseUrlOption(targetValue, "target"),
     port,
     root: process.cwd()
   };
 }
 
-function parsePortOption(args: string[], fallbackPort: number): number | "auto" {
-  const portValue = readOption(args, "--port") ?? String(fallbackPort);
+function parsePortOption(args: string[], fallbackPort: number | "auto"): number | "auto" {
+  const portValue = readOption(args, "--port") ?? process.env.VERNIER_PORT ?? String(fallbackPort);
   const port = portValue === "auto" ? "auto" : Number(portValue);
 
   if (port !== "auto" && (!Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new Error(`Invalid --port value: ${portValue}`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --port value: ${portValue}`, "Use a port from 1 to 65535, or --port auto.");
   }
 
   return port;
+}
+
+function resolveTargetOption(args: string[], config: VernierConfig): string {
+  return readOption(args, "--target") ?? readPositionalTarget(args) ?? process.env.VERNIER_TARGET ?? config.target ?? defaultTarget;
+}
+
+function resolveDefaultPort(config: VernierConfig): number | "auto" {
+  return process.env.VERNIER_PORT === undefined ? config.port ?? defaultPort : defaultPort;
+}
+
+function parseUrlOption(value: string, field: string): URL {
+  try {
+    return new URL(value);
+  } catch {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid ${field} URL: ${value}`, "Use an absolute local URL, for example http://localhost:5173.");
+  }
 }
 
 async function startProxyServer(options: ProxyOptions, settings: { open: boolean }): Promise<void> {
@@ -2221,7 +2456,7 @@ function isIssueStatus(value: string | undefined): value is IssueStatus {
 
 function readPositionalArgs(args: string[]): string[] {
   const positional: string[] = [];
-  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance"]);
+  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config"]);
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -2289,7 +2524,7 @@ function printHelp(): void {
   console.log(
     [
       "Usage:",
-      "  vernier [--target http://localhost:5173] [--port 3333|auto]",
+      "  vernier [--target http://localhost:5173] [--port 3333|auto] [--config vernier.config.json]",
       "  vernier attach [--target <url>] [--ports 5173,3000,6006] [--open|--no-open]",
       "  vernier start [--target <url>] [--port 3333|auto]",
       "  vernier proxy [--target <url>] [--port 3333|auto]",
@@ -2310,12 +2545,25 @@ function printHelp(): void {
       "  vernier latest",
       "  vernier open",
       "",
+      "Config:",
+      "  vernier.config.json|js|mjs|cjs can set target, port, detectPorts, verification.bboxTolerancePx, and agents.default.",
+      "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
+      "",
       `Latest session path: ${latestSessionMarkdownPath}`
     ].join("\n")
   );
 }
 
 main().catch((error) => {
+  if (error instanceof VernierError) {
+    console.error(error.code);
+    console.error(error.message);
+    if (error.hint) {
+      console.error(`Hint: ${error.hint}`);
+    }
+    process.exit(1);
+  }
+
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });

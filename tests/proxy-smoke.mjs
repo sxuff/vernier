@@ -359,6 +359,15 @@ try {
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
   const doctorOutput = await runNode(["dist/cli.js", "doctor"]);
   const cleanDryRunOutput = await runNode(["dist/cli.js", "clean", "--keep", "1", "--dry-run"]);
+  const configPath = path.join(feedbackRoot, "vernier.config.json");
+
+  await writeFile(configPath, `${JSON.stringify({
+    target: `http://127.0.0.1:${targetPort}`,
+    port: "auto",
+    detectPorts: [targetPort],
+    verification: { bboxTolerancePx: 5 },
+    agents: { default: "codex" }
+  }, null, 2)}\n`);
 
   await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
 
@@ -375,6 +384,10 @@ try {
 
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
+  const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
+  const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
+  const configSendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--config", configPath, "--print"]);
+  const invalidOptionOutput = await runNodeFailure(["dist/cli.js", "--port", "nope"]);
   const verifyOutput = await runNode([
     "dist/cli.js",
     "verify",
@@ -422,6 +435,9 @@ try {
   if (!helpOutput.includes("vernier [--target http://localhost:5173]") || !helpOutput.includes("vernier http://localhost:5173")) {
     throw new Error(`Expected help command to document CLI shorthand:\n${helpOutput}`);
   }
+  if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
+    throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
+  }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
@@ -457,6 +473,18 @@ try {
     !showOutput.includes("Screenshot:")
   ) {
     throw new Error(`Expected show command to print issue detail:\n${showOutput}`);
+  }
+  if (!configDetectOutput.includes(`http://127.0.0.1:${targetPort}`)) {
+    throw new Error(`Expected detect to use configured ports:\n${configDetectOutput}`);
+  }
+  if (!configVerifyOutput.includes(`URL: http://127.0.0.1:${targetPort}/`)) {
+    throw new Error(`Expected verify to use configured target:\n${configVerifyOutput}`);
+  }
+  if (!configSendOutput.includes("Fix the UI issue captured by Vernier.") || !configSendOutput.includes(stableIssueId)) {
+    throw new Error(`Expected send to use configured default agent with --print:\n${configSendOutput}`);
+  }
+  if (!invalidOptionOutput.includes("VERNIER_INVALID_OPTION") || !invalidOptionOutput.includes("Invalid --port value")) {
+    throw new Error(`Expected invalid CLI options to produce structured errors:\n${invalidOptionOutput}`);
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
     throw new Error(`Expected copy --print to produce issue task:\n${copyOutput}`);
@@ -786,6 +814,29 @@ function runNode(args) {
       }
 
       reject(new Error(stderr || `Command failed with ${code}`));
+    });
+  });
+}
+
+function runNodeFailure(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("exit", (code) => {
+      if (code === 0) {
+        reject(new Error(`Expected command to fail: ${args.join(" ")}\n${stdout}`));
+        return;
+      }
+
+      resolve(`${stdout}${stderr}`);
     });
   });
 }

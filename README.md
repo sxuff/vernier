@@ -70,6 +70,24 @@ The proxy injects Vernier into HTML responses and forwards everything else to yo
 
 Your target app must already be running. If the target app is down, Vernier keeps running and shows a 502 page explaining that the target refused the connection.
 
+Optional defaults can live in `vernier.config.json`:
+
+```json
+{
+  "target": "http://localhost:5173",
+  "port": "auto",
+  "detectPorts": [5173, 3000, 6006],
+  "verification": {
+    "bboxTolerancePx": 2
+  },
+  "agents": {
+    "default": "codex"
+  }
+}
+```
+
+Flags win over environment variables, environment variables win over config, and config wins over built-in defaults. Supported environment defaults are `VERNIER_TARGET`, `VERNIER_PORT`, `VERNIER_PORTS`, `VERNIER_AGENT`, and `VERNIER_DEBUG=1`.
+
 ## Workflow
 
 1. Press `Ctrl+Shift+F`.

@@ -4,6 +4,12 @@ interface SourceLocation {
 }
 
 export function getSourceLocation(element: Element): string {
+  const annotatedSource = findAnnotatedSource(element);
+
+  if (annotatedSource) {
+    return annotatedSource;
+  }
+
   const fiber = getReactFiber(element);
   const source = findDebugSource(fiber);
 
@@ -51,5 +57,21 @@ export function getSourceLocation(element: Element): string {
     const srcIndex = normalized.lastIndexOf("/src/");
 
     return srcIndex >= 0 ? normalized.slice(srcIndex + 1) : normalized;
+  }
+
+  function findAnnotatedSource(sourceElement: Element): string | null {
+    let current: Element | null = sourceElement;
+
+    while (current) {
+      const sourceAttribute = current.getAttribute("data-vernier-source");
+
+      if (sourceAttribute) {
+        return sourceAttribute;
+      }
+
+      current = current.parentElement;
+    }
+
+    return null;
   }
 }

@@ -51,7 +51,10 @@ function renderSessionMarkdown(session: VernierSession): string {
       "",
       "Target:",
       `Selector: ${issue.selector}`,
+      `Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
       `Source: ${issue.source}`,
+      `Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+      `Element: ${formatTarget(issue)}`,
       "",
       `Screenshot: ./screenshots/${issue.screenshotName}`,
       ""
@@ -66,6 +69,24 @@ function renderSessionMarkdown(session: VernierSession): string {
   );
 
   return lines.join("\n");
+}
+
+function formatTarget(issue: VernierSession["issues"][number]): string {
+  const target = issue.target;
+
+  if (!target) {
+    return issue.selector;
+  }
+
+  const parts = [
+    target.tag,
+    target.testId ? `data-testid=${target.testId}` : null,
+    target.id ? `id=${target.id}` : null,
+    target.role ? `role=${target.role}` : null,
+    target.accessibleName ? `name=${target.accessibleName}` : null
+  ].filter(Boolean);
+
+  return parts.join(" ");
 }
 
 function formatMeasured(measured: string): string[] {

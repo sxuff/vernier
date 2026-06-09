@@ -84,8 +84,19 @@ test("exports measured UI feedback session", async ({ page }) => {
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
   const sessionJson = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")) as {
+    schemaVersion: number;
+    sessionId: string;
     issueCount: number;
-    issues: Array<{ note: string }>;
+    issues: Array<{
+      stableId: string;
+      note: string;
+      target: {
+        selectorConfidence: string;
+        tag: string;
+        nearestTestId?: string;
+        ancestry: unknown[];
+      };
+    }>;
   };
 
   expect(sessionMarkdown).toContain("12px");
@@ -95,5 +106,12 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionMarkdown).not.toContain("edited exploratory note");
   expect(sessionMarkdown).toMatch(/Source: (src\/.*RevenueCard\.tsx:\d+|unresolved)/);
   expect(sessionJson.issueCount).toBe(1);
+  expect(sessionJson.schemaVersion).toBe(1);
+  expect(sessionJson.sessionId).toMatch(/^s-/);
+  expect(sessionJson.issues[0]?.stableId).toMatch(/^i-/);
   expect(sessionJson.issues[0]?.note).toBe("align these card edges");
+  expect(sessionJson.issues[0]?.target.selectorConfidence).toBe("high");
+  expect(sessionJson.issues[0]?.target.tag).toBe("article");
+  expect(sessionJson.issues[0]?.target.nearestTestId).toBe("revenue-card");
+  expect(sessionJson.issues[0]?.target.ancestry.length).toBeGreaterThan(0);
 });

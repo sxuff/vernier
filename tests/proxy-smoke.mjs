@@ -149,6 +149,9 @@ try {
   if (!sessionMarkdown.includes("Issue count: 3") || !sessionMarkdown.includes("edited delta note")) {
     throw new Error(`Expected cleaner edited session output:\n${sessionMarkdown}`);
   }
+  if (!sessionMarkdown.includes("Selector confidence:")) {
+    throw new Error(`Expected session markdown to include target confidence:\n${sessionMarkdown}`);
+  }
 
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
@@ -196,7 +199,13 @@ try {
   if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("todo") || !issuesOutput.includes("make it red")) {
     throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);
   }
-  if (!showOutput.includes(`ID: ${stableIssueId}`) || !showOutput.includes("Status: todo") || !showOutput.includes("Screenshot:")) {
+  if (
+    !showOutput.includes(`ID: ${stableIssueId}`) ||
+    !showOutput.includes("Status: todo") ||
+    !showOutput.includes("Selector confidence:") ||
+    !showOutput.includes("Element:") ||
+    !showOutput.includes("Screenshot:")
+  ) {
     throw new Error(`Expected show command to print issue detail:\n${showOutput}`);
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
@@ -314,6 +323,16 @@ function createSessionPayload(overrides = {}) {
         measured: "Selector: body",
         selector: "body",
         source: "unresolved",
+        target: {
+          selector: "body",
+          selectorConfidence: "medium",
+          selectorReason: "unique DOM selector",
+          tag: "body",
+          classes: [],
+          source: "unresolved",
+          sourceConfidence: "low",
+          ancestry: []
+        },
         note: "invalid request fixture",
         createdAt: new Date().toISOString(),
         screenshotName: overrides.screenshotName ?? "issue-1.png",

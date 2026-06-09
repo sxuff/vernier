@@ -157,10 +157,50 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     measured: expectString(issue.measured, `issues[${index}].measured`),
     selector: expectString(issue.selector, `issues[${index}].selector`),
     source: expectString(issue.source, `issues[${index}].source`),
+    target: validateTarget(issue.target, `issues[${index}].target`),
     note: expectString(issue.note, `issues[${index}].note`),
     createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
     screenshotName: expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`),
     screenshotDataUrl: expectPngDataUrl(issue.screenshotDataUrl, `issues[${index}].screenshotDataUrl`)
+  };
+}
+
+function validateTarget(value: unknown, field: string): VernierSession["issues"][number]["target"] {
+  const target = expectRecord(value, field);
+  const ancestry = expectArray(target.ancestry, `${field}.ancestry`);
+
+  if (ancestry.length > 10) {
+    throw badRequest(`${field}.ancestry cannot contain more than 10 entries`);
+  }
+
+  return {
+    selector: expectString(target.selector, `${field}.selector`),
+    selectorConfidence: expectConfidence(target.selectorConfidence, `${field}.selectorConfidence`),
+    selectorReason: expectString(target.selectorReason, `${field}.selectorReason`),
+    tag: expectString(target.tag, `${field}.tag`),
+    id: expectOptionalString(target.id, `${field}.id`),
+    classes: expectStringArray(target.classes, `${field}.classes`),
+    text: expectOptionalString(target.text, `${field}.text`),
+    role: expectOptionalString(target.role, `${field}.role`),
+    accessibleName: expectOptionalString(target.accessibleName, `${field}.accessibleName`),
+    testId: expectOptionalString(target.testId, `${field}.testId`),
+    nearestTestId: expectOptionalString(target.nearestTestId, `${field}.nearestTestId`),
+    source: expectString(target.source, `${field}.source`),
+    sourceConfidence: expectConfidence(target.sourceConfidence, `${field}.sourceConfidence`),
+    ancestry: ancestry.map((item, index) => validateAncestor(item, `${field}.ancestry[${index}]`))
+  };
+}
+
+function validateAncestor(value: unknown, field: string): VernierSession["issues"][number]["target"]["ancestry"][number] {
+  const ancestor = expectRecord(value, field);
+
+  return {
+    tag: expectString(ancestor.tag, `${field}.tag`),
+    id: expectOptionalString(ancestor.id, `${field}.id`),
+    classes: expectStringArray(ancestor.classes, `${field}.classes`),
+    role: expectOptionalString(ancestor.role, `${field}.role`),
+    testId: expectOptionalString(ancestor.testId, `${field}.testId`),
+    text: expectOptionalString(ancestor.text, `${field}.text`)
   };
 }
 
@@ -203,6 +243,32 @@ function expectArray(value: unknown, field: string): unknown[] {
 function expectString(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw badRequest(`${field} must be a string`);
+  }
+
+  return value;
+}
+
+function expectOptionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return expectString(value, field);
+}
+
+function expectStringArray(value: unknown, field: string): string[] {
+  const items = expectArray(value, field);
+
+  if (items.some((item) => typeof item !== "string")) {
+    throw badRequest(`${field} must contain only strings`);
+  }
+
+  return items as string[];
+}
+
+function expectConfidence(value: unknown, field: string): "high" | "medium" | "low" {
+  if (value !== "high" && value !== "medium" && value !== "low") {
+    throw badRequest(`${field} must be high, medium, or low`);
   }
 
   return value;

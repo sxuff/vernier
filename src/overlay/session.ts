@@ -1,5 +1,5 @@
-import { getStableSelector } from "./selector";
-import { getSourceLocation } from "./source";
+import type { ElementTarget } from "../schema";
+import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
   element: HTMLElement,
@@ -15,6 +15,7 @@ interface SessionIssue {
   measured: string;
   selector: string;
   source: string;
+  target: ElementTarget;
   note: string;
   createdAt: string;
   screenshotName: string;
@@ -26,6 +27,7 @@ interface DraftIssue {
   measured: string;
   selector: string;
   source: string;
+  target: ElementTarget;
   screenshotTarget: Element;
 }
 
@@ -47,11 +49,14 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   let draft: DraftIssue | null = null;
 
   function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string): void {
+    const target = createElementTarget(element);
+
     draft = {
       kind,
       measured,
-      selector: getStableSelector(element),
-      source: getSourceLocation(element),
+      selector: target.selector,
+      source: target.source,
+      target,
       screenshotTarget: element
     };
   }
@@ -62,6 +67,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       measured,
       selector: "viewport",
       source: "unresolved",
+      target: createViewportTarget(),
       screenshotTarget: document.documentElement
     };
   }
@@ -80,6 +86,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       measured: draft.measured,
       selector: draft.selector,
       source: draft.source,
+      target: draft.target,
       note: noteInput.value.trim(),
       createdAt: new Date().toISOString(),
       screenshotName: `issue-${stableId}.png`,

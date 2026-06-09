@@ -5,6 +5,16 @@ import { createPicker } from "../overlay/picker";
 import { getStableSelector } from "../overlay/selector";
 import { createSessionController } from "../overlay/session";
 import { getSourceLocation } from "../overlay/source";
+import {
+  ancestry,
+  createElementTarget,
+  createViewportTarget,
+  implicitRole,
+  nearestAttribute,
+  selectorConfidence,
+  selectorReason,
+  textSummary
+} from "../overlay/target";
 import { createOverlayRoot, renderIssueList, renderMeasurementPanel, setButtonEnabled } from "../overlay/ui";
 
 export interface OverlayScriptOptions {
@@ -21,6 +31,14 @@ export function createVernierOverlayScript(options: OverlayScriptOptions): strin
     getSourceLocation.toString(),
     measureElement.toString(),
     measureDelta.toString(),
+    selectorConfidence.toString(),
+    selectorReason.toString(),
+    textSummary.toString(),
+    nearestAttribute.toString(),
+    ancestry.toString(),
+    implicitRole.toString(),
+    createElementTarget.toString(),
+    createViewportTarget.toString(),
     createSessionController.toString(),
     createOverlayRoot.toString(),
     renderMeasurementPanel.toString(),

@@ -131,7 +131,10 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     "",
     "Target:",
     `Selector: ${issue.selector}`,
+    `Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}`,
     `Source: ${issue.source}`,
+    `Source confidence: ${indexed.issue.target?.sourceConfidence ?? "unknown"}`,
+    `Element: ${formatTarget(indexed)}`,
     "",
     `Screenshot: ${indexed.screenshotPath}`
   ].join("\n");
@@ -156,7 +159,10 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
     `- Selector: ${issue.selector}`,
+    `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
+    `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+    `- Element context: ${formatTarget(indexed)}`,
     `- Screenshot: ${indexed.screenshotPath}`,
     "",
     "Please inspect the related UI code, make the smallest safe fix, and verify at the captured viewport size.",
@@ -189,7 +195,10 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
       "Evidence:",
       ...indexed.issue.measured.split("\n").map((line) => `- ${line}`),
       `- Selector: ${indexed.issue.selector}`,
+      `- Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}${indexed.issue.target?.selectorReason ? ` (${indexed.issue.target.selectorReason})` : ""}`,
       `- Source: ${indexed.issue.source}`,
+      `- Source confidence: ${indexed.issue.target?.sourceConfidence ?? "unknown"}`,
+      `- Element context: ${formatTarget(indexed)}`,
       `- Screenshot: ${indexed.screenshotPath}`,
       ""
     ]),
@@ -215,13 +224,35 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
     `- Selector: ${issue.selector}`,
+    `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
+    `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+    `- Element context: ${formatTarget(indexed)}`,
     `- Original screenshot: ${indexed.screenshotPath}`,
     "",
     "After inspection:",
     `- Mark fixed: vernier mark ${indexed.stableId} fixed`,
     `- Keep todo: vernier mark ${indexed.stableId} todo`
   ].join("\n");
+}
+
+function formatTarget(indexed: IndexedVernierIssue): string {
+  const target = indexed.issue.target;
+
+  if (!target) {
+    return indexed.issue.selector;
+  }
+
+  const parts = [
+    target.tag,
+    target.testId ? `data-testid=${target.testId}` : null,
+    target.id ? `id=${target.id}` : null,
+    target.role ? `role=${target.role}` : null,
+    target.accessibleName ? `name=${target.accessibleName}` : null,
+    target.text ? `text=${target.text}` : null
+  ].filter(Boolean);
+
+  return parts.join(" ");
 }
 
 async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {

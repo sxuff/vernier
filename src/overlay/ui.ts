@@ -64,7 +64,8 @@ export function createOverlayRoot(): OverlayRoot {
   for (const [value, text] of [
     ["measure", "Measure"],
     ["pen", "Pen"],
-    ["box", "Box"]
+    ["box", "Box"],
+    ["redact", "Redact"]
   ]) {
     const option = document.createElement("option");
     option.value = value;

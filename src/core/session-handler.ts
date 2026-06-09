@@ -159,6 +159,7 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     source: expectString(issue.source, `issues[${index}].source`),
     target: validateTarget(issue.target, `issues[${index}].target`),
     measurement: issue.measurement === undefined ? undefined : validateMeasurement(issue.measurement, kind, `issues[${index}].measurement`),
+    redaction: issue.redaction === undefined ? undefined : validateRedaction(issue.redaction, `issues[${index}].redaction`),
     note: expectString(issue.note, `issues[${index}].note`),
     createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
     screenshotName: expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`),
@@ -471,9 +472,18 @@ function expectConfidence(value: unknown, field: string): "high" | "medium" | "l
   return value;
 }
 
-function expectAnnotationMode(value: unknown, field: string): "pen" | "box" {
-  if (value !== "pen" && value !== "box") {
-    throw badRequest(`${field} must be pen or box`);
+function validateRedaction(value: unknown, field: string): NonNullable<VernierSession["issues"][number]["redaction"]> {
+  const redaction = expectRecord(value, field);
+
+  return {
+    autoRedactedElements: expectNonNegativeInteger(redaction.autoRedactedElements, `${field}.autoRedactedElements`),
+    manualRedaction: expectBoolean(redaction.manualRedaction, `${field}.manualRedaction`)
+  };
+}
+
+function expectAnnotationMode(value: unknown, field: string): "pen" | "box" | "redact" {
+  if (value !== "pen" && value !== "box" && value !== "redact") {
+    throw badRequest(`${field} must be pen, box, or redact`);
   }
 
   return value;
@@ -506,6 +516,14 @@ function expectOptionalFiniteNumber(value: unknown, field: string): number | und
 function expectPositiveInteger(value: unknown, field: string): number {
   if (!Number.isInteger(value) || (value as number) <= 0) {
     throw badRequest(`${field} must be a positive integer`);
+  }
+
+  return value as number;
+}
+
+function expectNonNegativeInteger(value: unknown, field: string): number {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw badRequest(`${field} must be a non-negative integer`);
   }
 
   return value as number;

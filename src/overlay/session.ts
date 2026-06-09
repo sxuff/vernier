@@ -3,7 +3,7 @@ import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
   element: HTMLElement,
-  options?: { backgroundColor?: string | null }
+  options?: { backgroundColor?: string | null; onclone?: (document: Document) => void }
 ) => Promise<HTMLCanvasElement>;
 
 type IssueKind = "single" | "delta" | "annotation";
@@ -21,6 +21,10 @@ interface SessionIssue {
   createdAt: string;
   screenshotName: string;
   screenshotDataUrl: string;
+  redaction: {
+    autoRedactedElements: number;
+    manualRedaction: boolean;
+  };
 }
 
 interface DraftIssue {
@@ -83,6 +87,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
 
     const id = issues.length + 1;
     const stableId = createStableId();
+    const screenshot = await captureScreenshot(draft.screenshotTarget);
     const issue: SessionIssue = {
       id,
       stableId,
@@ -95,7 +100,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       note: noteInput.value.trim(),
       createdAt: new Date().toISOString(),
       screenshotName: `issue-${stableId}.png`,
-      screenshotDataUrl: await captureScreenshot(draft.screenshotTarget)
+      screenshotDataUrl: screenshot.dataUrl,
+      redaction: {
+        autoRedactedElements: screenshot.autoRedactedElements,
+        manualRedaction: draft.measurement.kind === "annotation" && draft.measurement.mode === "redact"
+      }
     };
 
     issues.push(issue);
@@ -205,16 +214,22 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     ].join("\n");
   }
 
-  async function captureScreenshot(element: Element): Promise<string> {
+  async function captureScreenshot(element: Element): Promise<{ dataUrl: string; autoRedactedElements: number }> {
     let canvas: HTMLCanvasElement;
+    const autoRedactedElements = countAutoRedactionTargets(element);
 
     try {
-      canvas = await html2canvas(element as HTMLElement, { backgroundColor: null });
+      canvas = await html2canvas(element as HTMLElement, {
+        backgroundColor: null,
+        onclone(clonedDocument) {
+          applyAutoRedaction(clonedDocument);
+        }
+      });
     } catch (error) {
       throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
     }
 
-    return canvas.toDataURL("image/png");
+    return { dataUrl: canvas.toDataURL("image/png"), autoRedactedElements };
   }
 
   async function captureFullPageScreenshot(): Promise<string> {
@@ -231,6 +246,36 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
 
   function formatCaptureError(error: unknown): string {
     return error instanceof Error ? error.message : "unknown capture error";
+  }
+
+  function countAutoRedactionTargets(root: Element): number {
+    return autoRedactionTargets(root).length;
+  }
+
+  function autoRedactionTargets(root: ParentNode): Element[] {
+    const selector = 'input[type="password"], [data-vernier-redact]';
+    const targets = Array.from(root.querySelectorAll(selector));
+
+    return root instanceof Element && root.matches(selector) ? [root, ...targets] : targets;
+  }
+
+  function applyAutoRedaction(clonedDocument: Document): void {
+    for (const element of autoRedactionTargets(clonedDocument)) {
+      const htmlElement = element as HTMLElement;
+
+      if (htmlElement instanceof HTMLInputElement || htmlElement instanceof HTMLTextAreaElement) {
+        htmlElement.value = "";
+        htmlElement.setAttribute("value", "");
+      }
+
+      htmlElement.textContent = "";
+      htmlElement.style.setProperty("background", "#111827", "important");
+      htmlElement.style.setProperty("background-color", "#111827", "important");
+      htmlElement.style.setProperty("color", "transparent", "important");
+      htmlElement.style.setProperty("border-color", "#111827", "important");
+      htmlElement.style.setProperty("box-shadow", "none", "important");
+      htmlElement.style.setProperty("text-shadow", "none", "important");
+    }
   }
 
   function renumberIssues(): void {

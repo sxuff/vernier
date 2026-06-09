@@ -77,6 +77,7 @@ Your target app must already be running. If the target app is down, Vernier keep
    - **Measure**: hover elements, click one element for a single measurement, click a second element for a delta.
    - **Pen**: draw a freehand annotation.
    - **Box**: drag a rectangular annotation.
+   - **Redact**: drag a mask over sensitive screenshot regions.
 3. Add a note.
 4. Click **Add issue** to queue the current measurement or annotation.
 5. Repeat for as many UI issues as you want.
@@ -95,6 +96,8 @@ Vernier writes:
 ```
 
 Annotations store viewport data and normalized relative points so future adapters can re-anchor or replay them across browser sizes.
+
+Screenshots automatically mask password inputs and elements marked with `data-vernier-redact`.
 
 ## Development
 

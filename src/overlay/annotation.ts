@@ -69,9 +69,14 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     context.lineCap = "round";
     context.lineJoin = "round";
 
-    if (mode === "box" && points.length >= 2) {
+    if ((mode === "box" || mode === "redact") && points.length >= 2) {
       const start = scalePoint(points[0]);
       const end = scalePoint(points[points.length - 1]);
+      if (mode === "redact") {
+        context.fillStyle = "#111827";
+        context.fillRect(start.x, start.y, end.x - start.x, end.y - start.y);
+        return;
+      }
       context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
       context.fillRect(start.x, start.y, end.x - start.x, end.y - start.y);
       return;
@@ -103,7 +108,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     }));
     const measurement: AnnotationMeasurement = {
       kind: "annotation",
-      mode: mode === "box" ? "box" : "pen",
+      mode: mode === "box" || mode === "redact" ? mode : "pen",
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,

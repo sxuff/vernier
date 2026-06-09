@@ -98,7 +98,7 @@ export interface DeltaMeasurement {
 
 export interface AnnotationMeasurement {
   kind: "annotation";
-  mode: "pen" | "box";
+  mode: "pen" | "box" | "redact";
   viewport: {
     width: number;
     height: number;
@@ -131,6 +131,10 @@ export interface VernierIssue {
   source: string;
   target: ElementTarget;
   measurement?: VernierMeasurement;
+  redaction?: {
+    autoRedactedElements: number;
+    manualRedaction: boolean;
+  };
   note: string;
   createdAt: string;
   screenshotName: string;

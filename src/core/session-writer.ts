@@ -64,6 +64,7 @@ function renderSessionMarkdown(session: VernierSession): string {
       "Measured:",
       ...formatMeasured(issue.measured),
       ...formatStructuredMeasurement(issue),
+      ...formatRedaction(issue),
       "",
       "Target:",
       `Selector: ${issue.selector}`,
@@ -122,6 +123,19 @@ function formatStructuredMeasurement(issue: VernierSession["issues"][number]): s
     "```json",
     JSON.stringify(issue.measurement, null, 2),
     "```"
+  ];
+}
+
+function formatRedaction(issue: VernierSession["issues"][number]): string[] {
+  if (!issue.redaction || (issue.redaction.autoRedactedElements === 0 && !issue.redaction.manualRedaction)) {
+    return [];
+  }
+
+  return [
+    "",
+    "Redaction:",
+    `- Auto-redacted elements: ${issue.redaction.autoRedactedElements}`,
+    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`
   ];
 }
 

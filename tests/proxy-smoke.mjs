@@ -75,7 +75,7 @@ const targetServer = createServer((request, response) => {
       </head>
       <body>
         <main>
-          <section class="usage-card card" data-testid="usage-card">Usage</section>
+          <section class="usage-card card" data-testid="usage-card">Usage <span data-vernier-redact>secret-token-123</span></section>
           <section class="revenue-card card" data-testid="revenue-card">Revenue</section>
         </main>
         <script type="module" src="/@vite/client"></script>
@@ -166,6 +166,15 @@ try {
   await page.locator("[data-vernier-note]").fill("freehand annotation");
   await page.locator("[data-vernier-add-issue]").click();
   await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 3");
+
+  await page.locator("[data-vernier-mode]").selectOption("redact");
+  await page.mouse.move(260, 160);
+  await page.mouse.down();
+  await page.mouse.move(340, 210);
+  await page.mouse.up();
+  await page.locator("[data-vernier-note]").fill("manual redaction");
+  await page.locator("[data-vernier-add-issue]").click();
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 4");
 
   await page.locator("[data-vernier-export]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
@@ -258,8 +267,11 @@ try {
   if (!sessionMarkdown.includes("Annotation: pen")) {
     throw new Error(`Expected proxy session to contain pen annotation:\n${sessionMarkdown}`);
   }
-  if (!sessionMarkdown.includes("Issue count: 3") || !sessionMarkdown.includes("edited delta note")) {
+  if (!sessionMarkdown.includes("Issue count: 4") || !sessionMarkdown.includes("edited delta note")) {
     throw new Error(`Expected cleaner edited session output:\n${sessionMarkdown}`);
+  }
+  if (!sessionMarkdown.includes("Auto-redacted elements: 1") || !sessionMarkdown.includes("Manual redaction: yes")) {
+    throw new Error(`Expected session markdown to include redaction evidence:\n${sessionMarkdown}`);
   }
   if (!sessionMarkdown.includes("Selector confidence:")) {
     throw new Error(`Expected session markdown to include target confidence:\n${sessionMarkdown}`);
@@ -275,6 +287,12 @@ try {
   }
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
+  }
+  if (sessionJson.issues[0]?.redaction?.autoRedactedElements !== 1) {
+    throw new Error(`Expected single issue to record automatic redaction:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
+  }
+  if (sessionJson.issues[3]?.measurement?.kind !== "annotation" || sessionJson.issues[3].measurement.mode !== "redact" || sessionJson.issues[3].redaction?.manualRedaction !== true) {
+    throw new Error(`Expected manual redact annotation issue:\n${JSON.stringify(sessionJson.issues[3], null, 2)}`);
   }
   if (sessionMetadata.localOnly !== true || sessionMetadata.networkUploads !== false || sessionMetadata.createdBy !== "vernier") {
     throw new Error(`Expected session metadata to document local-only behavior:\n${JSON.stringify(sessionMetadata, null, 2)}`);
@@ -385,10 +403,10 @@ try {
     }
   ]);
 
-  if (!latestOutput.includes("Issue count: 3")) {
+  if (!latestOutput.includes("Issue count: 4")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
   }
-  if (!promptOutput.includes("Use the Vernier UI feedback session below.") || !promptOutput.includes("Issue count: 3")) {
+  if (!promptOutput.includes("Use the Vernier UI feedback session below.") || !promptOutput.includes("Issue count: 4")) {
     throw new Error(`Expected prompt command to print handoff prompt:\n${promptOutput}`);
   }
   if (!helpOutput.includes("vernier [--target http://localhost:5173]") || !helpOutput.includes("vernier http://localhost:5173")) {

@@ -129,6 +129,7 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     "Measured:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
     ...formatStructuredMeasurement(issue),
+    ...formatRedactionEvidence(issue),
     "",
     "Target:",
     `Selector: ${issue.selector}`,
@@ -162,6 +163,7 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
     ...formatStructuredEvidence(issue),
+    ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
@@ -201,6 +203,7 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
       "Evidence:",
       ...indexed.issue.measured.split("\n").map((line) => `- ${line}`),
       ...formatStructuredEvidence(indexed.issue),
+      ...formatRedactionEvidence(indexed.issue),
       `- Selector: ${indexed.issue.selector}`,
       `- Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}${indexed.issue.target?.selectorReason ? ` (${indexed.issue.target.selectorReason})` : ""}`,
       `- Source: ${indexed.issue.source}`,
@@ -233,6 +236,7 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     "Evidence:",
     ...issue.measured.split("\n").map((line) => `- ${line}`),
     ...formatStructuredEvidence(issue),
+    ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
@@ -281,6 +285,17 @@ function formatStructuredEvidence(issue: VernierIssue): string[] {
   }
 
   return [`- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`];
+}
+
+function formatRedactionEvidence(issue: VernierIssue): string[] {
+  if (!issue.redaction || (issue.redaction.autoRedactedElements === 0 && !issue.redaction.manualRedaction)) {
+    return [];
+  }
+
+  return [
+    `- Auto-redacted elements: ${issue.redaction.autoRedactedElements}`,
+    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`
+  ];
 }
 
 async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {

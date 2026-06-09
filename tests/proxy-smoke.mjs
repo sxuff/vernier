@@ -354,6 +354,29 @@ try {
   const fixedIssuesOutput = await runNode(["dist/cli.js", "issues", "--fixed"]);
   const sendTodoOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
   const sendAllAfterFixedOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--all", "--print"]);
+  const mcp = await runMcpExchange([
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+    { jsonrpc: "2.0", id: 3, method: "resources/list", params: {} },
+    {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "get_vernier_issue", arguments: { id: stableIssueId } }
+    },
+    {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: { name: "mark_vernier_issue_todo", arguments: { id: stableIssueId } }
+    },
+    {
+      jsonrpc: "2.0",
+      id: 6,
+      method: "resources/read",
+      params: { uri: `vernier://issue/${stableIssueId}` }
+    }
+  ]);
 
   if (!latestOutput.includes("Issue count: 3")) {
     throw new Error(`Expected latest command to print session markdown:\n${latestOutput}`);
@@ -415,6 +438,16 @@ try {
   }
   if (!sendAllAfterFixedOutput.includes(stableIssueId) || !sendAllAfterFixedOutput.includes("Status: fixed")) {
     throw new Error(`Expected send --all to include fixed issues:\n${sendAllAfterFixedOutput}`);
+  }
+  if (
+    !mcp.byId[1]?.result?.serverInfo ||
+    !JSON.stringify(mcp.byId[2]).includes("get_vernier_issue") ||
+    !JSON.stringify(mcp.byId[3]).includes(`vernier://issue/${stableIssueId}`) ||
+    !JSON.stringify(mcp.byId[4]).includes("Fix the UI issue captured by Vernier.") ||
+    !JSON.stringify(mcp.byId[5]).includes(`Marked ${stableIssueId} todo.`) ||
+    !JSON.stringify(mcp.byId[6]).includes(stableIssueId)
+  ) {
+    throw new Error(`Expected MCP server to expose Vernier resources/tools:\n${JSON.stringify(mcp.responses, null, 2)}`);
   }
 
   console.log("proxy smoke verified");
@@ -658,6 +691,49 @@ function runNode(args) {
 
       reject(new Error(stderr || `Command failed with ${code}`));
     });
+  });
+}
+
+function runMcpExchange(messages) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["dist/cli.js", "mcp"], { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+    const responses = [];
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Timed out waiting for MCP responses:\n${stdout}\n${stderr}`));
+    }, 30_000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+      const lines = stdout.split("\n");
+      stdout = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (line.trim()) {
+          responses.push(JSON.parse(line));
+        }
+      }
+
+      if (responses.length === messages.length) {
+        clearTimeout(timeout);
+        child.stdin.end();
+        child.kill();
+        resolve({
+          responses,
+          byId: Object.fromEntries(responses.map((response) => [response.id, response]))
+        });
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.stdin.end(messages.map((message) => JSON.stringify(message)).join("\n") + "\n");
   });
 }
 

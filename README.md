@@ -37,11 +37,15 @@ By default, Vernier forwards to `http://localhost:5173` and opens its proxy on `
 Use an explicit target when your app runs somewhere else:
 
 ```bash
+vernier attach
+vernier attach --target http://localhost:3000
 vernier --target http://localhost:3000
 vernier start --target http://localhost:3000 --port 3333
 vernier proxy --target http://localhost:3000 --port 3333
 vernier http://localhost:3000
 ```
+
+`vernier attach` scans common local dev ports, starts the proxy for the best match, and opens it in your browser. Add `--no-open` for scripts. If the requested proxy port is busy, Vernier automatically picks the next available port and prints the URL.
 
 Find likely local apps without starting or owning them:
 
@@ -62,7 +66,7 @@ Open:
 http://127.0.0.1:3333
 ```
 
-The proxy injects Vernier into HTML responses and forwards everything else to your target app.
+The proxy injects Vernier into HTML responses and forwards everything else to your target app, including redirects, cookies, SSE streams, and WebSocket upgrades used by HMR.
 
 Your target app must already be running. If the target app is down, Vernier keeps running and shows a 502 page explaining that the target refused the connection.
 

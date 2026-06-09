@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { createServer } from "node:http";
 import { mkdir, readdir, rm, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { connect } from "node:net";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
 
@@ -50,6 +51,16 @@ const targetServer = createServer((request, response) => {
     return;
   }
 
+  if (request.url === "/cookies") {
+    response.setHeader("Set-Cookie", [
+      "session=abc; Domain=127.0.0.1; Path=/; HttpOnly",
+      "theme=dark; Path=/"
+    ]);
+    response.setHeader("Content-Type", "text/plain");
+    response.end("cookies");
+    return;
+  }
+
   response.setHeader("Content-Type", "text/html");
   response.end(`<!doctype html>
     <html>
@@ -70,6 +81,25 @@ const targetServer = createServer((request, response) => {
         <script type="module" src="/@vite/client"></script>
       </body>
     </html>`);
+});
+
+targetServer.on("upgrade", (request, socket) => {
+  if (request.url !== "/hmr") {
+    socket.destroy();
+    return;
+  }
+
+  socket.write(
+    [
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      "X-Forwarded-Host: " + (request.headers.host ?? ""),
+      "",
+      ""
+    ].join("\r\n")
+  );
+  socket.end();
 });
 
 await verifyUnavailableTarget();
@@ -175,6 +205,45 @@ try {
   const eventBody = await eventResponse.text();
   if (eventResponse.headers.get("content-type") !== "text/event-stream" || !eventBody.includes("data: one")) {
     throw new Error(`Expected SSE passthrough, got ${eventResponse.headers.get("content-type")}: ${eventBody}`);
+  }
+
+  const cookieResponse = await readRawHttpResponse(proxyPort, "/cookies");
+  const normalizedCookieResponse = cookieResponse.toLowerCase();
+  if (
+    !normalizedCookieResponse.includes("set-cookie: session=abc; path=/; httponly") ||
+    !normalizedCookieResponse.includes("set-cookie: theme=dark; path=/")
+  ) {
+    throw new Error(`Expected proxy to preserve separate rewritten Set-Cookie headers:\n${cookieResponse}`);
+  }
+
+  const upgradeResponse = await readRawUpgradeResponse(proxyPort, "/hmr");
+  if (
+    !upgradeResponse.includes("101 Switching Protocols") ||
+    !upgradeResponse.includes(`X-Forwarded-Host: 127.0.0.1:${targetPort}`)
+  ) {
+    throw new Error(`Expected WebSocket upgrade to reach target with rewritten Host:\n${upgradeResponse}`);
+  }
+
+  await verifyPortFallback(targetPort);
+
+  const attach = spawn(
+    process.execPath,
+    [
+      "dist/cli.js",
+      "attach",
+      "--target",
+      `http://127.0.0.1:${targetPort}`,
+      "--port",
+      "auto",
+      "--no-open"
+    ],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  try {
+    await waitForOutput(attach, "proxy listening");
+    attach.kill();
+  } finally {
+    attach.kill();
   }
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
@@ -403,12 +472,84 @@ function close(server) {
   });
 }
 
+function readRawHttpResponse(port, requestPath) {
+  return new Promise((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1");
+    let response = "";
+
+    socket.on("connect", () => {
+      socket.write(`GET ${requestPath} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`);
+    });
+    socket.on("data", (chunk) => {
+      response += String(chunk);
+    });
+    socket.on("end", () => resolve(response));
+    socket.on("error", reject);
+  });
+}
+
+function readRawUpgradeResponse(port, requestPath) {
+  return new Promise((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1");
+    let response = "";
+
+    socket.on("connect", () => {
+      socket.write(
+        [
+          `GET ${requestPath} HTTP/1.1`,
+          `Host: 127.0.0.1:${port}`,
+          "Connection: Upgrade",
+          "Upgrade: websocket",
+          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+          "Sec-WebSocket-Version: 13",
+          "",
+          ""
+        ].join("\r\n")
+      );
+    });
+    socket.on("data", (chunk) => {
+      response += String(chunk);
+    });
+    socket.on("end", () => resolve(response));
+    socket.on("error", reject);
+  });
+}
+
+async function verifyPortFallback(targetPort) {
+  const busyPort = 4330;
+  const busyServer = createServer((_request, response) => {
+    response.end("busy");
+  });
+  await listen(busyServer, busyPort);
+
+  const fallbackProxy = spawn(
+    process.execPath,
+    ["dist/cli.js", "proxy", "--target", `http://127.0.0.1:${targetPort}`, "--port", String(busyPort)],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+  );
+
+  try {
+    await waitForOutput(fallbackProxy, "Port 4330 is busy");
+    await waitForOutput(fallbackProxy, "proxy listening on http://127.0.0.1:4331");
+  } finally {
+    fallbackProxy.kill();
+    await close(busyServer);
+  }
+}
+
 function waitForOutput(process, text) {
   return new Promise((resolve, reject) => {
+    process.__vernierOutput ??= "";
+    if (process.__vernierOutput.includes(text)) {
+      resolve();
+      return;
+    }
+
     const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${text}`)), 30_000);
 
     process.stdout.on("data", (chunk) => {
-      if (String(chunk).includes(text)) {
+      process.__vernierOutput += String(chunk);
+      if (process.__vernierOutput.includes(text)) {
         clearTimeout(timeout);
         resolve();
       }

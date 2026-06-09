@@ -3,8 +3,11 @@ import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
+import { connect as connectNet } from "node:net";
 import { spawn } from "node:child_process";
+import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { connect as connectTls } from "node:tls";
 import path from "node:path";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
@@ -29,7 +32,7 @@ import { handleVernierSessionRequest } from "./core/session-handler";
 
 interface ProxyOptions {
   target: URL;
-  port: number;
+  port: number | "auto";
   root: string;
 }
 
@@ -41,9 +44,10 @@ interface DetectedApp {
 
 const require = createRequire(import.meta.url);
 const defaultTarget = "http://localhost:5173";
-const defaultPort = "3333";
+const defaultPort = 3333;
 const defaultDetectPorts = [5173, 3000, 3001, 4173, 4200, 4321, 5000, 5174, 6006, 8000, 8080];
 const maxProxyBodyBytes = 30 * 1024 * 1024;
+const maxPortFallbackAttempts = 20;
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
@@ -57,15 +61,12 @@ async function main(): Promise<void> {
     const proxyArgs =
       command && command !== "proxy" && command !== "start" ? [command, ...args] : args;
     const options = parseProxyOptions(proxyArgs);
-    const server = createServer((request, response) => {
-      void handleProxyRequest(options, request, response);
-    });
+    await startProxyServer(options, { open: false });
+    return;
+  }
 
-    server.listen(options.port, "127.0.0.1", () => {
-      console.log(`[vernier] proxy listening on http://127.0.0.1:${options.port}`);
-      console.log(`[vernier] forwarding to ${options.target.origin}`);
-      console.log(`[vernier] sessions write to ${options.root}`);
-    });
+  if (command === "attach") {
+    await attachToLocalApp(args);
     return;
   }
 
@@ -281,10 +282,7 @@ function tryClipboardCommand(command: string[], value: string): Promise<boolean>
 }
 
 async function detectLocalApps(args: string[]): Promise<void> {
-  const ports = parseDetectPorts(args);
-  const apps = (await Promise.all(ports.map((port) => detectPort(port)))).filter(
-    (app): app is DetectedApp => Boolean(app)
-  );
+  const apps = await scanLocalApps(parseDetectPorts(args));
 
   if (apps.length === 0) {
     console.log("No local web apps found.");
@@ -299,7 +297,37 @@ async function detectLocalApps(args: string[]): Promise<void> {
 
   console.log("");
   console.log("Attach Vernier:");
-  console.log(`  vernier --target ${apps[0].url}`);
+  console.log(`  vernier attach --target ${apps[0].url}`);
+}
+
+async function attachToLocalApp(args: string[]): Promise<void> {
+  const target = await resolveAttachTarget(args);
+  const options = parseProxyOptions(["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")]);
+
+  await startProxyServer(options, { open: !args.includes("--no-open") });
+}
+
+async function resolveAttachTarget(args: string[]): Promise<string> {
+  const explicitTarget = readOption(args, "--target") ?? readPositionalTarget(args);
+
+  if (explicitTarget) {
+    return explicitTarget;
+  }
+
+  const apps = await scanLocalApps(parseDetectPorts(args));
+
+  if (apps.length === 0) {
+    throw new Error(`No local web apps found. Start your app, or run: vernier attach --target ${defaultTarget}`);
+  }
+
+  console.log(`[vernier] detected ${apps[0].label} at ${apps[0].url}`);
+  return apps[0].url;
+}
+
+async function scanLocalApps(ports: number[]): Promise<DetectedApp[]> {
+  return (await Promise.all(ports.map((port) => detectPort(port)))).filter(
+    (app): app is DetectedApp => Boolean(app)
+  );
 }
 
 function parseDetectPorts(args: string[]): number[] {
@@ -374,10 +402,10 @@ function classifyDetectedApp(port: number, body: string, server: string, powered
 
 function parseProxyOptions(args: string[]): ProxyOptions {
   const targetValue = readOption(args, "--target") ?? readPositionalTarget(args) ?? defaultTarget;
-  const portValue = readOption(args, "--port") ?? defaultPort;
-  const port = Number(portValue);
+  const portValue = readOption(args, "--port") ?? String(defaultPort);
+  const port = portValue === "auto" ? "auto" : Number(portValue);
 
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  if (port !== "auto" && (!Number.isInteger(port) || port < 1 || port > 65535)) {
     throw new Error(`Invalid --port value: ${portValue}`);
   }
 
@@ -386,6 +414,61 @@ function parseProxyOptions(args: string[]): ProxyOptions {
     port,
     root: process.cwd()
   };
+}
+
+async function startProxyServer(options: ProxyOptions, settings: { open: boolean }): Promise<void> {
+  const server = createServer((request, response) => {
+    void handleProxyRequest(options, request, response);
+  });
+  server.on("upgrade", (request, socket, head) => {
+    handleProxyUpgrade(options, request, socket, head);
+  });
+
+  const requestedPort = options.port === "auto" ? defaultPort : options.port;
+  const port = await listenWithPortFallback(server, requestedPort);
+  const proxyUrl = `http://127.0.0.1:${port}`;
+
+  options.port = port;
+  console.log(`[vernier] proxy listening on ${proxyUrl}`);
+  console.log(`[vernier] forwarding to ${options.target.origin}`);
+  console.log(`[vernier] sessions write to ${options.root}`);
+
+  if (settings.open) {
+    await openUrl(proxyUrl);
+  }
+}
+
+function listenWithPortFallback(server: ReturnType<typeof createServer>, requestedPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let port = requestedPort;
+    let attempts = 0;
+
+    const listen = () => {
+      server.once("error", onError);
+      server.listen(port, "127.0.0.1", () => {
+        server.off("error", onError);
+        resolve(port);
+      });
+    };
+
+    const onError = (error: NodeJS.ErrnoException) => {
+      server.off("error", onError);
+
+      if (error.code !== "EADDRINUSE" || attempts >= maxPortFallbackAttempts) {
+        reject(error);
+        return;
+      }
+
+      const busyPort = port;
+      port += 1;
+      attempts += 1;
+      console.log(`[vernier] Port ${busyPort} is busy.`);
+      console.log(`[vernier] Using http://127.0.0.1:${port} instead.`);
+      listen();
+    };
+
+    listen();
+  });
 }
 
 async function handleProxyRequest(
@@ -424,6 +507,62 @@ async function handleProxyRequest(
   }
 }
 
+function handleProxyUpgrade(
+  options: ProxyOptions,
+  request: IncomingMessage,
+  socket: Duplex,
+  head: Buffer
+): void {
+  const targetUrl = new URL(request.url ?? "/", options.target);
+  const targetPort = Number(targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80));
+  const upstream = targetUrl.protocol === "https:"
+    ? connectTls(targetPort, targetUrl.hostname)
+    : connectNet(targetPort, targetUrl.hostname);
+
+  upstream.on("connect", () => {
+    upstream.write(createUpgradeRequest(request, targetUrl));
+
+    if (head.byteLength > 0) {
+      upstream.write(head);
+    }
+
+    upstream.pipe(socket);
+    socket.pipe(upstream);
+  });
+
+  upstream.on("error", () => {
+    socket.destroy();
+  });
+  socket.on("error", () => {
+    upstream.destroy();
+  });
+  socket.on("close", () => {
+    upstream.destroy();
+  });
+}
+
+function createUpgradeRequest(request: IncomingMessage, targetUrl: URL): string {
+  const pathAndQuery = `${targetUrl.pathname}${targetUrl.search}`;
+  const lines = [`${request.method ?? "GET"} ${pathAndQuery} HTTP/${request.httpVersion}`];
+  const rawHeaders = request.rawHeaders;
+
+  lines.push(`Host: ${targetUrl.host}`);
+
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    const name = rawHeaders[index]!;
+    const value = rawHeaders[index + 1] ?? "";
+    const normalizedName = name.toLowerCase();
+
+    if (normalizedName === "host" || normalizedName === "proxy-connection") {
+      continue;
+    }
+
+    lines.push(`${name}: ${value}`);
+  }
+
+  return `${lines.join("\r\n")}\r\n\r\n`;
+}
+
 async function forwardRequest(
   options: ProxyOptions,
   request: IncomingMessage,
@@ -449,7 +588,7 @@ async function forwardRequest(
   }
 
   if (contentType.includes("text/event-stream") && upstream.body) {
-    await pipeline(upstream.body, response);
+    await pipeline(Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]), response);
     return;
   }
 
@@ -485,11 +624,14 @@ function toForwardHeaders(request: IncomingMessage, target: URL): Headers {
 }
 
 function copyResponseHeaders(upstream: Response, response: ServerResponse, options: ProxyOptions): void {
+  const setCookies = readSetCookieHeaders(upstream);
+
   upstream.headers.forEach((value, key) => {
     const normalizedKey = key.toLowerCase();
 
     if (
       isHopByHopHeader(key) ||
+      normalizedKey === "set-cookie" ||
       normalizedKey === "content-encoding" ||
       normalizedKey === "content-length" ||
       normalizedKey === "content-md5"
@@ -499,6 +641,42 @@ function copyResponseHeaders(upstream: Response, response: ServerResponse, optio
 
     response.setHeader(key, key.toLowerCase() === "location" ? rewriteLocationHeader(value, options) : value);
   });
+
+  if (setCookies.length > 0) {
+    response.setHeader("set-cookie", setCookies.map((cookie) => rewriteSetCookieHeader(cookie, options.target)));
+  }
+}
+
+function readSetCookieHeaders(upstream: Response): string[] {
+  const headers = upstream.headers as Headers & { getSetCookie?: () => string[] };
+  const setCookies = headers.getSetCookie?.();
+
+  if (setCookies && setCookies.length > 0) {
+    return setCookies;
+  }
+
+  const fallback = upstream.headers.get("set-cookie");
+  return fallback ? [fallback] : [];
+}
+
+function rewriteSetCookieHeader(cookie: string, target: URL): string {
+  const targetHost = target.hostname.toLowerCase();
+
+  return cookie
+    .split(";")
+    .map((part) => {
+      const trimmed = part.trim();
+      const [name, ...rest] = trimmed.split("=");
+
+      if (name.toLowerCase() !== "domain") {
+        return trimmed;
+      }
+
+      const domain = rest.join("=").trim().replace(/^\./, "").toLowerCase();
+      return domain === targetHost || targetHost.endsWith(`.${domain}`) ? "" : trimmed;
+    })
+    .filter(Boolean)
+    .join("; ");
 }
 
 function rewriteLocationHeader(location: string, options: ProxyOptions): string {
@@ -715,9 +893,10 @@ function printHelp(): void {
   console.log(
     [
       "Usage:",
-      "  vernier [--target http://localhost:5173] [--port 3333]",
-      "  vernier start [--target <url>] [--port 3333]",
-      "  vernier proxy [--target <url>] [--port 3333]",
+      "  vernier [--target http://localhost:5173] [--port 3333|auto]",
+      "  vernier attach [--target <url>] [--ports 5173,3000,6006] [--open|--no-open]",
+      "  vernier start [--target <url>] [--port 3333|auto]",
+      "  vernier proxy [--target <url>] [--port 3333|auto]",
       "  vernier http://localhost:5173",
       "  vernier detect [--ports 5173,3000,6006]",
       "  vernier issues [--todo|--fixed|--all]",

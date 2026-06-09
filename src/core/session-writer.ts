@@ -11,6 +11,21 @@ export async function writeSession(root: string, session: VernierSession): Promi
   await mkdir(screenshotsDirectory, { recursive: true });
   await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(baseDirectory, "session.md"), renderSessionMarkdown(session));
+  await writeFile(
+    path.join(baseDirectory, "metadata.json"),
+    `${JSON.stringify(
+      {
+        localOnly: true,
+        networkUploads: false,
+        createdBy: "vernier",
+        createdAt: session.createdAt,
+        sessionId: session.sessionId,
+        privacy: "Screenshots and UI feedback are written only to this local .ui-feedback directory."
+      },
+      null,
+      2
+    )}\n`
+  );
 
   for (const issue of session.issues) {
     await writeDataUrl(path.join(screenshotsDirectory, issue.screenshotName), issue.screenshotDataUrl);

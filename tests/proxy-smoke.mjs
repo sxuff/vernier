@@ -248,6 +248,7 @@ try {
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
   const sessionJson = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8"));
+  const sessionMetadata = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "metadata.json"), "utf8"));
   if (!sessionMarkdown.includes("Left edge delta: +12px")) {
     throw new Error(`Expected proxy session to contain +12px delta:\n${sessionMarkdown}`);
   }
@@ -271,6 +272,9 @@ try {
   }
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
+  }
+  if (sessionMetadata.localOnly !== true || sessionMetadata.networkUploads !== false || sessionMetadata.createdBy !== "vernier") {
+    throw new Error(`Expected session metadata to document local-only behavior:\n${JSON.stringify(sessionMetadata, null, 2)}`);
   }
   const compareOutput = await runNode([
     "dist/cli.js",
@@ -322,6 +326,8 @@ try {
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
+  const doctorOutput = await runNode(["dist/cli.js", "doctor"]);
+  const cleanDryRunOutput = await runNode(["dist/cli.js", "clean", "--keep", "1", "--dry-run"]);
 
   await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
 
@@ -360,6 +366,12 @@ try {
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
+  }
+  if (!doctorOutput.includes("OK: .ui-feedback is ignored") || !doctorOutput.includes("no network uploads")) {
+    throw new Error(`Expected doctor command to report privacy hygiene:\n${doctorOutput}`);
+  }
+  if (!cleanDryRunOutput.includes("Dry run: would remove Vernier sessions") || !cleanDryRunOutput.includes("would be removed")) {
+    throw new Error(`Expected clean --dry-run to report removable sessions:\n${cleanDryRunOutput}`);
   }
   if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("todo") || !issuesOutput.includes("make it red")) {
     throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);

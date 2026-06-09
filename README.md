@@ -119,6 +119,8 @@ vernier verify <issue-id>
 vernier verify <issue-id> --target http://localhost:3000 --open
 vernier verify <issue-id> --target http://localhost:3000 --compare
 vernier replay latest
+vernier doctor
+vernier clean --keep 20 --dry-run
 vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
@@ -138,3 +140,5 @@ vernier open
 `vernier verify <issue-id> --compare` reopens the captured route at the captured viewport, finds the selector, remeasures it, and writes local artifacts under `.ui-feedback/sessions/<session>/verification/<issue-id>/`.
 
 `vernier replay latest` opens a local read-only viewer for the latest session, including screenshots, structured evidence, statuses, and verification reports.
+
+`vernier doctor` checks local privacy hygiene, including whether `.ui-feedback/` is ignored. `vernier clean` removes old local session folders by count or age.

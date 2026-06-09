@@ -166,6 +166,18 @@ export interface AnnotationMeasurement {
 
 export type VernierMeasurement = SingleMeasurement | DeltaMeasurement | AnnotationMeasurement;
 
+export interface ScreenshotArtifact {
+  name: string;
+  kind: "element" | "full-page";
+  width: number;
+  height: number;
+  devicePixelRatio: number;
+  captureStrategy: "html2canvas";
+  mimeType: "image/png";
+  byteLength: number;
+  hash: string;
+}
+
 export interface VernierIssue {
   id: number;
   stableId: string;
@@ -183,6 +195,7 @@ export interface VernierIssue {
   createdAt: string;
   screenshotName: string;
   screenshotDataUrl: string;
+  screenshot: ScreenshotArtifact;
 }
 
 export interface VernierSession {
@@ -201,4 +214,5 @@ export interface VernierSession {
   issues: VernierIssue[];
   fullPageScreenshotName: string;
   fullPageScreenshotDataUrl: string;
+  fullPageScreenshot: ScreenshotArtifact;
 }

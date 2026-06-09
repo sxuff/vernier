@@ -1,4 +1,4 @@
-import type { ElementTarget, VernierMeasurement } from "../schema";
+import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -21,6 +21,7 @@ interface SessionIssue {
   createdAt: string;
   screenshotName: string;
   screenshotDataUrl: string;
+  screenshot: ScreenshotArtifact;
   redaction: {
     autoRedactedElements: number;
     manualRedaction: boolean;
@@ -87,7 +88,8 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
 
     const id = issues.length + 1;
     const stableId = createStableId();
-    const screenshot = await captureScreenshot(draft.screenshotTarget);
+    const screenshotName = `issue-${stableId}.png`;
+    const screenshot = await captureScreenshot(draft.screenshotTarget, screenshotName, "element");
     const issue: SessionIssue = {
       id,
       stableId,
@@ -99,8 +101,9 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       measurement: draft.measurement,
       note: noteInput.value.trim(),
       createdAt: new Date().toISOString(),
-      screenshotName: `issue-${stableId}.png`,
+      screenshotName,
       screenshotDataUrl: screenshot.dataUrl,
+      screenshot: screenshot.artifact,
       redaction: {
         autoRedactedElements: screenshot.autoRedactedElements,
         manualRedaction: draft.measurement.kind === "annotation" && draft.measurement.mode === "redact"
@@ -151,7 +154,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       throw new Error("Add at least one issue before export");
     }
 
-    const fullPageScreenshotDataUrl = await captureFullPageScreenshot();
+    const fullPageScreenshot = await captureFullPageScreenshot();
     const response = await fetch("/__vernier/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -169,8 +172,9 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
         createdAt: new Date().toISOString(),
         issueCount: issues.length,
         issues,
-        fullPageScreenshotName: "full-page.png",
-        fullPageScreenshotDataUrl
+        fullPageScreenshotName: fullPageScreenshot.artifact.name,
+        fullPageScreenshotDataUrl: fullPageScreenshot.dataUrl,
+        fullPageScreenshot: fullPageScreenshot.artifact
       })
     });
 
@@ -214,7 +218,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     ].join("\n");
   }
 
-  async function captureScreenshot(element: Element): Promise<{ dataUrl: string; autoRedactedElements: number }> {
+  async function captureScreenshot(
+    element: Element,
+    name: string,
+    kind: ScreenshotArtifact["kind"]
+  ): Promise<{ dataUrl: string; artifact: ScreenshotArtifact; autoRedactedElements: number }> {
     let canvas: HTMLCanvasElement;
     const autoRedactedElements = countAutoRedactionTargets(element);
 
@@ -229,19 +237,63 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
     }
 
-    return { dataUrl: canvas.toDataURL("image/png"), autoRedactedElements };
+    const dataUrl = canvas.toDataURL("image/png");
+    return {
+      dataUrl,
+      artifact: await createScreenshotArtifact(name, kind, canvas, dataUrl),
+      autoRedactedElements
+    };
   }
 
-  async function captureFullPageScreenshot(): Promise<string> {
-    let canvas: HTMLCanvasElement;
-
+  async function captureFullPageScreenshot(): Promise<{ dataUrl: string; artifact: ScreenshotArtifact }> {
     try {
-      canvas = await html2canvas(document.documentElement, { backgroundColor: null });
+      const captured = await captureScreenshot(document.documentElement, "full-page.png", "full-page");
+      return { dataUrl: captured.dataUrl, artifact: captured.artifact };
     } catch (error) {
       throw new Error(`Full-page screenshot capture failed: ${formatCaptureError(error)}`);
     }
+  }
 
-    return canvas.toDataURL("image/png");
+  async function createScreenshotArtifact(
+    name: string,
+    kind: ScreenshotArtifact["kind"],
+    canvas: HTMLCanvasElement,
+    dataUrl: string
+  ): Promise<ScreenshotArtifact> {
+    const bytes = dataUrlBytes(dataUrl);
+
+    return {
+      name,
+      kind,
+      width: canvas.width,
+      height: canvas.height,
+      devicePixelRatio: window.devicePixelRatio,
+      captureStrategy: "html2canvas",
+      mimeType: "image/png",
+      byteLength: bytes.byteLength,
+      hash: await sha256(bytes)
+    };
+  }
+
+  function dataUrlBytes(dataUrl: string): Uint8Array {
+    const base64 = dataUrl.split(",")[1] ?? "";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+  }
+
+  async function sha256(bytes: Uint8Array): Promise<string> {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const digest = await crypto.subtle.digest("SHA-256", copy.buffer as ArrayBuffer);
+    const hashBytes = Array.from(new Uint8Array(digest));
+
+    return `sha256-${hashBytes.map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
   }
 
   function formatCaptureError(error: unknown): string {

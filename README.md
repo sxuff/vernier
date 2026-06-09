@@ -110,6 +110,7 @@ Vernier writes:
 ```text
 .ui-feedback/latest/session.md
 .ui-feedback/latest/session.json
+.ui-feedback/latest/screenshots.json
 .ui-feedback/latest/screenshots/
 ```
 

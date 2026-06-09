@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, StackingContext, TextMetrics, VernierSession } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, ScreenshotArtifact, StackingContext, TextMetrics, VernierSession } from "../schema";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -123,6 +123,9 @@ function validateSession(value: unknown): VernierSession {
     throw badRequest("issueCount must match issues.length");
   }
 
+  const fullPageScreenshotName = expectSafeFilename(session.fullPageScreenshotName, "fullPageScreenshotName");
+  const fullPageScreenshotDataUrl = expectPngDataUrl(session.fullPageScreenshotDataUrl, "fullPageScreenshotDataUrl");
+
   return {
     schemaVersion: 1,
     toolVersion,
@@ -137,8 +140,9 @@ function validateSession(value: unknown): VernierSession {
     createdAt,
     issueCount,
     issues: issues.map((issue, index) => validateIssue(issue, index)),
-    fullPageScreenshotName: expectSafeFilename(session.fullPageScreenshotName, "fullPageScreenshotName"),
-    fullPageScreenshotDataUrl: expectPngDataUrl(session.fullPageScreenshotDataUrl, "fullPageScreenshotDataUrl")
+    fullPageScreenshotName,
+    fullPageScreenshotDataUrl,
+    fullPageScreenshot: validateScreenshotArtifact(session.fullPageScreenshot, "fullPageScreenshot", fullPageScreenshotName, "full-page", fullPageScreenshotDataUrl)
   };
 }
 
@@ -149,6 +153,9 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
   if (kind !== "single" && kind !== "delta" && kind !== "annotation") {
     throw badRequest(`issues[${index}].kind must be single, delta, or annotation`);
   }
+
+  const screenshotName = expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`);
+  const screenshotDataUrl = expectPngDataUrl(issue.screenshotDataUrl, `issues[${index}].screenshotDataUrl`);
 
   return {
     id: expectPositiveInteger(issue.id, `issues[${index}].id`),
@@ -162,8 +169,9 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     redaction: issue.redaction === undefined ? undefined : validateRedaction(issue.redaction, `issues[${index}].redaction`),
     note: expectString(issue.note, `issues[${index}].note`),
     createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
-    screenshotName: expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`),
-    screenshotDataUrl: expectPngDataUrl(issue.screenshotDataUrl, `issues[${index}].screenshotDataUrl`)
+    screenshotName,
+    screenshotDataUrl,
+    screenshot: validateScreenshotArtifact(issue.screenshot, `issues[${index}].screenshot`, screenshotName, "element", screenshotDataUrl)
   };
 }
 
@@ -358,6 +366,48 @@ function validateStackingAncestor(value: unknown, field: string): StackingContex
     opacity: expectString(ancestor.opacity, `${field}.opacity`),
     transform: expectString(ancestor.transform, `${field}.transform`),
     isolation: expectString(ancestor.isolation, `${field}.isolation`)
+  };
+}
+
+function validateScreenshotArtifact(
+  value: unknown,
+  field: string,
+  expectedName: string,
+  expectedKind: ScreenshotArtifact["kind"],
+  dataUrl: string
+): ScreenshotArtifact {
+  const artifact = expectRecord(value, field);
+  const name = expectSafeFilename(artifact.name, `${field}.name`);
+  const kind = expectScreenshotKind(artifact.kind, `${field}.kind`);
+  const mimeType = expectString(artifact.mimeType, `${field}.mimeType`);
+  const byteLength = expectPositiveInteger(artifact.byteLength, `${field}.byteLength`);
+
+  if (name !== expectedName) {
+    throw badRequest(`${field}.name must match the screenshot filename`);
+  }
+
+  if (kind !== expectedKind) {
+    throw badRequest(`${field}.kind must be ${expectedKind}`);
+  }
+
+  if (mimeType !== "image/png") {
+    throw badRequest(`${field}.mimeType must be image/png`);
+  }
+
+  if (byteLength !== pngByteLength(dataUrl)) {
+    throw badRequest(`${field}.byteLength must match the PNG payload size`);
+  }
+
+  return {
+    name,
+    kind,
+    width: expectPositiveInteger(artifact.width, `${field}.width`),
+    height: expectPositiveInteger(artifact.height, `${field}.height`),
+    devicePixelRatio: expectPositiveNumber(artifact.devicePixelRatio, `${field}.devicePixelRatio`),
+    captureStrategy: expectCaptureStrategy(artifact.captureStrategy, `${field}.captureStrategy`),
+    mimeType: "image/png",
+    byteLength,
+    hash: expectSha256Hash(artifact.hash, `${field}.hash`)
   };
 }
 
@@ -560,6 +610,22 @@ function expectAnnotationMode(value: unknown, field: string): "pen" | "box" | "r
   return value;
 }
 
+function expectScreenshotKind(value: unknown, field: string): ScreenshotArtifact["kind"] {
+  if (value !== "element" && value !== "full-page") {
+    throw badRequest(`${field} must be element or full-page`);
+  }
+
+  return value;
+}
+
+function expectCaptureStrategy(value: unknown, field: string): ScreenshotArtifact["captureStrategy"] {
+  if (value !== "html2canvas") {
+    throw badRequest(`${field} must be html2canvas`);
+  }
+
+  return value;
+}
+
 function expectPositiveNumber(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw badRequest(`${field} must be a positive number`);
@@ -633,6 +699,21 @@ function expectPngDataUrl(value: unknown, field: string): string {
   }
 
   return dataUrl;
+}
+
+function pngByteLength(dataUrl: string): number {
+  const base64 = dataUrl.match(/^data:image\/png;base64,([a-zA-Z0-9+/=]+)$/)?.[1] ?? "";
+  return Buffer.byteLength(base64, "base64");
+}
+
+function expectSha256Hash(value: unknown, field: string): string {
+  const hash = expectString(value, field);
+
+  if (!/^sha256-[a-f0-9]{64}$/.test(hash)) {
+    throw badRequest(`${field} must be a sha256-prefixed lowercase hex digest`);
+  }
+
+  return hash;
 }
 
 function badRequest(message: string): SessionRequestError {

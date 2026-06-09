@@ -258,6 +258,7 @@ try {
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
   const sessionJson = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8"));
+  const screenshotInventory = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "screenshots.json"), "utf8"));
   const sessionMetadata = JSON.parse(await readFile(path.join(feedbackRoot, "latest", "metadata.json"), "utf8"));
   if (!sessionMarkdown.includes("Left edge delta: +12px")) {
     throw new Error(`Expected proxy session to contain +12px delta:\n${sessionMarkdown}`);
@@ -274,8 +275,29 @@ try {
   if (!sessionMarkdown.includes("Auto-redacted elements: 1") || !sessionMarkdown.includes("Manual redaction: yes")) {
     throw new Error(`Expected session markdown to include redaction evidence:\n${sessionMarkdown}`);
   }
+  if (!sessionMarkdown.includes("Screenshot metadata:") || !sessionMarkdown.includes("html2canvas")) {
+    throw new Error(`Expected session markdown to include screenshot metadata:\n${sessionMarkdown}`);
+  }
   if (!sessionMarkdown.includes("Selector confidence:")) {
     throw new Error(`Expected session markdown to include target confidence:\n${sessionMarkdown}`);
+  }
+  if (
+    sessionJson.fullPageScreenshot?.kind !== "full-page" ||
+    sessionJson.fullPageScreenshot.captureStrategy !== "html2canvas" ||
+    !/^sha256-[a-f0-9]{64}$/.test(sessionJson.fullPageScreenshot.hash)
+  ) {
+    throw new Error(`Expected full-page screenshot artifact metadata:\n${JSON.stringify(sessionJson.fullPageScreenshot, null, 2)}`);
+  }
+  if (
+    sessionJson.issues[0]?.screenshot?.kind !== "element" ||
+    sessionJson.issues[0].screenshot.name !== sessionJson.issues[0].screenshotName ||
+    sessionJson.issues[0].screenshot.byteLength <= 0 ||
+    !/^sha256-[a-f0-9]{64}$/.test(sessionJson.issues[0].screenshot.hash)
+  ) {
+    throw new Error(`Expected issue screenshot artifact metadata:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
+  }
+  if (screenshotInventory.length !== sessionJson.issues.length + 1 || screenshotInventory[0]?.kind !== "full-page") {
+    throw new Error(`Expected screenshots.json inventory for full page plus issues:\n${JSON.stringify(screenshotInventory, null, 2)}`);
   }
   if (sessionJson.issues[0]?.measurement?.kind !== "single" || !sessionJson.issues[0].measurement.bbox) {
     throw new Error(`Expected single issue to include structured bbox measurement:\n${JSON.stringify(sessionJson, null, 2)}`);
@@ -616,7 +638,18 @@ async function writeNestedSessionFixture(baseSession) {
             }
           }
         },
-        screenshotName: "issue-1.png"
+        screenshotName: "issue-1.png",
+        screenshot: {
+          name: "issue-1.png",
+          kind: "element",
+          width: 24,
+          height: 24,
+          devicePixelRatio: 1,
+          captureStrategy: "html2canvas",
+          mimeType: "image/png",
+          byteLength: Buffer.byteLength(baseSession.issues[0].screenshotDataUrl.split(",")[1], "base64"),
+          hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000"
+        }
       }
     ]
   };
@@ -660,6 +693,17 @@ async function verifyInvalidSessionRequests(port) {
 
 function createSessionPayload(overrides = {}) {
   const png = "data:image/png;base64,iVBORw0KGgo=";
+  const screenshot = {
+    name: overrides.screenshotName ?? "issue-1.png",
+    kind: "element",
+    width: 1,
+    height: 1,
+    devicePixelRatio: 1,
+    captureStrategy: "html2canvas",
+    mimeType: "image/png",
+    byteLength: 8,
+    hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000"
+  };
 
   return {
     schemaVersion: 1,
@@ -697,11 +741,17 @@ function createSessionPayload(overrides = {}) {
         note: "invalid request fixture",
         createdAt: new Date().toISOString(),
         screenshotName: overrides.screenshotName ?? "issue-1.png",
-        screenshotDataUrl: png
+        screenshotDataUrl: png,
+        screenshot
       }
     ],
     fullPageScreenshotName: "full-page.png",
-    fullPageScreenshotDataUrl: png
+    fullPageScreenshotDataUrl: png,
+    fullPageScreenshot: {
+      ...screenshot,
+      name: "full-page.png",
+      kind: "full-page"
+    }
   };
 }
 

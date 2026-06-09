@@ -11,6 +11,7 @@ export async function writeSession(root: string, session: VernierSession): Promi
   await mkdir(screenshotsDirectory, { recursive: true });
   await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(baseDirectory, "session.md"), renderSessionMarkdown(session));
+  await writeFile(path.join(baseDirectory, "screenshots.json"), `${JSON.stringify(renderScreenshotInventory(session), null, 2)}\n`);
   await writeFile(
     path.join(baseDirectory, "metadata.json"),
     `${JSON.stringify(
@@ -76,6 +77,7 @@ function renderSessionMarkdown(session: VernierSession): string {
       `Element: ${formatTarget(issue)}`,
       "",
       `Screenshot: ./screenshots/${issue.screenshotName}`,
+      `Screenshot metadata: ${issue.screenshot.width}x${issue.screenshot.height}, ${issue.screenshot.captureStrategy}, ${issue.screenshot.hash}`,
       ""
     );
   }
@@ -88,6 +90,13 @@ function renderSessionMarkdown(session: VernierSession): string {
   );
 
   return lines.join("\n");
+}
+
+function renderScreenshotInventory(session: VernierSession): Array<VernierSession["fullPageScreenshot"]> {
+  return [
+    session.fullPageScreenshot,
+    ...session.issues.map((issue) => issue.screenshot)
+  ];
 }
 
 function formatTarget(issue: VernierSession["issues"][number]): string {

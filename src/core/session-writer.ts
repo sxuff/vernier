@@ -1,13 +1,13 @@
-import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { VernierSession } from "../schema";
 
 export async function writeSession(root: string, session: VernierSession): Promise<string> {
-  const slug = `${session.createdAt.slice(0, 10)}-${slugify(session.route)}`;
+  const slug = `${session.createdAt.replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}-${slugify(session.route)}`;
   const baseDirectory = path.join(root, ".ui-feedback", "sessions", slug);
   const screenshotsDirectory = path.join(baseDirectory, "screenshots");
 
-  await rm(baseDirectory, { recursive: true, force: true });
   await mkdir(screenshotsDirectory, { recursive: true });
   await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(baseDirectory, "session.md"), renderSessionMarkdown(session));
@@ -73,15 +73,29 @@ function titleCase(value: string): string {
 
 async function updateLatestLink(root: string, targetDirectory: string): Promise<void> {
   const latestPath = path.join(root, ".ui-feedback", "latest");
+  let latestKind = "junction";
 
   await rm(latestPath, { recursive: true, force: true });
 
   try {
     await symlink(targetDirectory, latestPath, "junction");
   } catch {
-    await mkdir(latestPath, { recursive: true });
-    await writeFile(path.join(latestPath, "README.txt"), `Latest session: ${targetDirectory}\n`);
+    latestKind = "copy";
+    await cp(targetDirectory, latestPath, { recursive: true });
   }
+
+  await writeFile(
+    path.join(root, ".ui-feedback", "latest.json"),
+    `${JSON.stringify(
+      {
+        kind: latestKind,
+        target: path.relative(path.join(root, ".ui-feedback"), targetDirectory),
+        updatedAt: new Date().toISOString()
+      },
+      null,
+      2
+    )}\n`
+  );
 }
 
 async function writeDataUrl(filePath: string, dataUrl: string): Promise<void> {

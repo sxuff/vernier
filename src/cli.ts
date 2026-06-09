@@ -434,7 +434,7 @@ async function forwardRequest(
   const contentType = upstream.headers.get("content-type") ?? "";
   const isHtml = contentType.includes("text/html");
 
-  copyResponseHeaders(upstream, response, isHtml);
+  copyResponseHeaders(upstream, response);
   response.statusCode = upstream.status;
 
   if (isHtml) {
@@ -466,9 +466,16 @@ function toForwardHeaders(request: IncomingMessage): Headers {
   return headers;
 }
 
-function copyResponseHeaders(upstream: Response, response: ServerResponse, transformed: boolean): void {
+function copyResponseHeaders(upstream: Response, response: ServerResponse): void {
   upstream.headers.forEach((value, key) => {
-    if (isHopByHopHeader(key) || (transformed && key.toLowerCase() === "content-length")) {
+    const normalizedKey = key.toLowerCase();
+
+    if (
+      isHopByHopHeader(key) ||
+      normalizedKey === "content-encoding" ||
+      normalizedKey === "content-length" ||
+      normalizedKey === "content-md5"
+    ) {
       return;
     }
 

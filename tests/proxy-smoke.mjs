@@ -1,7 +1,8 @@
 import { chromium } from "playwright";
 import { createServer } from "node:http";
-import { mkdir, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
 
 const root = process.cwd();
@@ -14,6 +15,13 @@ await rm(feedbackRoot, { recursive: true, force: true });
 await rm(nestedFeedbackRoot, { recursive: true, force: true });
 
 const targetServer = createServer((request, response) => {
+  if (request.url === "/compressed") {
+    response.setHeader("Content-Type", "text/plain");
+    response.setHeader("Content-Encoding", "gzip");
+    response.end(gzipSync("compressed upstream response"));
+    return;
+  }
+
   response.setHeader("Content-Type", "text/html");
   response.end(`<!doctype html>
     <html>
@@ -103,7 +111,20 @@ try {
   await page.locator("[data-vernier-export]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
   await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Exported");
+  await page.locator("[data-vernier-export]").click();
+  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Exported");
   await browser.close();
+
+  const sessionDirectories = await readdir(path.join(feedbackRoot, "sessions"));
+  if (sessionDirectories.length !== 2) {
+    throw new Error(`Expected two durable same-route sessions, got ${sessionDirectories.length}`);
+  }
+
+  const compressedResponse = await fetch(`http://127.0.0.1:${proxyPort}/compressed`);
+  const compressedBody = await compressedResponse.text();
+  if (compressedResponse.headers.has("content-encoding") || compressedBody !== "compressed upstream response") {
+    throw new Error(`Expected decoded proxy response without stale content-encoding, got ${compressedBody}`);
+  }
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
   if (!sessionMarkdown.includes("Left edge delta: +12px")) {

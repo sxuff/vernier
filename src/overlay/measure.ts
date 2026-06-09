@@ -71,17 +71,28 @@ export function measureDelta(firstElement: Element, secondElement: Element): str
   }
 
   function toHexColor(value: string): string {
-    const match = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    const match = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)/);
 
     if (!match) {
       return value;
     }
 
-    return `#${toHex(Number(match[1]))}${toHex(Number(match[2]))}${toHex(Number(match[3]))}`;
+    const alpha = match[4] === undefined ? 1 : Number(match[4]);
+
+    if (alpha === 0) {
+      return "transparent";
+    }
+
+    const rgb = `#${toHex(Number(match[1]))}${toHex(Number(match[2]))}${toHex(Number(match[3]))}`;
+
+    if (alpha >= 1) {
+      return rgb;
+    }
+
+    return `${rgb}${toHex(Math.round(alpha * 255))}`;
   }
 
   function toHex(value: number): string {
     return value.toString(16).padStart(2, "0");
   }
 }
-

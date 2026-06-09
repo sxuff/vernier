@@ -117,6 +117,7 @@ vernier issues --fixed
 vernier show <issue-id>
 vernier verify <issue-id>
 vernier verify <issue-id> --target http://localhost:3000 --open
+vernier verify <issue-id> --target http://localhost:3000 --compare
 vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
@@ -132,3 +133,5 @@ vernier open
 `vernier send --to codex` sends todo issues in the latest session by default. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
 
 `vernier verify <issue-id>` prints the captured viewport, original evidence, target URL, screenshot path, and the follow-up mark commands. Add `--open` to open the captured route in your browser.
+
+`vernier verify <issue-id> --compare` reopens the captured route at the captured viewport, finds the selector, remeasures it, and writes local artifacts under `.ui-feedback/sessions/<session>/verification/<issue-id>/`.

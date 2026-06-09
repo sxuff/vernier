@@ -272,6 +272,23 @@ try {
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
+  const compareOutput = await runNode([
+    "dist/cli.js",
+    "verify",
+    sessionJson.issues[1].stableId,
+    "--target",
+    `http://127.0.0.1:${proxyPort}`,
+    "--compare"
+  ]);
+  const artifactDirectory = compareOutput.match(/Artifacts: (.+)/)?.[1]?.trim();
+  if (!compareOutput.includes("Selector found: yes") || !artifactDirectory) {
+    throw new Error(`Expected verify --compare to remeasure and print artifact path:\n${compareOutput}`);
+  }
+  const compareReport = JSON.parse(await readFile(path.join(artifactDirectory, "report.json"), "utf8"));
+  const compareMarkdown = await readFile(path.join(artifactDirectory, "report.md"), "utf8");
+  if (compareReport.selectorFound !== true || !compareMarkdown.includes(`Issue ${sessionJson.issues[1].stableId}`)) {
+    throw new Error(`Expected verify --compare artifacts to include report data:\n${compareMarkdown}`);
+  }
 
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);

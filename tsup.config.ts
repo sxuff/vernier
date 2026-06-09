@@ -17,7 +17,6 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     target: "es2022",
-    external: ["vite"]
+    external: ["vite", "playwright"]
   }
 ]);
-

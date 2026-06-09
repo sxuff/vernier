@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { connect as connectNet } from "node:net";
@@ -9,6 +9,8 @@ import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import path from "node:path";
+import type { Browser, Page } from "playwright";
+import type { BoundingBox, VernierIssue } from "./schema";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -136,6 +138,12 @@ async function verifyIssue(args: string[]): Promise<void> {
   const reference = readRequiredReference(args, "verify");
   const issue = await findLatestIssue(process.cwd(), reference);
   const targetUrl = createIssueTargetUrl(readOption(args, "--target") ?? defaultTarget, issue.session.route);
+
+  if (args.includes("--compare")) {
+    console.log(await compareIssue(issue, targetUrl, readTolerance(args)));
+    return;
+  }
+
   const verification = renderIssueVerification(issue, targetUrl);
 
   console.log(verification);
@@ -143,6 +151,275 @@ async function verifyIssue(args: string[]): Promise<void> {
   if (args.includes("--open")) {
     await openUrl(targetUrl);
   }
+}
+
+async function compareIssue(
+  indexed: Awaited<ReturnType<typeof findLatestIssue>>,
+  targetUrl: string,
+  tolerancePx: number
+): Promise<string> {
+  if (!indexed.issue.measurement || indexed.issue.measurement.kind === "annotation") {
+    return [
+      renderIssueVerification(indexed, targetUrl),
+      "",
+      "Compare result:",
+      "Structured element measurement is required for automatic comparison."
+    ].join("\n");
+  }
+
+  const { chromium } = await import("playwright");
+  let browser: Browser | null = null;
+
+  try {
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({
+      viewport: {
+        width: indexed.session.viewport.width,
+        height: indexed.session.viewport.height
+      },
+      deviceScaleFactor: indexed.session.viewport.devicePixelRatio
+    });
+
+    await page.goto(targetUrl, { waitUntil: "networkidle" });
+    const report = await remeasureIssue(page, indexed.issue, tolerancePx);
+    const artifactDirectory = path.join(indexed.sessionDirectory, "verification", indexed.stableId);
+    await writeVerificationArtifacts(artifactDirectory, indexed, report, page);
+
+    return renderCompareReport(indexed.stableId, targetUrl, artifactDirectory, report);
+  } finally {
+    await browser?.close();
+  }
+}
+
+interface CompareReport {
+  selectorFound: boolean;
+  referenceFound?: boolean;
+  original?: Record<string, unknown>;
+  current?: Record<string, unknown>;
+  differences: Array<{ field: string; original: unknown; current: unknown; delta?: number; withinTolerance?: boolean }>;
+  tolerancePx: number;
+  suggestedStatus: IssueStatus;
+}
+
+async function remeasureIssue(page: Page, issue: VernierIssue, tolerancePx: number): Promise<CompareReport> {
+  const measurement = issue.measurement;
+
+  if (!measurement || measurement.kind === "annotation") {
+    throw new Error("Cannot compare an issue without element measurement data.");
+  }
+
+  const selector = measurement.kind === "delta" ? measurement.target.selector : issue.selector;
+  const current = await measureSelectorOnPage(page, selector);
+
+  if (!current) {
+    return {
+      selectorFound: false,
+      differences: [{ field: "selector", original: selector, current: "not found" }],
+      tolerancePx,
+      suggestedStatus: "todo"
+    };
+  }
+
+  if (measurement.kind === "single") {
+    const differences = compareBoundingBoxes(measurement.bbox, current.bbox, tolerancePx);
+    compareStyleValue(differences, "color", measurement.computedStyle.color, current.computedStyle.color);
+    compareStyleValue(
+      differences,
+      "background-color",
+      measurement.computedStyle["background-color"],
+      current.computedStyle["background-color"]
+    );
+    compareStyleValue(differences, "font-size", measurement.computedStyle["font-size"], current.computedStyle["font-size"]);
+
+    return {
+      selectorFound: true,
+      original: { bbox: measurement.bbox, computedStyle: measurement.computedStyle },
+      current,
+      differences,
+      tolerancePx,
+      suggestedStatus: hasMeaningfulChange(differences) ? "fixed" : "todo"
+    };
+  }
+
+  const currentReference = await measureSelectorOnPage(page, measurement.reference.selector);
+
+  if (!currentReference) {
+    return {
+      selectorFound: true,
+      referenceFound: false,
+      current,
+      differences: [{ field: "reference", original: measurement.reference.selector, current: "not found" }],
+      tolerancePx,
+      suggestedStatus: "todo"
+    };
+  }
+
+  const currentDelta = {
+    left: roundNumber(current.bbox.left - currentReference.bbox.left),
+    top: roundNumber(current.bbox.top - currentReference.bbox.top),
+    width: roundNumber(current.bbox.width - currentReference.bbox.width),
+    height: roundNumber(current.bbox.height - currentReference.bbox.height)
+  };
+  const differences = compareNumericRecord(measurement.delta, currentDelta, tolerancePx, ["left", "top", "width", "height"]);
+
+  compareStyleValue(differences, "color", measurement.delta.color?.[1], current.computedStyle.color);
+  compareStyleValue(differences, "background-color", measurement.delta.backgroundColor?.[1], current.computedStyle["background-color"]);
+  compareStyleValue(differences, "font-size", measurement.delta.fontSize?.[1], current.computedStyle["font-size"]);
+
+  return {
+    selectorFound: true,
+    referenceFound: true,
+    original: { delta: measurement.delta, targetBbox: measurement.targetBbox, referenceBbox: measurement.referenceBbox },
+    current: { delta: currentDelta, target: current, reference: currentReference },
+    differences,
+    tolerancePx,
+    suggestedStatus: hasMeaningfulChange(differences) ? "fixed" : "todo"
+  };
+}
+
+async function measureSelectorOnPage(page: Page, selector: string): Promise<{ bbox: BoundingBox; computedStyle: Record<string, string> } | null> {
+  return page.evaluate((candidateSelector) => {
+    const element = document.querySelector(candidateSelector);
+
+    if (!element) {
+      return null;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    const round = (value: number) => Math.round(value * 100) / 100;
+
+    return {
+      bbox: {
+        x: round(rect.x),
+        y: round(rect.y),
+        width: round(rect.width),
+        height: round(rect.height),
+        top: round(rect.top),
+        right: round(rect.right),
+        bottom: round(rect.bottom),
+        left: round(rect.left)
+      },
+      computedStyle: {
+        color: styles.color,
+        "background-color": styles.backgroundColor,
+        "font-size": styles.fontSize,
+        padding: styles.padding,
+        margin: styles.margin,
+        width: styles.width,
+        height: styles.height,
+        "border-radius": styles.borderRadius
+      }
+    };
+  }, selector);
+}
+
+function compareBoundingBoxes(
+  original: BoundingBox,
+  current: BoundingBox,
+  tolerancePx: number
+): CompareReport["differences"] {
+  return compareNumericRecord(original, current, tolerancePx, ["x", "y", "width", "height", "top", "right", "bottom", "left"]);
+}
+
+function compareNumericRecord(
+  original: object,
+  current: object,
+  tolerancePx: number,
+  fields: string[]
+): CompareReport["differences"] {
+  const originalRecord = original as Record<string, unknown>;
+  const currentRecord = current as Record<string, unknown>;
+
+  return fields.map((field) => {
+    const originalValue = Number(originalRecord[field]);
+    const currentValue = Number(currentRecord[field]);
+    const delta = roundNumber(currentValue - originalValue);
+
+    return {
+      field,
+      original: originalValue,
+      current: currentValue,
+      delta,
+      withinTolerance: Math.abs(delta) <= tolerancePx
+    };
+  });
+}
+
+function compareStyleValue(
+  differences: CompareReport["differences"],
+  field: string,
+  original: string | undefined,
+  current: string | undefined
+): void {
+  if (original === undefined || current === undefined) {
+    return;
+  }
+
+  differences.push({
+    field,
+    original,
+    current,
+    withinTolerance: original === current
+  });
+}
+
+function hasMeaningfulChange(differences: CompareReport["differences"]): boolean {
+  return differences.some((difference) => difference.withinTolerance === false);
+}
+
+async function writeVerificationArtifacts(
+  artifactDirectory: string,
+  indexed: Awaited<ReturnType<typeof findLatestIssue>>,
+  report: CompareReport,
+  page: Page
+): Promise<void> {
+  await mkdir(artifactDirectory, { recursive: true });
+  await copyFile(indexed.screenshotPath, path.join(artifactDirectory, "before.png"));
+  await page.screenshot({ path: path.join(artifactDirectory, "after.png"), fullPage: true });
+  await writeFile(path.join(artifactDirectory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(path.join(artifactDirectory, "report.md"), `${renderCompareReport(indexed.stableId, "", artifactDirectory, report)}\n`);
+}
+
+function renderCompareReport(
+  issueId: string,
+  targetUrl: string,
+  artifactDirectory: string,
+  report: CompareReport
+): string {
+  return [
+    `Issue ${issueId}`,
+    targetUrl ? `URL: ${targetUrl}` : null,
+    `Selector found: ${report.selectorFound ? "yes" : "no"}`,
+    report.referenceFound === undefined ? null : `Reference found: ${report.referenceFound ? "yes" : "no"}`,
+    `Tolerance: ${report.tolerancePx}px`,
+    `Suggested status: ${report.suggestedStatus}`,
+    `Artifacts: ${artifactDirectory}`,
+    "",
+    "Differences:",
+    ...report.differences.map((difference) =>
+      `- ${difference.field}: ${String(difference.original)} -> ${String(difference.current)}${typeof difference.delta === "number" ? ` (${formatSignedNumber(difference.delta)})` : ""} ${difference.withinTolerance ? "ok" : "changed"}`
+    )
+  ].filter((line): line is string => line !== null).join("\n");
+}
+
+function readTolerance(args: string[]): number {
+  const value = readOption(args, "--tolerance") ?? "2";
+  const tolerance = Number(value);
+
+  if (!Number.isFinite(tolerance) || tolerance < 0) {
+    throw new Error(`Invalid --tolerance value: ${value}`);
+  }
+
+  return tolerance;
+}
+
+function roundNumber(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function formatSignedNumber(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
 }
 
 async function markIssue(args: string[]): Promise<void> {
@@ -904,6 +1181,7 @@ function printHelp(): void {
       "  vernier copy <issue-id> [--print]",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
+      "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2]",
       "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
       "  vernier latest",
       "  vernier open",

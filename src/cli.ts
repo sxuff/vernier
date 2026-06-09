@@ -24,7 +24,8 @@ import {
   renderIssueList,
   renderIssueTask,
   renderIssueVerification,
-  renderIssuesTask
+  renderIssuesTask,
+  updateLatestIssueNote
 } from "./core/issues";
 import {
   createVernierOverlayScript,
@@ -302,6 +303,11 @@ async function main(): Promise<void> {
 
   if (command === "mark") {
     await markIssue(args);
+    return;
+  }
+
+  if (command === "note") {
+    await updateIssueNote(args);
     return;
   }
 
@@ -1742,6 +1748,19 @@ async function markIssue(args: string[]): Promise<void> {
   console.log(`Marked ${issue.stableId} ${status}.`);
 }
 
+async function updateIssueNote(args: string[]): Promise<void> {
+  const [reference, ...noteParts] = readPositionalArgs(args);
+  const note = noteParts.join(" ").trim();
+
+  if (!reference || !note) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier note <issue-id> \"updated note\"", "Use quotes around notes with spaces.");
+  }
+
+  const issue = await updateLatestIssueNote(process.cwd(), reference, note);
+
+  console.log(`Updated ${issue.stableId} note.`);
+}
+
 function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
   if (args.includes("--todo")) {
     return "todo";
@@ -2533,6 +2552,7 @@ function printHelp(): void {
       "  vernier issues [--todo|--fixed|--all]",
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--print]",
+      "  vernier note <issue-id> \"updated note\"",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
       "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2]",

@@ -143,6 +143,7 @@ export interface DeltaMeasurement {
 export interface AnnotationMeasurement {
   kind: "annotation";
   mode: "pen" | "box" | "redact";
+  label?: string;
   viewport: {
     width: number;
     height: number;

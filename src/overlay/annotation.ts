@@ -7,6 +7,7 @@ export interface AnnotationLayer {
 
 interface AnnotationOptions {
   onDraft(measured: string, measurement: AnnotationMeasurement): void;
+  getLabel?: () => string | undefined;
 }
 
 interface Point {
@@ -109,6 +110,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     const measurement: AnnotationMeasurement = {
       kind: "annotation",
       mode: mode === "box" || mode === "redact" ? mode : "pen",
+      label: options.getLabel?.(),
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -131,10 +133,11 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     options.onDraft(
       [
         `Annotation: ${mode}`,
+        measurement.label ? `Label: ${measurement.label}` : null,
         `Viewport: ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}x`,
         `Region: x=${Math.round(normalizedBounds.x)}, y=${Math.round(normalizedBounds.y)}, w=${Math.round(normalizedBounds.width)}, h=${Math.round(normalizedBounds.height)}`,
         `Relative points: ${JSON.stringify(relativePoints)}`
-      ].join("\n"),
+      ].filter((line): line is string => line !== null).join("\n"),
       measurement
     );
   }

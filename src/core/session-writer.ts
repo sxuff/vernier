@@ -41,7 +41,7 @@ export async function writeSession(root: string, session: VernierSession): Promi
   return baseDirectory;
 }
 
-function renderSessionMarkdown(session: VernierSession): string {
+export function renderSessionMarkdown(session: VernierSession): string {
   const lines = [
     "# UI Feedback Session - Vernier",
     `Schema version: ${session.schemaVersion}`,

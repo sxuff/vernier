@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { VernierIssue, VernierSession } from "../schema";
+import { renderSessionMarkdown } from "./session-writer";
 
 export type IssueStatus = "todo" | "fixed";
 
@@ -56,6 +57,25 @@ export async function markLatestIssue(root: string, reference: string, status: I
   await writeIssueStatuses(issue.sessionDirectory, statuses);
 
   return { ...issue, status };
+}
+
+export async function updateLatestIssueNote(root: string, reference: string, note: string): Promise<IndexedVernierIssue> {
+  const latest = await findLatestSessionFile(root);
+  const raw = await readFile(latest.filePath, "utf8");
+  const session = JSON.parse(raw) as VernierSession;
+  const statuses = await readIssueStatuses(latest.sessionDirectory);
+  const issues = session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
+  const indexed = findIssueByReference(issues, reference);
+
+  if (!indexed) {
+    throw new Error(`Unknown Vernier issue: ${reference}`);
+  }
+
+  indexed.issue.note = note.trim();
+  await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
+  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+
+  return indexIssue(latest.sessionDirectory, session, indexed.issue, statuses);
 }
 
 function findIssueByReference(issues: IndexedVernierIssue[], reference: string): IndexedVernierIssue | undefined {

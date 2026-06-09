@@ -4,6 +4,7 @@ export interface OverlayRoot {
   panel: HTMLDivElement;
   panelContent: HTMLPreElement;
   noteInput: HTMLTextAreaElement;
+  annotationLabelSelect: HTMLSelectElement;
   modeSelect: HTMLSelectElement;
   addIssueButton: HTMLButtonElement;
   saveIssueButton: HTMLButtonElement;
@@ -105,6 +106,30 @@ export function createOverlayRoot(): OverlayRoot {
   noteInput.style.margin = "0 0 8px";
   noteInput.style.resize = "vertical";
 
+  const annotationLabelSelect = document.createElement("select");
+  annotationLabelSelect.dataset.vernierAnnotationLabel = "true";
+  annotationLabelSelect.style.width = "100%";
+  annotationLabelSelect.style.margin = "0 0 8px";
+  annotationLabelSelect.style.padding = "6px";
+  annotationLabelSelect.style.border = "1px solid rgba(23, 32, 51, 0.18)";
+  annotationLabelSelect.style.borderRadius = "6px";
+  annotationLabelSelect.style.background = "#ffffff";
+  annotationLabelSelect.style.color = "#172033";
+
+  for (const [value, text] of [
+    ["", "Quick label"],
+    ["too-much-padding", "Too much padding"],
+    ["wrong-color", "Wrong color"],
+    ["misaligned", "Misaligned"],
+    ["broken-mobile", "Broken mobile"],
+    ["missing-hover", "Missing hover"]
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    annotationLabelSelect.append(option);
+  }
+
   const addIssueButton = document.createElement("button");
   addIssueButton.dataset.vernierAddIssue = "true";
   addIssueButton.type = "button";
@@ -176,6 +201,7 @@ export function createOverlayRoot(): OverlayRoot {
   panel.append(
     panelContent,
     noteInput,
+    annotationLabelSelect,
     addIssueButton,
     issueList,
     issueActions,
@@ -194,6 +220,7 @@ export function createOverlayRoot(): OverlayRoot {
     panel,
     panelContent,
     noteInput,
+    annotationLabelSelect,
     modeSelect,
     addIssueButton,
     saveIssueButton,

@@ -242,6 +242,7 @@ function validateMeasurement(
   return {
     kind,
     mode: expectAnnotationMode(measurement.mode, `${field}.mode`),
+    label: expectOptionalString(measurement.label, `${field}.label`),
     viewport: {
       width: expectPositiveNumber(viewport.width, `${field}.viewport.width`),
       height: expectPositiveNumber(viewport.height, `${field}.viewport.height`),

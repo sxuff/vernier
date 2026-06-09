@@ -160,6 +160,7 @@ try {
   await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Saved issue 2");
 
   await page.locator("[data-vernier-mode]").selectOption("pen");
+  await page.locator("[data-vernier-annotation-label]").selectOption("misaligned");
   await page.mouse.move(160, 160);
   await page.mouse.down();
   await page.mouse.move(220, 190);
@@ -326,6 +327,9 @@ try {
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
+  if (sessionJson.issues[2].measurement.label !== "misaligned" || !sessionJson.issues[2].measured.includes("Label: misaligned")) {
+    throw new Error(`Expected annotation issue to include quick label evidence:\n${JSON.stringify(sessionJson.issues[2], null, 2)}`);
+  }
   if (sessionJson.issues[0]?.redaction?.autoRedactedElements !== 1) {
     throw new Error(`Expected single issue to record automatic redaction:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
   }
@@ -412,6 +416,9 @@ try {
 
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
+  const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
+  const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
+  const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
   const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
   const configSendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--config", configPath, "--print"]);
@@ -516,6 +523,9 @@ try {
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
     throw new Error(`Expected copy --print to produce issue task:\n${copyOutput}`);
+  }
+  if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
+    throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);
   }
   if (
     !verifyOutput.includes(`Verify Vernier issue ${stableIssueId}.`) ||

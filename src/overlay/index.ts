@@ -15,6 +15,9 @@ export function startVernierOverlay(): void {
 
   updateControls();
   const annotation = createAnnotationLayer(overlay.root, {
+    getLabel() {
+      return overlay.annotationLabelSelect.value || undefined;
+    },
     onDraft(measured, measurement) {
       renderMeasurementPanel(overlay.panel, measured);
       session.setAnnotationDraft(measured, measurement);
@@ -77,6 +80,7 @@ export function startVernierOverlay(): void {
 
     selectedIssueId = issue.id;
     overlay.noteInput.value = issue.note;
+    overlay.annotationLabelSelect.value = issue.measurement.kind === "annotation" ? issue.measurement.label ?? "" : "";
     renderMeasurementPanel(overlay.panel, issue.measured);
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
     updateControls();
@@ -89,7 +93,7 @@ export function startVernierOverlay(): void {
       return;
     }
 
-    const issue = session.updateIssueNote(selectedIssueId, overlay.noteInput.value);
+    const issue = session.updateIssueNote(selectedIssueId, overlay.noteInput.value, overlay.annotationLabelSelect.value);
     overlay.status.textContent = issue ? `Saved issue ${issue.id}` : "Selected issue no longer exists";
   });
 
@@ -102,6 +106,7 @@ export function startVernierOverlay(): void {
     session.deleteIssue(selectedIssueId);
     selectedIssueId = null;
     overlay.noteInput.value = "";
+    overlay.annotationLabelSelect.value = "";
     renderMeasurementPanel(overlay.panel, "No issue selected");
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
     updateControls();
@@ -114,6 +119,7 @@ export function startVernierOverlay(): void {
     annotation.clear();
     picker.clear();
     overlay.noteInput.value = "";
+    overlay.annotationLabelSelect.value = "";
     renderMeasurementPanel(overlay.panel, "No queued issues");
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
     updateControls();

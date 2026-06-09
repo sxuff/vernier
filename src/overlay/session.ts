@@ -42,7 +42,7 @@ interface SessionController {
   setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement): void;
   setAnnotationDraft(measured: string, measurement: VernierMeasurement): void;
   addDraftIssue(): Promise<SessionIssue | null>;
-  updateIssueNote(id: number, note: string): SessionIssue | null;
+  updateIssueNote(id: number, note: string, label?: string): SessionIssue | null;
   deleteIssue(id: number): void;
   clearIssues(): void;
   getIssues(): SessionIssue[];
@@ -121,7 +121,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return [...issues];
   }
 
-  function updateIssueNote(id: number, note: string): SessionIssue | null {
+  function updateIssueNote(id: number, note: string, label?: string): SessionIssue | null {
     const issue = issues.find((candidate) => candidate.id === id);
 
     if (!issue) {
@@ -129,6 +129,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
 
     issue.note = note.trim();
+    if (issue.measurement.kind === "annotation") {
+      issue.measurement.label = label || undefined;
+      issue.measured = withAnnotationLabel(issue.measured, issue.measurement.label);
+    }
 
     return issue;
   }
@@ -335,6 +339,16 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       const nextId = index + 1;
       issue.id = nextId;
     });
+  }
+
+  function withAnnotationLabel(measured: string, label: string | undefined): string {
+    const lines = measured.split("\n").filter((line) => !line.startsWith("Label: "));
+
+    if (label) {
+      lines.splice(1, 0, `Label: ${label}`);
+    }
+
+    return lines.join("\n");
   }
 
   function createStableId(prefix = "i"): string {

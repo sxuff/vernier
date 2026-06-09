@@ -50,6 +50,9 @@ test("exports measured UI feedback session", async ({ page }) => {
   await expect(page.locator("[data-vernier-issue-list]")).toHaveAttribute("data-vernier-issue-count", "0");
 
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
+  await page.locator(".revenue-card").evaluate((element) => {
+    element.setAttribute("data-vernier-source", "src/components/RevenueCard.tsx:42");
+  });
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
@@ -93,7 +96,10 @@ test("exports measured UI feedback session", async ({ page }) => {
       target: {
         selectorConfidence: string;
         tag: string;
+        source: string;
         nearestTestId?: string;
+        sourceResolver: string;
+        ownerChain: string[];
         ancestry: unknown[];
       };
     }>;
@@ -104,7 +110,7 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionMarkdown).toContain("Measured:");
   expect(sessionMarkdown).toContain("Issue count: 1");
   expect(sessionMarkdown).not.toContain("edited exploratory note");
-  expect(sessionMarkdown).toMatch(/Source: (src\/.*RevenueCard\.tsx:\d+|unresolved)/);
+  expect(sessionMarkdown).toContain("Source: src/components/RevenueCard.tsx:42");
   expect(sessionJson.issueCount).toBe(1);
   expect(sessionJson.schemaVersion).toBe(1);
   expect(sessionJson.sessionId).toMatch(/^s-/);
@@ -112,6 +118,9 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionJson.issues[0]?.note).toBe("align these card edges");
   expect(sessionJson.issues[0]?.target.selectorConfidence).toBe("high");
   expect(sessionJson.issues[0]?.target.tag).toBe("article");
+  expect(sessionJson.issues[0]?.target.source).toBe("src/components/RevenueCard.tsx:42");
   expect(sessionJson.issues[0]?.target.nearestTestId).toBe("revenue-card");
+  expect(sessionJson.issues[0]?.target.sourceResolver).toBe("data-vernier-source");
+  expect(Array.isArray(sessionJson.issues[0]?.target.ownerChain)).toBe(true);
   expect(sessionJson.issues[0]?.target.ancestry.length).toBeGreaterThan(0);
 });

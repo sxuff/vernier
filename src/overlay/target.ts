@@ -1,10 +1,10 @@
 import type { ElementTarget } from "../schema";
 import { getStableSelector } from "./selector";
-import { getSourceLocation } from "./source";
+import { resolveSource } from "./source";
 
 export function createElementTarget(element: Element): ElementTarget {
   const selector = getStableSelector(element);
-  const source = getSourceLocation(element);
+  const source = resolveSource(element);
   const testId = element.getAttribute("data-testid") ?? undefined;
   const role = element.getAttribute("role") ?? implicitRole(element) ?? undefined;
   const accessibleName = element.getAttribute("aria-label") ?? textSummary(element) ?? undefined;
@@ -21,8 +21,11 @@ export function createElementTarget(element: Element): ElementTarget {
     accessibleName,
     testId,
     nearestTestId: nearestAttribute(element, "data-testid"),
-    source,
-    sourceConfidence: source === "unresolved" ? "low" : "medium",
+    source: source.source,
+    sourceConfidence: source.confidence,
+    sourceResolver: source.resolver,
+    componentName: source.componentName,
+    ownerChain: source.ownerChain,
     ancestry: ancestry(element)
   };
 }
@@ -36,6 +39,8 @@ export function createViewportTarget(): ElementTarget {
     classes: [],
     source: "unresolved",
     sourceConfidence: "low",
+    sourceResolver: "viewport",
+    ownerChain: [],
     ancestry: []
   };
 }

@@ -12,6 +12,9 @@ export interface ElementTarget {
   nearestTestId?: string;
   source: string;
   sourceConfidence: "high" | "medium" | "low";
+  sourceResolver: string;
+  componentName?: string;
+  ownerChain: string[];
   ancestry: Array<{
     tag: string;
     id?: string;

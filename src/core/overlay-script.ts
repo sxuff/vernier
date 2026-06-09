@@ -4,7 +4,18 @@ import { measureDelta, measureElement } from "../overlay/measure";
 import { createPicker } from "../overlay/picker";
 import { getStableSelector } from "../overlay/selector";
 import { createSessionController } from "../overlay/session";
-import { getSourceLocation } from "../overlay/source";
+import {
+  fiberDisplayName,
+  findAnnotatedSource,
+  findDebugSource,
+  findOwnerChain,
+  getReactFiber,
+  getSourceLocation,
+  isRecord,
+  isSourceLocation,
+  resolveSource,
+  trimSourcePath
+} from "../overlay/source";
 import {
   ancestry,
   createElementTarget,
@@ -28,6 +39,15 @@ export function createVernierOverlayScript(options: OverlayScriptOptions): strin
   return [
     `import html2canvas from ${JSON.stringify(options.html2canvasImportPath)};`,
     getStableSelector.toString(),
+    isRecord.toString(),
+    isSourceLocation.toString(),
+    trimSourcePath.toString(),
+    findAnnotatedSource.toString(),
+    getReactFiber.toString(),
+    findDebugSource.toString(),
+    fiberDisplayName.toString(),
+    findOwnerChain.toString(),
+    resolveSource.toString(),
     getSourceLocation.toString(),
     measureElement.toString(),
     measureDelta.toString(),

@@ -331,6 +331,8 @@ function createSessionPayload(overrides = {}) {
           classes: [],
           source: "unresolved",
           sourceConfidence: "low",
+          sourceResolver: "fallback-dom",
+          ownerChain: [],
           ancestry: []
         },
         note: "invalid request fixture",

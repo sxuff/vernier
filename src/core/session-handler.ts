@@ -187,6 +187,9 @@ function validateTarget(value: unknown, field: string): VernierSession["issues"]
     nearestTestId: expectOptionalString(target.nearestTestId, `${field}.nearestTestId`),
     source: expectString(target.source, `${field}.source`),
     sourceConfidence: expectConfidence(target.sourceConfidence, `${field}.sourceConfidence`),
+    sourceResolver: expectString(target.sourceResolver, `${field}.sourceResolver`),
+    componentName: expectOptionalString(target.componentName, `${field}.componentName`),
+    ownerChain: expectStringArray(target.ownerChain, `${field}.ownerChain`),
     ancestry: ancestry.map((item, index) => validateAncestor(item, `${field}.ancestry[${index}]`))
   };
 }

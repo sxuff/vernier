@@ -54,6 +54,8 @@ function renderSessionMarkdown(session: VernierSession): string {
       `Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
       `Source: ${issue.source}`,
       `Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+      `Source resolver: ${issue.target?.sourceResolver ?? "unknown"}`,
+      `Component: ${issue.target?.componentName ?? "unknown"}`,
       `Element: ${formatTarget(issue)}`,
       "",
       `Screenshot: ./screenshots/${issue.screenshotName}`,

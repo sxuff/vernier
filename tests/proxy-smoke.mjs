@@ -28,6 +28,28 @@ const targetServer = createServer((request, response) => {
     return;
   }
 
+  if (request.url === "/redirect-local") {
+    response.statusCode = 302;
+    response.setHeader("Location", `http://127.0.0.1:${targetPort}/login?from=target`);
+    response.end();
+    return;
+  }
+
+  if (request.url === "/redirect-external") {
+    response.statusCode = 302;
+    response.setHeader("Location", "https://example.com/login");
+    response.end();
+    return;
+  }
+
+  if (request.url === "/events") {
+    response.setHeader("Content-Type", "text/event-stream");
+    response.write("event: ready\n");
+    response.write("data: one\n\n");
+    response.end();
+    return;
+  }
+
   response.setHeader("Content-Type", "text/html");
   response.end(`<!doctype html>
     <html>
@@ -137,6 +159,22 @@ try {
   const hostBody = await hostResponse.text();
   if (hostBody !== `127.0.0.1:${targetPort}`) {
     throw new Error(`Expected proxy to rewrite Host header to target host, got ${hostBody}`);
+  }
+
+  const localRedirect = await fetch(`http://127.0.0.1:${proxyPort}/redirect-local`, { redirect: "manual" });
+  if (localRedirect.headers.get("location") !== "/login?from=target") {
+    throw new Error(`Expected local redirect to stay on proxy origin, got ${localRedirect.headers.get("location")}`);
+  }
+
+  const externalRedirect = await fetch(`http://127.0.0.1:${proxyPort}/redirect-external`, { redirect: "manual" });
+  if (externalRedirect.headers.get("location") !== "https://example.com/login") {
+    throw new Error(`Expected external redirect to remain untouched, got ${externalRedirect.headers.get("location")}`);
+  }
+
+  const eventResponse = await fetch(`http://127.0.0.1:${proxyPort}/events`);
+  const eventBody = await eventResponse.text();
+  if (eventResponse.headers.get("content-type") !== "text/event-stream" || !eventBody.includes("data: one")) {
+    throw new Error(`Expected SSE passthrough, got ${eventResponse.headers.get("content-type")}: ${eventBody}`);
   }
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");

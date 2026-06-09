@@ -440,8 +440,18 @@ async function forwardRequest(
   const contentType = upstream.headers.get("content-type") ?? "";
   const isHtml = contentType.includes("text/html");
 
-  copyResponseHeaders(upstream, response);
+  copyResponseHeaders(upstream, response, options);
   response.statusCode = upstream.status;
+
+  if (isRedirectStatus(upstream.status)) {
+    response.end();
+    return;
+  }
+
+  if (contentType.includes("text/event-stream") && upstream.body) {
+    await pipeline(upstream.body, response);
+    return;
+  }
 
   if (isHtml) {
     const html = await upstream.text();
@@ -474,7 +484,7 @@ function toForwardHeaders(request: IncomingMessage, target: URL): Headers {
   return headers;
 }
 
-function copyResponseHeaders(upstream: Response, response: ServerResponse): void {
+function copyResponseHeaders(upstream: Response, response: ServerResponse, options: ProxyOptions): void {
   upstream.headers.forEach((value, key) => {
     const normalizedKey = key.toLowerCase();
 
@@ -487,8 +497,28 @@ function copyResponseHeaders(upstream: Response, response: ServerResponse): void
       return;
     }
 
-    response.setHeader(key, value);
+    response.setHeader(key, key.toLowerCase() === "location" ? rewriteLocationHeader(value, options) : value);
   });
+}
+
+function rewriteLocationHeader(location: string, options: ProxyOptions): string {
+  let locationUrl: URL;
+
+  try {
+    locationUrl = new URL(location, options.target);
+  } catch {
+    return location;
+  }
+
+  if (locationUrl.origin !== options.target.origin) {
+    return location;
+  }
+
+  return `${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+}
+
+function isRedirectStatus(status: number): boolean {
+  return [301, 302, 303, 307, 308].includes(status);
 }
 
 function isHopByHopHeader(header: string): boolean {

@@ -10,7 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import path from "node:path";
 import type { Browser, Page } from "playwright";
-import type { BoundingBox, VernierIssue } from "./schema";
+import type { BoundingBox, VernierIssue, VernierMeasurement } from "./schema";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -127,6 +127,11 @@ async function main(): Promise<void> {
 
   if (command === "clean") {
     console.log(await cleanSessions(process.cwd(), args));
+    return;
+  }
+
+  if (command === "audit") {
+    console.log(await auditLatestSession(process.cwd(), args));
     return;
   }
 
@@ -358,6 +363,241 @@ function gitignoreIgnoresFeedback(gitignore: string): boolean {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .some((line) => line === ".ui-feedback" || line === ".ui-feedback/" || line === "/.ui-feedback" || line === "/.ui-feedback/");
+}
+
+async function auditLatestSession(root: string, args: string[]): Promise<string> {
+  const [kind] = readPositionalArgs(args);
+
+  if (kind && kind !== "a11y") {
+    throw new Error("Usage: vernier audit a11y [--json]");
+  }
+
+  const issues = await listLatestIssues(root);
+  const findings = issues.flatMap((issue) => auditIssueAccessibility(issue.issue, issue.stableId));
+  const report: A11yAuditReport = {
+    kind: "a11y",
+    sessionId: issues[0]?.session.sessionId ?? "unknown",
+    route: issues[0]?.session.route ?? "unknown",
+    checkedIssues: issues.length,
+    findingCount: findings.length,
+    findings
+  };
+
+  return args.includes("--json") ? JSON.stringify(report, null, 2) : renderA11yAudit(report);
+}
+
+interface A11yFinding {
+  issueId: string;
+  rule: "contrast" | "tap-target" | "accessible-name";
+  severity: "low" | "medium" | "high";
+  message: string;
+  selector: string;
+  expected: string;
+  actual: string;
+}
+
+interface A11yAuditReport {
+  kind: "a11y";
+  sessionId: string;
+  route: string;
+  checkedIssues: number;
+  findingCount: number;
+  findings: A11yFinding[];
+}
+
+function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFinding[] {
+  const findings: A11yFinding[] = [];
+  const measurement = issue.measurement;
+  const box = measurementBoundingBox(measurement);
+  const computedStyle = measurementComputedStyle(measurement);
+  const target = issue.target;
+  const selector = issue.selector;
+
+  if (box && isLikelyInteractive(issue)) {
+    const minSide = Math.min(box.width, box.height);
+
+    if (minSide < 44) {
+      findings.push({
+        issueId: stableId,
+        rule: "tap-target",
+        severity: "medium",
+        message: "Interactive target is smaller than the recommended 44px minimum.",
+        selector,
+        expected: "at least 44x44px",
+        actual: `${Math.round(box.width)}x${Math.round(box.height)}px`
+      });
+    }
+  }
+
+  if (isLikelyInteractive(issue) && !target.accessibleName && !target.text) {
+    findings.push({
+      issueId: stableId,
+      rule: "accessible-name",
+      severity: "high",
+      message: "Interactive target has no captured accessible name or text.",
+      selector,
+      expected: "accessible name or visible text",
+      actual: "missing"
+    });
+  }
+
+  const color = computedStyle?.color;
+  const backgroundColor = computedStyle?.["background-color"];
+  const hasText = Boolean(target.text || target.accessibleName || (measurement?.kind === "single" && measurement.text));
+
+  if (hasText && color && backgroundColor) {
+    const contrast = contrastRatio(color, backgroundColor);
+
+    if (contrast !== null && contrast < 4.5) {
+      findings.push({
+        issueId: stableId,
+        rule: "contrast",
+        severity: contrast < 3 ? "high" : "medium",
+        message: "Text contrast is below WCAG AA guidance for normal text.",
+        selector,
+        expected: "contrast ratio >= 4.5:1",
+        actual: `${contrast.toFixed(2)}:1`
+      });
+    }
+  }
+
+  return findings;
+}
+
+function renderA11yAudit(report: A11yAuditReport): string {
+  const lines = [
+    `A11y audit: ${report.route}`,
+    `Checked issues: ${report.checkedIssues}`,
+    `Findings: ${report.findingCount}`,
+    ""
+  ];
+
+  if (report.findings.length === 0) {
+    lines.push("No accessibility findings from captured Vernier evidence.");
+    return lines.join("\n");
+  }
+
+  for (const finding of report.findings) {
+    lines.push(
+      `[${finding.severity}] ${finding.rule} ${finding.issueId}`,
+      `Selector: ${finding.selector}`,
+      `Expected: ${finding.expected}`,
+      `Actual: ${finding.actual}`,
+      finding.message,
+      ""
+    );
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
+function measurementBoundingBox(measurement: VernierMeasurement | undefined): BoundingBox | null {
+  if (!measurement) {
+    return null;
+  }
+
+  if (measurement.kind === "single") {
+    return measurement.bbox;
+  }
+
+  if (measurement.kind === "delta") {
+    return measurement.targetBbox;
+  }
+
+  return null;
+}
+
+function measurementComputedStyle(measurement: VernierMeasurement | undefined): Record<string, string> | null {
+  if (!measurement) {
+    return null;
+  }
+
+  if (measurement.kind === "single") {
+    return measurement.computedStyle;
+  }
+
+  if (measurement.kind === "delta") {
+    return {
+      color: measurement.delta.color?.[1] ?? "",
+      "background-color": measurement.delta.backgroundColor?.[1] ?? "",
+      "font-size": measurement.delta.fontSize?.[1] ?? ""
+    };
+  }
+
+  return null;
+}
+
+function isLikelyInteractive(issue: VernierIssue): boolean {
+  const target = issue.target;
+  const tag = target.tag.toLowerCase();
+  const role = target.role?.toLowerCase();
+
+  return ["button", "a", "input", "select", "textarea", "summary"].includes(tag) ||
+    ["button", "link", "checkbox", "radio", "switch", "menuitem", "tab"].includes(role ?? "");
+}
+
+function contrastRatio(foreground: string, background: string): number | null {
+  const fg = parseCssColor(foreground);
+  const bg = parseCssColor(background);
+
+  if (!fg || !bg || fg.alpha === 0 || bg.alpha === 0) {
+    return null;
+  }
+
+  const fgLuminance = relativeLuminance(fg);
+  const bgLuminance = relativeLuminance(bg);
+  const lighter = Math.max(fgLuminance, bgLuminance);
+  const darker = Math.min(fgLuminance, bgLuminance);
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+interface ParsedColor {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+}
+
+function parseCssColor(value: string): ParsedColor | null {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "transparent") {
+    return { red: 0, green: 0, blue: 0, alpha: 0 };
+  }
+
+  const hex = normalized.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/);
+
+  if (hex) {
+    return {
+      red: Number.parseInt(hex[1]!.slice(0, 2), 16),
+      green: Number.parseInt(hex[1]!.slice(2, 4), 16),
+      blue: Number.parseInt(hex[1]!.slice(4, 6), 16),
+      alpha: hex[2] ? Number.parseInt(hex[2], 16) / 255 : 1
+    };
+  }
+
+  const rgb = normalized.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)$/);
+
+  if (!rgb) {
+    return null;
+  }
+
+  return {
+    red: Number(rgb[1]),
+    green: Number(rgb[2]),
+    blue: Number(rgb[3]),
+    alpha: rgb[4] === undefined ? 1 : Number(rgb[4])
+  };
+}
+
+function relativeLuminance(color: ParsedColor): number {
+  const channels = [color.red, color.green, color.blue].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
 }
 
 async function startMcpServer(root: string): Promise<void> {
@@ -1925,6 +2165,7 @@ function printHelp(): void {
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",
+      "  vernier audit a11y [--json]",
       "  vernier mcp",
       "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
       "  vernier latest",

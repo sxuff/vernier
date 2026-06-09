@@ -121,6 +121,7 @@ vernier verify <issue-id> --target http://localhost:3000 --compare
 vernier replay latest
 vernier doctor
 vernier clean --keep 20 --dry-run
+vernier audit a11y
 vernier mcp
 vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
@@ -143,5 +144,7 @@ vernier open
 `vernier replay latest` opens a local read-only viewer for the latest session, including screenshots, structured evidence, statuses, and verification reports.
 
 `vernier doctor` checks local privacy hygiene, including whether `.ui-feedback/` is ignored. `vernier clean` removes old local session folders by count or age.
+
+`vernier audit a11y` checks the latest captured evidence for contrast, tap-target size, and missing accessible names. Add `--json` for agent/CI output.
 
 `vernier mcp` starts a local MCP server over stdio so agents can list/read Vernier issues and mark or verify them without clipboard handoff.

@@ -332,6 +332,8 @@ try {
   await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
 
   const issuesOutput = await runNode(["dist/cli.js", "issues"]);
+  const auditOutput = await runNode(["dist/cli.js", "audit", "a11y"]);
+  const auditJson = JSON.parse(await runNode(["dist/cli.js", "audit", "a11y", "--json"]));
   const stableIssueId = issuesOutput.match(/i-[a-f0-9]{6}/)?.[0];
 
   if (!stableIssueId) {
@@ -398,6 +400,14 @@ try {
   }
   if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("todo") || !issuesOutput.includes("make it red")) {
     throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);
+  }
+  if (
+    !auditOutput.includes("A11y audit:") ||
+    !auditOutput.includes("tap-target") ||
+    !auditOutput.includes("accessible-name") ||
+    auditJson.findingCount < 2
+  ) {
+    throw new Error(`Expected audit a11y to flag fixture accessibility findings:\n${auditOutput}\n${JSON.stringify(auditJson, null, 2)}`);
   }
   if (
     !showOutput.includes(`ID: ${stableIssueId}`) ||
@@ -467,6 +477,38 @@ async function writeNestedSessionFixture(baseSession) {
         ...baseSession.issues[0],
         id: 1,
         note: "make it red",
+        selector: "[data-testid=\"bad-button\"]",
+        source: "src/components/BadButton.tsx:7",
+        target: {
+          ...baseSession.issues[0].target,
+          selector: "[data-testid=\"bad-button\"]",
+          tag: "button",
+          text: undefined,
+          accessibleName: undefined,
+          role: "button",
+          testId: "bad-button",
+          nearestTestId: "bad-button",
+          source: "src/components/BadButton.tsx:7"
+        },
+        measurement: {
+          kind: "single",
+          bbox: {
+            x: 10,
+            y: 10,
+            width: 24,
+            height: 24,
+            top: 10,
+            right: 34,
+            bottom: 34,
+            left: 10
+          },
+          computedStyle: {
+            color: "rgb(120, 120, 120)",
+            "background-color": "rgb(130, 130, 130)",
+            "font-size": "14px"
+          },
+          authoredHints: []
+        },
         screenshotName: "issue-1.png"
       }
     ]

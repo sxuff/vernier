@@ -290,6 +290,34 @@ try {
     throw new Error(`Expected verify --compare artifacts to include report data:\n${compareMarkdown}`);
   }
 
+  const replay = spawn(
+    process.execPath,
+    ["dist/cli.js", "replay", "latest", "--port", "4342", "--no-open"],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  try {
+    await waitForOutput(replay, "replay viewer listening");
+    const replayHtml = await (await fetch("http://127.0.0.1:4342/")).text();
+    const replaySession = await (await fetch("http://127.0.0.1:4342/session.json")).json();
+    const replayScreenshot = await fetch(`http://127.0.0.1:4342/screenshots/${sessionJson.issues[0].screenshotName}`);
+    const replayReport = await (await fetch(`http://127.0.0.1:4342/verification/${sessionJson.issues[1].stableId}/report.json`)).json();
+
+    if (!replayHtml.includes("Vernier Replay") || !replayHtml.includes(sessionJson.issues[1].stableId)) {
+      throw new Error(`Expected replay viewer HTML to include latest session issues:\n${replayHtml}`);
+    }
+    if (replaySession.sessionId !== sessionJson.sessionId) {
+      throw new Error(`Expected replay /session.json to serve latest session.`);
+    }
+    if (!replayScreenshot.ok || replayScreenshot.headers.get("content-type") !== "image/png") {
+      throw new Error(`Expected replay viewer to serve screenshot PNG.`);
+    }
+    if (replayReport.selectorFound !== true) {
+      throw new Error(`Expected replay viewer to serve verification report.`);
+    }
+  } finally {
+    replay.kill();
+  }
+
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);

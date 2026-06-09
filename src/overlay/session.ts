@@ -10,11 +10,13 @@ type IssueKind = "single" | "delta" | "annotation";
 
 interface SessionIssue {
   id: number;
+  stableId: string;
   kind: IssueKind;
   measured: string;
   selector: string;
   source: string;
   note: string;
+  createdAt: string;
   screenshotName: string;
   screenshotDataUrl: string;
 }
@@ -70,14 +72,17 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
 
     const id = issues.length + 1;
+    const stableId = createStableId();
     const issue: SessionIssue = {
       id,
+      stableId,
       kind: draft.kind,
       measured: draft.measured,
       selector: draft.selector,
       source: draft.source,
       note: noteInput.value.trim(),
-      screenshotName: `issue-${id}.png`,
+      createdAt: new Date().toISOString(),
+      screenshotName: `issue-${stableId}.png`,
       screenshotDataUrl: await captureScreenshot(draft.screenshotTarget)
     };
 
@@ -130,7 +135,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        schemaVersion: 1,
+        toolVersion: "0.0.0",
+        sessionId: createStableId("s"),
         route: window.location.pathname,
+        url: window.location.href,
         viewport: {
           width: window.innerWidth,
           height: window.innerHeight,
@@ -185,23 +194,45 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   }
 
   async function captureScreenshot(element: Element): Promise<string> {
-    const canvas = await html2canvas(element as HTMLElement, { backgroundColor: null });
+    let canvas: HTMLCanvasElement;
+
+    try {
+      canvas = await html2canvas(element as HTMLElement, { backgroundColor: null });
+    } catch (error) {
+      throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
+    }
 
     return canvas.toDataURL("image/png");
   }
 
   async function captureFullPageScreenshot(): Promise<string> {
-    const canvas = await html2canvas(document.documentElement, { backgroundColor: null });
+    let canvas: HTMLCanvasElement;
+
+    try {
+      canvas = await html2canvas(document.documentElement, { backgroundColor: null });
+    } catch (error) {
+      throw new Error(`Full-page screenshot capture failed: ${formatCaptureError(error)}`);
+    }
 
     return canvas.toDataURL("image/png");
+  }
+
+  function formatCaptureError(error: unknown): string {
+    return error instanceof Error ? error.message : "unknown capture error";
   }
 
   function renumberIssues(): void {
     issues.forEach((issue, index) => {
       const nextId = index + 1;
       issue.id = nextId;
-      issue.screenshotName = `issue-${nextId}.png`;
     });
+  }
+
+  function createStableId(prefix = "i"): string {
+    const random = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    const length = prefix === "i" ? 6 : 12;
+
+    return `${prefix}-${random.replace(/[^a-zA-Z0-9]/g, "").slice(0, length).toLowerCase()}`;
   }
 
   return {

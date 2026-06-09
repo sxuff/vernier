@@ -43,6 +43,7 @@ const require = createRequire(import.meta.url);
 const defaultTarget = "http://localhost:5173";
 const defaultPort = "3333";
 const defaultDetectPorts = [5173, 3000, 3001, 4173, 4200, 4321, 5000, 5174, 6006, 8000, 8080];
+const maxProxyBodyBytes = 30 * 1024 * 1024;
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
@@ -414,6 +415,11 @@ async function handleProxyRequest(
   try {
     await forwardRequest(options, request, response);
   } catch (error) {
+    if (error instanceof ProxyRequestError) {
+      sendText(response, error.statusCode, error.message);
+      return;
+    }
+
     sendProxyError(response, options.target, error);
   }
 }
@@ -427,7 +433,7 @@ async function forwardRequest(
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readRequestBody(request);
   const upstream = await fetch(targetUrl, {
     method: request.method,
-    headers: toForwardHeaders(request),
+    headers: toForwardHeaders(request, options.target),
     body,
     redirect: "manual"
   });
@@ -446,7 +452,7 @@ async function forwardRequest(
   response.end(Buffer.from(await upstream.arrayBuffer()));
 }
 
-function toForwardHeaders(request: IncomingMessage): Headers {
+function toForwardHeaders(request: IncomingMessage, target: URL): Headers {
   const headers = new Headers();
 
   for (const [key, value] of Object.entries(request.headers)) {
@@ -462,6 +468,8 @@ function toForwardHeaders(request: IncomingMessage): Headers {
       headers.set(key, value);
     }
   }
+
+  headers.set("host", target.host);
 
   return headers;
 }
@@ -499,9 +507,30 @@ function isHopByHopHeader(header: string): boolean {
 function readRequestBody(request: IncomingMessage): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let bytes = 0;
+    let rejected = false;
 
-    request.on("data", (chunk: Buffer) => chunks.push(chunk));
+    request.on("data", (chunk: Buffer) => {
+      if (rejected) {
+        return;
+      }
+
+      bytes += chunk.byteLength;
+
+      if (bytes > maxProxyBodyBytes) {
+        rejected = true;
+        reject(new ProxyRequestError(`Proxy request body exceeds ${maxProxyBodyBytes} bytes`, 413));
+        request.destroy();
+        return;
+      }
+
+      chunks.push(chunk);
+    });
     request.on("end", () => {
+      if (rejected) {
+        return;
+      }
+
       const body = Buffer.concat(chunks);
       resolve(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
     });
@@ -509,10 +538,25 @@ function readRequestBody(request: IncomingMessage): Promise<ArrayBuffer> {
   });
 }
 
+class ProxyRequestError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number
+  ) {
+    super(message);
+  }
+}
+
 function sendJavaScript(response: ServerResponse, source: string): void {
   response.statusCode = 200;
   response.setHeader("Content-Type", "text/javascript");
   response.end(source);
+}
+
+function sendText(response: ServerResponse, statusCode: number, message: string): void {
+  response.statusCode = statusCode;
+  response.setHeader("Content-Type", "text/plain; charset=utf-8");
+  response.end(message);
 }
 
 function sendProxyError(response: ServerResponse, target: URL, error: unknown): void {

@@ -22,6 +22,12 @@ const targetServer = createServer((request, response) => {
     return;
   }
 
+  if (request.url === "/host") {
+    response.setHeader("Content-Type", "text/plain");
+    response.end(request.headers.host ?? "");
+    return;
+  }
+
   response.setHeader("Content-Type", "text/html");
   response.end(`<!doctype html>
     <html>
@@ -56,6 +62,7 @@ const proxy = spawn(
 
 try {
   await waitForOutput(proxy, "proxy listening");
+  await verifyInvalidSessionRequests(proxyPort);
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -124,6 +131,12 @@ try {
   const compressedBody = await compressedResponse.text();
   if (compressedResponse.headers.has("content-encoding") || compressedBody !== "compressed upstream response") {
     throw new Error(`Expected decoded proxy response without stale content-encoding, got ${compressedBody}`);
+  }
+
+  const hostResponse = await fetch(`http://127.0.0.1:${proxyPort}/host`);
+  const hostBody = await hostResponse.text();
+  if (hostBody !== `127.0.0.1:${targetPort}`) {
+    throw new Error(`Expected proxy to rewrite Host header to target host, got ${hostBody}`);
   }
 
   const sessionMarkdown = await readFile(path.join(feedbackRoot, "latest", "session.md"), "utf8");
@@ -243,6 +256,73 @@ async function writeNestedSessionFixture(baseSession) {
   await mkdir(path.join(sessionDirectory, "screenshots"), { recursive: true });
   await writeFile(path.join(sessionDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(sessionDirectory, "session.md"), "# nested fixture\nmake it red\n");
+}
+
+async function verifyInvalidSessionRequests(port) {
+  const badJsonResponse = await fetch(`http://127.0.0.1:${port}/__vernier/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{"
+  });
+
+  if (badJsonResponse.status !== 400) {
+    throw new Error(`Expected bad JSON to return 400, got ${badJsonResponse.status}`);
+  }
+
+  const traversalResponse = await fetch(`http://127.0.0.1:${port}/__vernier/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(createSessionPayload({ screenshotName: "../escape.png" }))
+  });
+
+  if (traversalResponse.status !== 400) {
+    throw new Error(`Expected unsafe screenshot path to return 400, got ${traversalResponse.status}`);
+  }
+
+  const countResponse = await fetch(`http://127.0.0.1:${port}/__vernier/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(createSessionPayload({ issueCount: 2 }))
+  });
+
+  if (countResponse.status !== 400) {
+    throw new Error(`Expected mismatched issueCount to return 400, got ${countResponse.status}`);
+  }
+}
+
+function createSessionPayload(overrides = {}) {
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+
+  return {
+    schemaVersion: 1,
+    toolVersion: "0.0.0",
+    sessionId: "s-testsession1",
+    route: "/",
+    url: "http://127.0.0.1/",
+    viewport: {
+      width: 1280,
+      height: 720,
+      devicePixelRatio: 1
+    },
+    createdAt: new Date().toISOString(),
+    issueCount: overrides.issueCount ?? 1,
+    issues: [
+      {
+        id: 1,
+        stableId: "i-testissue1",
+        kind: "single",
+        measured: "Selector: body",
+        selector: "body",
+        source: "unresolved",
+        note: "invalid request fixture",
+        createdAt: new Date().toISOString(),
+        screenshotName: overrides.screenshotName ?? "issue-1.png",
+        screenshotDataUrl: png
+      }
+    ],
+    fullPageScreenshotName: "full-page.png",
+    fullPageScreenshotDataUrl: png
+  };
 }
 
 function listen(server, port) {

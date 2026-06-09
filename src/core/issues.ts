@@ -34,9 +34,7 @@ export async function listLatestIssues(root: string): Promise<IndexedVernierIssu
 
 export async function findLatestIssue(root: string, reference: string): Promise<IndexedVernierIssue> {
   const issues = await listLatestIssues(root);
-  const issue = issues.find(
-    (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
-  );
+  const issue = findIssueByReference(issues, reference);
 
   if (!issue) {
     throw new Error(`Unknown Vernier issue: ${reference}`);
@@ -47,9 +45,7 @@ export async function findLatestIssue(root: string, reference: string): Promise<
 
 export async function markLatestIssue(root: string, reference: string, status: IssueStatus): Promise<IndexedVernierIssue> {
   const issues = await listLatestIssues(root);
-  const issue = issues.find(
-    (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
-  );
+  const issue = findIssueByReference(issues, reference);
 
   if (!issue) {
     throw new Error(`Unknown Vernier issue: ${reference}`);
@@ -60,6 +56,20 @@ export async function markLatestIssue(root: string, reference: string, status: I
   await writeIssueStatuses(issue.sessionDirectory, statuses);
 
   return { ...issue, status };
+}
+
+function findIssueByReference(issues: IndexedVernierIssue[], reference: string): IndexedVernierIssue | undefined {
+  const exact = issues.find(
+    (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
+  );
+
+  if (exact) {
+    return exact;
+  }
+
+  const prefixMatches = issues.filter((candidate) => candidate.stableId.startsWith(reference));
+
+  return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
 }
 
 export function filterIssuesByStatus(
@@ -326,7 +336,7 @@ function indexIssue(
   issue: VernierIssue,
   statuses: Record<string, IssueStatus>
 ): IndexedVernierIssue {
-  const stableId = createStableIssueId(session, issue);
+  const stableId = issue.stableId ?? createStableIssueId(session, issue);
 
   return {
     stableId,

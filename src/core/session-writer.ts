@@ -28,8 +28,12 @@ export async function writeSession(root: string, session: VernierSession): Promi
 function renderSessionMarkdown(session: VernierSession): string {
   const lines = [
     "# UI Feedback Session - Vernier",
+    `Schema version: ${session.schemaVersion}`,
+    `Tool version: ${session.toolVersion}`,
+    `Session ID: ${session.sessionId}`,
     `Created: ${session.createdAt}`,
     `Route: ${session.route}`,
+    `URL: ${session.url}`,
     `Viewport: ${session.viewport.width}x${session.viewport.height} @${session.viewport.devicePixelRatio}x`,
     `Issue count: ${session.issues.length}`,
     ""
@@ -38,6 +42,7 @@ function renderSessionMarkdown(session: VernierSession): string {
   for (const issue of session.issues) {
     lines.push(
       `## Issue ${issue.id} - ${titleCase(issue.kind)}`,
+      `Stable ID: ${issue.stableId}`,
       "Instruction:",
       issue.note || "Fix the measured UI issue. Prefer minimal changes.",
       "",

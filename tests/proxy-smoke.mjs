@@ -270,6 +270,9 @@ try {
   if (sessionJson.issues[1]?.measurement?.kind !== "delta" || sessionJson.issues[1].measurement.delta.left !== 12) {
     throw new Error(`Expected delta issue to include structured delta measurement:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
+  if (!sessionJson.issues[1]?.measurement?.layoutContext?.parentDisplay) {
+    throw new Error(`Expected delta issue to include layout context:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
+  }
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
@@ -334,6 +337,8 @@ try {
   const issuesOutput = await runNode(["dist/cli.js", "issues"]);
   const auditOutput = await runNode(["dist/cli.js", "audit", "a11y"]);
   const auditJson = JSON.parse(await runNode(["dist/cli.js", "audit", "a11y", "--json"]));
+  const layoutAuditOutput = await runNode(["dist/cli.js", "audit", "layout"]);
+  const layoutAuditJson = JSON.parse(await runNode(["dist/cli.js", "audit", "layout", "--json"]));
   const stableIssueId = issuesOutput.match(/i-[a-f0-9]{6}/)?.[0];
 
   if (!stableIssueId) {
@@ -408,6 +413,13 @@ try {
     auditJson.findingCount < 2
   ) {
     throw new Error(`Expected audit a11y to flag fixture accessibility findings:\n${auditOutput}\n${JSON.stringify(auditJson, null, 2)}`);
+  }
+  if (
+    !layoutAuditOutput.includes("Layout audit:") ||
+    !layoutAuditOutput.includes("layout-context") ||
+    layoutAuditJson.findingCount < 1
+  ) {
+    throw new Error(`Expected audit layout to flag fixture layout findings:\n${layoutAuditOutput}\n${JSON.stringify(layoutAuditJson, null, 2)}`);
   }
   if (
     !showOutput.includes(`ID: ${stableIssueId}`) ||
@@ -507,7 +519,19 @@ async function writeNestedSessionFixture(baseSession) {
             "background-color": "rgb(130, 130, 130)",
             "font-size": "14px"
           },
-          authoredHints: []
+          authoredHints: [],
+          layoutContext: {
+            parentSelector: "main",
+            parentDisplay: "grid",
+            parentGap: "24px",
+            parentPadding: "16px",
+            overflow: {
+              x: "hidden",
+              y: "hidden",
+              clippedByParent: true,
+              horizontalPageScroll: false
+            }
+          }
         },
         screenshotName: "issue-1.png"
       }

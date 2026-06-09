@@ -122,6 +122,7 @@ vernier replay latest
 vernier doctor
 vernier clean --keep 20 --dry-run
 vernier audit a11y
+vernier audit layout
 vernier mcp
 vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
@@ -145,6 +146,6 @@ vernier open
 
 `vernier doctor` checks local privacy hygiene, including whether `.ui-feedback/` is ignored. `vernier clean` removes old local session folders by count or age.
 
-`vernier audit a11y` checks the latest captured evidence for contrast, tap-target size, and missing accessible names. Add `--json` for agent/CI output.
+`vernier audit a11y` checks the latest captured evidence for contrast, tap-target size, and missing accessible names. `vernier audit layout` checks alignment deltas, overflow, and captured layout context. Add `--json` for agent/CI output.
 
 `vernier mcp` starts a local MCP server over stdio so agents can list/read Vernier issues and mark or verify them without clipboard handoff.

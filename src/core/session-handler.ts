@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthoredStyleHint, BoundingBox, VernierSession } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, LayoutContext, VernierSession } from "../schema";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -189,7 +189,8 @@ function validateMeasurement(
       inlineStyle: measurement.inlineStyle === undefined ? undefined : expectStringRecord(measurement.inlineStyle, `${field}.inlineStyle`),
       authoredHints: expectArray(measurement.authoredHints, `${field}.authoredHints`).map((hint, index) =>
         validateAuthoredHint(hint, `${field}.authoredHints[${index}]`)
-      )
+      ),
+      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
     };
   }
 
@@ -210,7 +211,8 @@ function validateMeasurement(
         color: validateStringPair(delta.color, `${field}.delta.color`),
         backgroundColor: validateStringPair(delta.backgroundColor, `${field}.delta.backgroundColor`),
         fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`)
-      }
+      },
+      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
     };
   }
 
@@ -265,6 +267,47 @@ function validateAuthoredHint(value: unknown, field: string): AuthoredStyleHint 
     property: expectString(hint.property, `${field}.property`),
     value: expectString(hint.value, `${field}.value`),
     source: expectString(hint.source, `${field}.source`)
+  };
+}
+
+function validateLayoutContext(value: unknown, field: string): LayoutContext {
+  const context = expectRecord(value, field);
+
+  return {
+    parentSelector: expectOptionalString(context.parentSelector, `${field}.parentSelector`),
+    parentDisplay: expectOptionalString(context.parentDisplay, `${field}.parentDisplay`),
+    parentGap: expectOptionalString(context.parentGap, `${field}.parentGap`),
+    parentRowGap: expectOptionalString(context.parentRowGap, `${field}.parentRowGap`),
+    parentColumnGap: expectOptionalString(context.parentColumnGap, `${field}.parentColumnGap`),
+    parentPadding: expectOptionalString(context.parentPadding, `${field}.parentPadding`),
+    gridTemplateColumns: expectOptionalString(context.gridTemplateColumns, `${field}.gridTemplateColumns`),
+    flexDirection: expectOptionalString(context.flexDirection, `${field}.flexDirection`),
+    nearestSiblingDistance: context.nearestSiblingDistance === undefined
+      ? undefined
+      : validateSiblingDistance(context.nearestSiblingDistance, `${field}.nearestSiblingDistance`),
+    overflow: context.overflow === undefined ? undefined : validateOverflowContext(context.overflow, `${field}.overflow`)
+  };
+}
+
+function validateSiblingDistance(value: unknown, field: string): NonNullable<LayoutContext["nearestSiblingDistance"]> {
+  const distance = expectRecord(value, field);
+
+  return {
+    left: expectOptionalFiniteNumber(distance.left, `${field}.left`),
+    right: expectOptionalFiniteNumber(distance.right, `${field}.right`),
+    top: expectOptionalFiniteNumber(distance.top, `${field}.top`),
+    bottom: expectOptionalFiniteNumber(distance.bottom, `${field}.bottom`)
+  };
+}
+
+function validateOverflowContext(value: unknown, field: string): NonNullable<LayoutContext["overflow"]> {
+  const overflow = expectRecord(value, field);
+
+  return {
+    x: expectString(overflow.x, `${field}.x`),
+    y: expectString(overflow.y, `${field}.y`),
+    clippedByParent: expectBoolean(overflow.clippedByParent, `${field}.clippedByParent`),
+    horizontalPageScroll: expectBoolean(overflow.horizontalPageScroll, `${field}.horizontalPageScroll`)
   };
 }
 
@@ -412,6 +455,14 @@ function expectStringRecord(value: unknown, field: string): Record<string, strin
   return result;
 }
 
+function expectBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw badRequest(`${field} must be a boolean`);
+  }
+
+  return value;
+}
+
 function expectConfidence(value: unknown, field: string): "high" | "medium" | "low" {
   if (value !== "high" && value !== "medium" && value !== "low") {
     throw badRequest(`${field} must be high, medium, or low`);
@@ -442,6 +493,14 @@ function expectFiniteNumber(value: unknown, field: string): number {
   }
 
   return value;
+}
+
+function expectOptionalFiniteNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return expectFiniteNumber(value, field);
 }
 
 function expectPositiveInteger(value: unknown, field: string): number {

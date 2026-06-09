@@ -1,4 +1,4 @@
-import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, SingleMeasurement } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, LayoutContext, SingleMeasurement } from "../schema";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
 import { createElementTarget } from "./target";
@@ -48,7 +48,8 @@ export function measureElement(element: Element): MeasurementDraft {
       role: (element as HTMLElement).getAttribute?.("role") ?? undefined,
       accessibleName: accessibleName(element),
       inlineStyle: inlineStyle(element),
-      authoredHints: authoredStyleHints(element, Object.keys(computedStyle))
+      authoredHints: authoredStyleHints(element, Object.keys(computedStyle)),
+      layoutContext: layoutContext(element)
     }
   };
 }
@@ -97,7 +98,8 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         color: [firstColor, secondColor],
         backgroundColor: [firstBackground, secondBackground],
         fontSize: [firstFontSize, secondFontSize]
-      }
+      },
+      layoutContext: layoutContext(secondElement)
     }
   };
 }
@@ -181,6 +183,79 @@ export function authoredStyleHints(element: Element, properties: string[]): Auth
   }
 
   return hints.slice(0, 20);
+}
+
+export function layoutContext(element: Element): LayoutContext {
+  const parent = element.parentElement;
+  const parentStyles = parent ? window.getComputedStyle(parent) : null;
+
+  return {
+    parentSelector: parent ? getStableSelector(parent) : undefined,
+    parentDisplay: parentStyles?.display,
+    parentGap: parentStyles?.gap,
+    parentRowGap: parentStyles?.rowGap,
+    parentColumnGap: parentStyles?.columnGap,
+    parentPadding: parentStyles?.padding,
+    gridTemplateColumns: parentStyles?.gridTemplateColumns,
+    flexDirection: parentStyles?.flexDirection,
+    nearestSiblingDistance: nearestSiblingDistance(element),
+    overflow: overflowContext(element)
+  };
+}
+
+export function nearestSiblingDistance(element: Element): LayoutContext["nearestSiblingDistance"] {
+  const rect = element.getBoundingClientRect();
+  const distances: NonNullable<LayoutContext["nearestSiblingDistance"]> = {};
+
+  for (const sibling of Array.from(element.parentElement?.children ?? [])) {
+    if (sibling === element) {
+      continue;
+    }
+
+    const siblingRect = sibling.getBoundingClientRect();
+
+    if (siblingRect.right <= rect.left) {
+      distances.left = minDistance(distances.left, rect.left - siblingRect.right);
+    }
+    if (siblingRect.left >= rect.right) {
+      distances.right = minDistance(distances.right, siblingRect.left - rect.right);
+    }
+    if (siblingRect.bottom <= rect.top) {
+      distances.top = minDistance(distances.top, rect.top - siblingRect.bottom);
+    }
+    if (siblingRect.top >= rect.bottom) {
+      distances.bottom = minDistance(distances.bottom, siblingRect.top - rect.bottom);
+    }
+  }
+
+  return distances;
+}
+
+export function overflowContext(element: Element): LayoutContext["overflow"] {
+  const parent = element.parentElement;
+  const rect = element.getBoundingClientRect();
+  const parentRect = parent?.getBoundingClientRect();
+  const parentStyles = parent ? window.getComputedStyle(parent) : null;
+  const clipsOverflow = parentStyles
+    ? ["hidden", "clip", "auto", "scroll"].includes(parentStyles.overflowX) ||
+      ["hidden", "clip", "auto", "scroll"].includes(parentStyles.overflowY)
+    : false;
+
+  return {
+    x: parentStyles?.overflowX ?? "visible",
+    y: parentStyles?.overflowY ?? "visible",
+    clippedByParent: Boolean(
+      clipsOverflow &&
+      parentRect &&
+      (rect.left < parentRect.left || rect.right > parentRect.right || rect.top < parentRect.top || rect.bottom > parentRect.bottom)
+    ),
+    horizontalPageScroll: document.documentElement.scrollWidth > window.innerWidth
+  };
+}
+
+export function minDistance(current: number | undefined, candidate: number): number {
+  const rounded = roundNumber(candidate);
+  return current === undefined ? rounded : Math.min(current, rounded);
 }
 
 export function textSummary(element: Element): string | undefined {

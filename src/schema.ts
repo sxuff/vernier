@@ -43,6 +43,29 @@ export interface AuthoredStyleHint {
   source: string;
 }
 
+export interface LayoutContext {
+  parentSelector?: string;
+  parentDisplay?: string;
+  parentGap?: string;
+  parentRowGap?: string;
+  parentColumnGap?: string;
+  parentPadding?: string;
+  gridTemplateColumns?: string;
+  flexDirection?: string;
+  nearestSiblingDistance?: {
+    left?: number;
+    right?: number;
+    top?: number;
+    bottom?: number;
+  };
+  overflow?: {
+    x: string;
+    y: string;
+    clippedByParent: boolean;
+    horizontalPageScroll: boolean;
+  };
+}
+
 export interface SingleMeasurement {
   kind: "single";
   bbox: BoundingBox;
@@ -52,6 +75,7 @@ export interface SingleMeasurement {
   accessibleName?: string;
   inlineStyle?: Record<string, string>;
   authoredHints: AuthoredStyleHint[];
+  layoutContext?: LayoutContext;
 }
 
 export interface DeltaMeasurement {
@@ -69,6 +93,7 @@ export interface DeltaMeasurement {
     backgroundColor?: [string, string];
     fontSize?: [string, string];
   };
+  layoutContext?: LayoutContext;
 }
 
 export interface AnnotationMeasurement {

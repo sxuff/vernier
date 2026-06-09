@@ -10,7 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import path from "node:path";
 import type { Browser, Page } from "playwright";
-import type { BoundingBox, VernierIssue, VernierMeasurement } from "./schema";
+import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "./schema";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -366,13 +366,28 @@ function gitignoreIgnoresFeedback(gitignore: string): boolean {
 }
 
 async function auditLatestSession(root: string, args: string[]): Promise<string> {
-  const [kind] = readPositionalArgs(args);
+  const [kind = "a11y"] = readPositionalArgs(args);
 
-  if (kind && kind !== "a11y") {
-    throw new Error("Usage: vernier audit a11y [--json]");
+  if (kind !== "a11y" && kind !== "layout") {
+    throw new Error("Usage: vernier audit a11y|layout [--json]");
   }
 
   const issues = await listLatestIssues(root);
+
+  if (kind === "layout") {
+    const findings = issues.flatMap((issue) => auditIssueLayout(issue.issue, issue.stableId));
+    const report: LayoutAuditReport = {
+      kind,
+      sessionId: issues[0]?.session.sessionId ?? "unknown",
+      route: issues[0]?.session.route ?? "unknown",
+      checkedIssues: issues.length,
+      findingCount: findings.length,
+      findings
+    };
+
+    return args.includes("--json") ? JSON.stringify(report, null, 2) : renderLayoutAudit(report);
+  }
+
   const findings = issues.flatMap((issue) => auditIssueAccessibility(issue.issue, issue.stableId));
   const report: A11yAuditReport = {
     kind: "a11y",
@@ -384,6 +399,25 @@ async function auditLatestSession(root: string, args: string[]): Promise<string>
   };
 
   return args.includes("--json") ? JSON.stringify(report, null, 2) : renderA11yAudit(report);
+}
+
+interface LayoutFinding {
+  issueId: string;
+  rule: "overflow" | "spacing" | "layout-context";
+  severity: "low" | "medium" | "high";
+  message: string;
+  selector: string;
+  expected: string;
+  actual: string;
+}
+
+interface LayoutAuditReport {
+  kind: "layout";
+  sessionId: string;
+  route: string;
+  checkedIssues: number;
+  findingCount: number;
+  findings: LayoutFinding[];
 }
 
 interface A11yFinding {
@@ -491,6 +525,103 @@ function renderA11yAudit(report: A11yAuditReport): string {
   return lines.join("\n").trimEnd();
 }
 
+function auditIssueLayout(issue: VernierIssue, stableId: string): LayoutFinding[] {
+  const findings: LayoutFinding[] = [];
+  const measurement = issue.measurement;
+  const context = measurementLayoutContext(measurement);
+  const selector = issue.selector;
+
+  if (context?.overflow?.horizontalPageScroll) {
+    findings.push({
+      issueId: stableId,
+      rule: "overflow",
+      severity: "high",
+      message: "Page had horizontal overflow when this issue was captured.",
+      selector,
+      expected: "document width fits viewport",
+      actual: "horizontal page scroll detected"
+    });
+  }
+
+  if (context?.overflow?.clippedByParent) {
+    findings.push({
+      issueId: stableId,
+      rule: "overflow",
+      severity: "medium",
+      message: "Selected element appears clipped by an overflowing parent.",
+      selector,
+      expected: "element fully visible inside parent",
+      actual: `parent overflow ${context.overflow.x}/${context.overflow.y}`
+    });
+  }
+
+  if (measurement?.kind === "delta") {
+    const nonZeroEdges = [
+      ["left", measurement.delta.left],
+      ["top", measurement.delta.top],
+      ["width", measurement.delta.width],
+      ["height", measurement.delta.height]
+    ].filter(([, value]) => Math.abs(Number(value)) > 1);
+
+    if (nonZeroEdges.length > 0) {
+      findings.push({
+        issueId: stableId,
+        rule: "spacing",
+        severity: "medium",
+        message: "Compared elements are not aligned or equally sized.",
+        selector,
+        expected: "deltas within 1px",
+        actual: nonZeroEdges.map(([name, value]) => `${name}: ${formatSignedNumber(Number(value))}px`).join(", ")
+      });
+    }
+  }
+
+  if (context?.parentDisplay && !["block", "flow-root", "inline"].includes(context.parentDisplay)) {
+    findings.push({
+      issueId: stableId,
+      rule: "layout-context",
+      severity: "low",
+      message: "Captured parent layout context may be relevant to the fix.",
+      selector,
+      expected: "use existing layout system",
+      actual: [
+        `display: ${context.parentDisplay}`,
+        context.parentGap ? `gap: ${context.parentGap}` : null,
+        context.parentPadding ? `padding: ${context.parentPadding}` : null
+      ].filter(Boolean).join(", ")
+    });
+  }
+
+  return findings;
+}
+
+function renderLayoutAudit(report: LayoutAuditReport): string {
+  const lines = [
+    `Layout audit: ${report.route}`,
+    `Checked issues: ${report.checkedIssues}`,
+    `Findings: ${report.findingCount}`,
+    ""
+  ];
+
+  if (report.findings.length === 0) {
+    lines.push("No layout findings from captured Vernier evidence.");
+    return lines.join("\n");
+  }
+
+  for (const finding of report.findings) {
+    lines.push(
+      `[${finding.severity}] ${finding.rule} ${finding.issueId}`,
+      `Selector: ${finding.selector}`,
+      `Expected: ${finding.expected}`,
+      `Actual: ${finding.actual}`,
+      finding.message,
+      ""
+    );
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
 function measurementBoundingBox(measurement: VernierMeasurement | undefined): BoundingBox | null {
   if (!measurement) {
     return null;
@@ -525,6 +656,14 @@ function measurementComputedStyle(measurement: VernierMeasurement | undefined): 
   }
 
   return null;
+}
+
+function measurementLayoutContext(measurement: VernierMeasurement | undefined): LayoutContext | undefined {
+  if (!measurement || measurement.kind === "annotation") {
+    return undefined;
+  }
+
+  return measurement.layoutContext;
 }
 
 function isLikelyInteractive(issue: VernierIssue): boolean {
@@ -2165,7 +2304,7 @@ function printHelp(): void {
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",
-      "  vernier audit a11y [--json]",
+      "  vernier audit a11y|layout [--json]",
       "  vernier mcp",
       "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
       "  vernier latest",

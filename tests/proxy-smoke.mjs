@@ -68,8 +68,8 @@ const targetServer = createServer((request, response) => {
         <style>
           :root { --card-bg: #ffffff; --card-ink: #172033; --space-6: 24px; }
           body { margin: 0; font-family: system-ui, sans-serif; }
-          main { padding: 64px; }
-          .card { width: 360px; height: 120px; padding: var(--space-6); border-radius: 8px; background: var(--card-bg); color: var(--card-ink); box-sizing: border-box; border: 1px solid #d8dde8; }
+          main { padding: 64px; position: relative; z-index: 2; isolation: isolate; }
+          .card { width: 360px; height: 120px; padding: var(--space-6); border-radius: 8px; background: var(--card-bg); color: var(--card-ink); box-sizing: border-box; border: 1px solid #d8dde8; line-height: 24px; font-weight: 600; letter-spacing: 0px; }
           .usage-card { margin-left: 0; }
           .revenue-card { margin-top: 20px; margin-left: 12px; }
         </style>
@@ -294,6 +294,12 @@ try {
   }
   if (!sessionJson.issues[1]?.measurement?.designTokenHints?.some((hint) => hint.token === "--card-ink" && hint.property === "color")) {
     throw new Error(`Expected delta issue to include target design token hints:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
+  }
+  if (sessionJson.issues[0]?.measurement?.textMetrics?.fontWeight !== "600") {
+    throw new Error(`Expected single issue to include text metrics:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
+  }
+  if (!sessionJson.issues[0]?.measurement?.stackingContext?.stackingAncestors?.some((ancestor) => ancestor.selector === "main" && ancestor.isolation === "isolate")) {
+    throw new Error(`Expected single issue to include stacking context ancestors:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
   }
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
@@ -578,6 +584,25 @@ async function writeNestedSessionFixture(baseSession) {
           authoredHints: [],
           classHints: [],
           designTokenHints: [],
+          textMetrics: {
+            fontFamily: "system-ui",
+            fontSize: "14px",
+            fontWeight: "400",
+            lineHeight: "20px",
+            letterSpacing: "0px",
+            textTransform: "none",
+            textOverflow: "clip",
+            whiteSpace: "normal",
+            renderedLineCount: 1
+          },
+          stackingContext: {
+            position: "relative",
+            zIndex: "10",
+            opacity: "1",
+            transform: "none",
+            isolation: "auto",
+            stackingAncestors: []
+          },
           layoutContext: {
             parentSelector: "main",
             parentDisplay: "grid",

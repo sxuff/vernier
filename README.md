@@ -117,7 +117,7 @@ Annotations store viewport data and normalized relative points so future adapter
 
 Screenshots automatically mask password inputs and elements marked with `data-vernier-redact`.
 
-Element measurements include computed styles, authored CSS hints, layout context, utility-like class hints, and nearby CSS custom properties that match captured values. This helps agents reuse existing classes and design tokens instead of inventing one-off values.
+Element measurements include computed styles, authored CSS hints, layout context, text metrics, stacking context, utility-like class hints, and nearby CSS custom properties that match captured values. This helps agents reuse existing classes and design tokens instead of inventing one-off values.
 
 ## Development
 

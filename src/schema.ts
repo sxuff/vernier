@@ -74,6 +74,34 @@ export interface LayoutContext {
   };
 }
 
+export interface TextMetrics {
+  fontFamily: string;
+  fontSize: string;
+  fontWeight: string;
+  lineHeight: string;
+  letterSpacing: string;
+  textTransform: string;
+  textOverflow: string;
+  whiteSpace: string;
+  renderedLineCount?: number;
+}
+
+export interface StackingContext {
+  position: string;
+  zIndex: string;
+  opacity: string;
+  transform: string;
+  isolation: string;
+  stackingAncestors: Array<{
+    selector: string;
+    position: string;
+    zIndex: string;
+    opacity: string;
+    transform: string;
+    isolation: string;
+  }>;
+}
+
 export interface SingleMeasurement {
   kind: "single";
   bbox: BoundingBox;
@@ -86,6 +114,8 @@ export interface SingleMeasurement {
   classHints: string[];
   designTokenHints: DesignTokenHint[];
   layoutContext?: LayoutContext;
+  textMetrics?: TextMetrics;
+  stackingContext?: StackingContext;
 }
 
 export interface DeltaMeasurement {
@@ -106,6 +136,8 @@ export interface DeltaMeasurement {
   layoutContext?: LayoutContext;
   classHints: string[];
   designTokenHints: DesignTokenHint[];
+  textMetrics?: TextMetrics;
+  stackingContext?: StackingContext;
 }
 
 export interface AnnotationMeasurement {

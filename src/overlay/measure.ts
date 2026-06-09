@@ -1,4 +1,4 @@
-import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement, StackingContext, TextMetrics } from "../schema";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
 import { createElementTarget } from "./target";
@@ -51,7 +51,9 @@ export function measureElement(element: Element): MeasurementDraft {
       authoredHints: authoredStyleHints(element, Object.keys(computedStyle)),
       classHints: classHints(element),
       designTokenHints: designTokenHints(computedStyle),
-      layoutContext: layoutContext(element)
+      layoutContext: layoutContext(element),
+      textMetrics: textMetrics(element),
+      stackingContext: stackingContext(element)
     }
   };
 }
@@ -107,7 +109,9 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         color: secondColor,
         "background-color": secondBackground,
         "font-size": secondFontSize
-      })
+      }),
+      textMetrics: textMetrics(secondElement),
+      stackingContext: stackingContext(secondElement)
     }
   };
 }
@@ -409,6 +413,83 @@ export function overflowContext(element: Element): LayoutContext["overflow"] {
     ),
     horizontalPageScroll: document.documentElement.scrollWidth > window.innerWidth
   };
+}
+
+export function textMetrics(element: Element): TextMetrics | undefined {
+  if (!element.textContent?.trim()) {
+    return undefined;
+  }
+
+  const styles = window.getComputedStyle(element);
+  const lineHeight = styles.lineHeight;
+  const lineHeightPixels = parsePixelValue(lineHeight);
+  const renderedLineCount = lineHeightPixels && lineHeightPixels > 0
+    ? Math.max(1, Math.round(element.getBoundingClientRect().height / lineHeightPixels))
+    : undefined;
+
+  return {
+    fontFamily: styles.fontFamily,
+    fontSize: styles.fontSize,
+    fontWeight: styles.fontWeight,
+    lineHeight,
+    letterSpacing: styles.letterSpacing,
+    textTransform: styles.textTransform,
+    textOverflow: styles.textOverflow,
+    whiteSpace: styles.whiteSpace,
+    renderedLineCount
+  };
+}
+
+export function stackingContext(element: Element): StackingContext {
+  const styles = window.getComputedStyle(element);
+
+  return {
+    position: styles.position,
+    zIndex: styles.zIndex,
+    opacity: styles.opacity,
+    transform: styles.transform,
+    isolation: styles.isolation,
+    stackingAncestors: stackingAncestors(element)
+  };
+}
+
+export function stackingAncestors(element: Element): StackingContext["stackingAncestors"] {
+  const ancestors: StackingContext["stackingAncestors"] = [];
+  let current = element.parentElement;
+
+  while (current && current !== document.documentElement) {
+    const styles = window.getComputedStyle(current);
+
+    if (createsStackingContext(styles)) {
+      ancestors.push({
+        selector: getStableSelector(current),
+        position: styles.position,
+        zIndex: styles.zIndex,
+        opacity: styles.opacity,
+        transform: styles.transform,
+        isolation: styles.isolation
+      });
+    }
+
+    current = current.parentElement;
+  }
+
+  return ancestors.slice(0, 8);
+}
+
+export function createsStackingContext(styles: CSSStyleDeclaration): boolean {
+  return (
+    (styles.position === "fixed" || styles.position === "sticky") ||
+    (styles.position !== "static" && styles.zIndex !== "auto") ||
+    Number(styles.opacity) < 1 ||
+    styles.transform !== "none" ||
+    styles.filter !== "none" ||
+    styles.perspective !== "none" ||
+    styles.mixBlendMode !== "normal" ||
+    styles.isolation === "isolate" ||
+    styles.contain.includes("paint") ||
+    styles.willChange.split(",").map((value) => value.trim()).some((value) => ["transform", "opacity", "filter", "perspective"].includes(value))
+  );
 }
 
 export function minDistance(current: number | undefined, candidate: number): number {

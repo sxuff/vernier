@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, VernierSession } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, StackingContext, TextMetrics, VernierSession } from "../schema";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -195,7 +195,9 @@ function validateMeasurement(
       designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
         validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
       ),
-      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
+      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`),
+      textMetrics: measurement.textMetrics === undefined ? undefined : validateTextMetrics(measurement.textMetrics, `${field}.textMetrics`),
+      stackingContext: measurement.stackingContext === undefined ? undefined : validateStackingContext(measurement.stackingContext, `${field}.stackingContext`)
     };
   }
 
@@ -221,7 +223,9 @@ function validateMeasurement(
       designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
         validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
       ),
-      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
+      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`),
+      textMetrics: measurement.textMetrics === undefined ? undefined : validateTextMetrics(measurement.textMetrics, `${field}.textMetrics`),
+      stackingContext: measurement.stackingContext === undefined ? undefined : validateStackingContext(measurement.stackingContext, `${field}.stackingContext`)
     };
   }
 
@@ -307,6 +311,53 @@ function validateLayoutContext(value: unknown, field: string): LayoutContext {
       ? undefined
       : validateSiblingDistance(context.nearestSiblingDistance, `${field}.nearestSiblingDistance`),
     overflow: context.overflow === undefined ? undefined : validateOverflowContext(context.overflow, `${field}.overflow`)
+  };
+}
+
+function validateTextMetrics(value: unknown, field: string): TextMetrics {
+  const metrics = expectRecord(value, field);
+
+  return {
+    fontFamily: expectString(metrics.fontFamily, `${field}.fontFamily`),
+    fontSize: expectString(metrics.fontSize, `${field}.fontSize`),
+    fontWeight: expectString(metrics.fontWeight, `${field}.fontWeight`),
+    lineHeight: expectString(metrics.lineHeight, `${field}.lineHeight`),
+    letterSpacing: expectString(metrics.letterSpacing, `${field}.letterSpacing`),
+    textTransform: expectString(metrics.textTransform, `${field}.textTransform`),
+    textOverflow: expectString(metrics.textOverflow, `${field}.textOverflow`),
+    whiteSpace: expectString(metrics.whiteSpace, `${field}.whiteSpace`),
+    renderedLineCount: expectOptionalPositiveInteger(metrics.renderedLineCount, `${field}.renderedLineCount`)
+  };
+}
+
+function validateStackingContext(value: unknown, field: string): StackingContext {
+  const context = expectRecord(value, field);
+  const ancestors = expectArray(context.stackingAncestors, `${field}.stackingAncestors`);
+
+  if (ancestors.length > 8) {
+    throw badRequest(`${field}.stackingAncestors cannot contain more than 8 entries`);
+  }
+
+  return {
+    position: expectString(context.position, `${field}.position`),
+    zIndex: expectString(context.zIndex, `${field}.zIndex`),
+    opacity: expectString(context.opacity, `${field}.opacity`),
+    transform: expectString(context.transform, `${field}.transform`),
+    isolation: expectString(context.isolation, `${field}.isolation`),
+    stackingAncestors: ancestors.map((ancestor, index) => validateStackingAncestor(ancestor, `${field}.stackingAncestors[${index}]`))
+  };
+}
+
+function validateStackingAncestor(value: unknown, field: string): StackingContext["stackingAncestors"][number] {
+  const ancestor = expectRecord(value, field);
+
+  return {
+    selector: expectString(ancestor.selector, `${field}.selector`),
+    position: expectString(ancestor.position, `${field}.position`),
+    zIndex: expectString(ancestor.zIndex, `${field}.zIndex`),
+    opacity: expectString(ancestor.opacity, `${field}.opacity`),
+    transform: expectString(ancestor.transform, `${field}.transform`),
+    isolation: expectString(ancestor.isolation, `${field}.isolation`)
   };
 }
 
@@ -539,6 +590,14 @@ function expectPositiveInteger(value: unknown, field: string): number {
   }
 
   return value as number;
+}
+
+function expectOptionalPositiveInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return expectPositiveInteger(value, field);
 }
 
 function expectNonNegativeInteger(value: unknown, field: string): number {

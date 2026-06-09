@@ -1,4 +1,4 @@
-import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, LayoutContext, SingleMeasurement } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement } from "../schema";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
 import { createElementTarget } from "./target";
@@ -49,6 +49,8 @@ export function measureElement(element: Element): MeasurementDraft {
       accessibleName: accessibleName(element),
       inlineStyle: inlineStyle(element),
       authoredHints: authoredStyleHints(element, Object.keys(computedStyle)),
+      classHints: classHints(element),
+      designTokenHints: designTokenHints(computedStyle),
       layoutContext: layoutContext(element)
     }
   };
@@ -99,7 +101,13 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         backgroundColor: [firstBackground, secondBackground],
         fontSize: [firstFontSize, secondFontSize]
       },
-      layoutContext: layoutContext(secondElement)
+      layoutContext: layoutContext(secondElement),
+      classHints: classHints(secondElement),
+      designTokenHints: designTokenHints({
+        color: secondColor,
+        "background-color": secondBackground,
+        "font-size": secondFontSize
+      })
     }
   };
 }
@@ -183,6 +191,156 @@ export function authoredStyleHints(element: Element, properties: string[]): Auth
   }
 
   return hints.slice(0, 20);
+}
+
+export function classHints(element: Element): string[] {
+  return Array.from(element.classList)
+    .filter((className) =>
+      /^(bg|text|border|ring|fill|stroke|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap|rounded|w|h|min-w|min-h|max-w|max-h|font|leading|tracking|shadow|grid|flex|items|justify|content|self|col|row)-/.test(className) ||
+      /^(btn|button|card|panel|surface|token|color|space|radius|size)-/.test(className)
+    )
+    .slice(0, 24);
+}
+
+export function designTokenHints(computedStyle: Record<string, string>): DesignTokenHint[] {
+  const tokens = cssVariableTokens();
+  const hints: DesignTokenHint[] = [];
+
+  for (const [property, computed] of Object.entries(computedStyle)) {
+    const best = nearestToken(computed, tokens);
+
+    if (best) {
+      hints.push({
+        property,
+        computed,
+        token: best.token,
+        value: best.value,
+        distance: best.distance
+      });
+    }
+  }
+
+  return hints.slice(0, 20);
+}
+
+export function cssVariableTokens(): Array<{ token: string; value: string }> {
+  const tokens = new Map<string, string>();
+  const rootStyles = window.getComputedStyle(document.documentElement);
+
+  for (let index = 0; index < rootStyles.length; index += 1) {
+    const property = rootStyles.item(index);
+
+    if (property.startsWith("--")) {
+      tokens.set(property, rootStyles.getPropertyValue(property).trim());
+    }
+  }
+
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
+
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue;
+    }
+
+    collectRuleTokens(rules, tokens);
+  }
+
+  return Array.from(tokens.entries())
+    .filter(([, value]) => Boolean(value))
+    .map(([token, value]) => ({ token, value }));
+}
+
+export function collectRuleTokens(rules: CSSRuleList, tokens: Map<string, string>): void {
+  for (const rule of Array.from(rules)) {
+    if (rule instanceof CSSStyleRule) {
+      for (let index = 0; index < rule.style.length; index += 1) {
+        const property = rule.style.item(index);
+
+        if (property.startsWith("--")) {
+          tokens.set(property, rule.style.getPropertyValue(property).trim());
+        }
+      }
+      continue;
+    }
+
+    const nestedRules = (rule as CSSGroupingRule).cssRules;
+
+    if (nestedRules) {
+      collectRuleTokens(nestedRules, tokens);
+    }
+  }
+}
+
+export function nearestToken(computed: string, tokens: Array<{ token: string; value: string }>): { token: string; value: string; distance: number } | null {
+  let best: { token: string; value: string; distance: number } | null = null;
+
+  for (const token of tokens) {
+    const distance = tokenDistance(computed, token.value);
+
+    if (distance === null || distance > 4) {
+      continue;
+    }
+
+    if (!best || distance < best.distance) {
+      best = { ...token, distance };
+    }
+  }
+
+  return best;
+}
+
+export function tokenDistance(left: string, right: string): number | null {
+  const leftColor = parseColor(left);
+  const rightColor = parseColor(right);
+
+  if (leftColor && rightColor) {
+    return Math.round(Math.sqrt(
+      (leftColor.red - rightColor.red) ** 2 +
+      (leftColor.green - rightColor.green) ** 2 +
+      (leftColor.blue - rightColor.blue) ** 2
+    ));
+  }
+
+  const leftPx = parsePixelValue(left);
+  const rightPx = parsePixelValue(right);
+
+  if (leftPx !== null && rightPx !== null) {
+    return Math.abs(leftPx - rightPx);
+  }
+
+  return left.trim() === right.trim() ? 0 : null;
+}
+
+export function parsePixelValue(value: string): number | null {
+  const match = value.trim().match(/^(-?[\d.]+)px$/);
+  return match ? Number(match[1]) : null;
+}
+
+export function parseColor(value: string): { red: number; green: number; blue: number } | null {
+  const normalized = value.trim().toLowerCase();
+  const hex = normalized.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/);
+
+  if (hex) {
+    return {
+      red: Number.parseInt(hex[1]!.slice(0, 2), 16),
+      green: Number.parseInt(hex[1]!.slice(2, 4), 16),
+      blue: Number.parseInt(hex[1]!.slice(4, 6), 16)
+    };
+  }
+
+  const rgb = normalized.match(/^rgba?\((\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:\s*\/\s*([.\d]+%?)|,\s*([.\d]+))?\)$/);
+
+  if (!rgb) {
+    return null;
+  }
+
+  return {
+    red: Number(rgb[1]),
+    green: Number(rgb[2]),
+    blue: Number(rgb[3])
+  };
 }
 
 export function layoutContext(element: Element): LayoutContext {

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthoredStyleHint, BoundingBox, LayoutContext, VernierSession } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, VernierSession } from "../schema";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -191,6 +191,10 @@ function validateMeasurement(
       authoredHints: expectArray(measurement.authoredHints, `${field}.authoredHints`).map((hint, index) =>
         validateAuthoredHint(hint, `${field}.authoredHints[${index}]`)
       ),
+      classHints: expectStringArray(measurement.classHints, `${field}.classHints`),
+      designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
+        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
+      ),
       layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
     };
   }
@@ -213,6 +217,10 @@ function validateMeasurement(
         backgroundColor: validateStringPair(delta.backgroundColor, `${field}.delta.backgroundColor`),
         fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`)
       },
+      classHints: expectStringArray(measurement.classHints, `${field}.classHints`),
+      designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
+        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
+      ),
       layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`)
     };
   }
@@ -268,6 +276,18 @@ function validateAuthoredHint(value: unknown, field: string): AuthoredStyleHint 
     property: expectString(hint.property, `${field}.property`),
     value: expectString(hint.value, `${field}.value`),
     source: expectString(hint.source, `${field}.source`)
+  };
+}
+
+function validateDesignTokenHint(value: unknown, field: string): DesignTokenHint {
+  const hint = expectRecord(value, field);
+
+  return {
+    property: expectString(hint.property, `${field}.property`),
+    computed: expectString(hint.computed, `${field}.computed`),
+    token: expectString(hint.token, `${field}.token`),
+    value: expectString(hint.value, `${field}.value`),
+    distance: expectFiniteNumber(hint.distance, `${field}.distance`)
   };
 }
 

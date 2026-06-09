@@ -66,17 +66,18 @@ const targetServer = createServer((request, response) => {
     <html>
       <head>
         <style>
+          :root { --card-bg: #ffffff; --card-ink: #172033; --space-6: 24px; }
           body { margin: 0; font-family: system-ui, sans-serif; }
           main { padding: 64px; }
-          .card { width: 360px; height: 120px; padding: 24px; border-radius: 8px; background: #fff; color: #172033; box-sizing: border-box; border: 1px solid #d8dde8; }
+          .card { width: 360px; height: 120px; padding: var(--space-6); border-radius: 8px; background: var(--card-bg); color: var(--card-ink); box-sizing: border-box; border: 1px solid #d8dde8; }
           .usage-card { margin-left: 0; }
           .revenue-card { margin-top: 20px; margin-left: 12px; }
         </style>
       </head>
       <body>
         <main>
-          <section class="usage-card card" data-testid="usage-card">Usage <span data-vernier-redact>secret-token-123</span></section>
-          <section class="revenue-card card" data-testid="revenue-card">Revenue</section>
+          <section class="usage-card card px-6 text-slate-900" data-testid="usage-card">Usage <span data-vernier-redact>secret-token-123</span></section>
+          <section class="revenue-card card px-6 text-slate-900" data-testid="revenue-card">Revenue</section>
         </main>
         <script type="module" src="/@vite/client"></script>
       </body>
@@ -284,6 +285,15 @@ try {
   }
   if (!sessionJson.issues[1]?.measurement?.layoutContext?.parentDisplay) {
     throw new Error(`Expected delta issue to include layout context:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
+  }
+  if (!sessionJson.issues[0]?.measurement?.classHints?.includes("px-6")) {
+    throw new Error(`Expected single issue to include utility class hints:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
+  }
+  if (!sessionJson.issues[0]?.measurement?.designTokenHints?.some((hint) => hint.token === "--card-bg" && hint.property === "background-color")) {
+    throw new Error(`Expected single issue to include design token hints:\n${JSON.stringify(sessionJson.issues[0], null, 2)}`);
+  }
+  if (!sessionJson.issues[1]?.measurement?.designTokenHints?.some((hint) => hint.token === "--card-ink" && hint.property === "color")) {
+    throw new Error(`Expected delta issue to include target design token hints:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
   }
   if (sessionJson.issues[2]?.measurement?.kind !== "annotation" || sessionJson.issues[2].measurement.points.length < 2) {
     throw new Error(`Expected annotation issue to include structured points:\n${JSON.stringify(sessionJson, null, 2)}`);
@@ -538,6 +548,8 @@ async function writeNestedSessionFixture(baseSession) {
             "font-size": "14px"
           },
           authoredHints: [],
+          classHints: [],
+          designTokenHints: [],
           layoutContext: {
             parentSelector: "main",
             parentDisplay: "grid",

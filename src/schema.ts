@@ -43,6 +43,14 @@ export interface AuthoredStyleHint {
   source: string;
 }
 
+export interface DesignTokenHint {
+  property: string;
+  computed: string;
+  token: string;
+  value: string;
+  distance: number;
+}
+
 export interface LayoutContext {
   parentSelector?: string;
   parentDisplay?: string;
@@ -75,6 +83,8 @@ export interface SingleMeasurement {
   accessibleName?: string;
   inlineStyle?: Record<string, string>;
   authoredHints: AuthoredStyleHint[];
+  classHints: string[];
+  designTokenHints: DesignTokenHint[];
   layoutContext?: LayoutContext;
 }
 
@@ -94,6 +104,8 @@ export interface DeltaMeasurement {
     fontSize?: [string, string];
   };
   layoutContext?: LayoutContext;
+  classHints: string[];
+  designTokenHints: DesignTokenHint[];
 }
 
 export interface AnnotationMeasurement {

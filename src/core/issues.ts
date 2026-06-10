@@ -5,6 +5,7 @@ import type { VernierIssue, VernierSession } from "../schema";
 import { renderSessionMarkdown } from "./session-writer";
 
 export type IssueStatus = "todo" | "fixed";
+export type AgentTemplate = "generic" | "codex" | "claude" | "cursor" | "aider" | "strict";
 
 export interface IndexedVernierIssue {
   stableId: string;
@@ -164,10 +165,11 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
   ].join("\n");
 }
 
-export function renderIssueTask(indexed: IndexedVernierIssue): string {
+export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTemplate = "generic"): string {
   const { issue, session } = indexed;
 
   return [
+    ...templatePreamble(template, false),
     "Fix the UI issue captured by Vernier.",
     "",
     `Vernier issue ID: ${indexed.stableId}`,
@@ -194,11 +196,12 @@ export function renderIssueTask(indexed: IndexedVernierIssue): string {
     `- Screenshot: ${indexed.screenshotPath}`,
     "",
     "Please inspect the related UI code, make the smallest safe fix, and verify at the captured viewport size.",
-    "In your summary, map the code change back to this Vernier issue ID."
+    "In your summary, map the code change back to this Vernier issue ID.",
+    ...templatePostscript(template)
   ].join("\n");
 }
 
-export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
+export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentTemplate = "generic"): string {
   if (issues.length === 0) {
     return "No issues in latest Vernier session.";
   }
@@ -206,6 +209,7 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
   const session = issues[0]!.session;
 
   return [
+    ...templatePreamble(template, true),
     "Fix the UI issues captured by Vernier.",
     "",
     `Target route: ${session.route}`,
@@ -235,8 +239,117 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
       ""
     ]),
     "Please inspect the related UI code, make the smallest safe fixes, and verify at the captured viewport size.",
-    "In your summary, map each code change back to the relevant Vernier issue ID."
+    "In your summary, map each code change back to the relevant Vernier issue ID.",
+    ...templatePostscript(template)
   ].join("\n");
+}
+
+export function renderIssuePlan(indexed: IndexedVernierIssue): string {
+  const { issue, session } = indexed;
+  const sourceConfidence = issue.target?.sourceConfidence ?? "unknown";
+  const selectorConfidence = issue.target?.selectorConfidence ?? "unknown";
+  const likelySource = issue.source && issue.source !== "unresolved"
+    ? issue.source
+    : issue.target?.componentName
+      ? `component ${issue.target.componentName}`
+      : "source unresolved; search by selector, text, component hints, or ancestry";
+
+  return [
+    `Vernier patch plan for ${indexed.stableId}`,
+    "",
+    `Likely source: ${likelySource}`,
+    `Likely change type: ${likelyChangeType(issue)}`,
+    `Evidence confidence: ${combinedConfidence(selectorConfidence, sourceConfidence)}`,
+    `Selector confidence: ${selectorConfidence}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
+    `Source confidence: ${sourceConfidence}`,
+    `Route: ${session.route}`,
+    `Viewport: ${formatViewport(session)}`,
+    "",
+    "Suggested approach:",
+    ...suggestedPlanSteps(indexed).map((step) => `- ${step}`),
+    "",
+    "Suggested checks:",
+    "- Run the smallest relevant typecheck/build command for the touched package.",
+    `- Run: vernier verify ${indexed.stableId} --compare --target <local-app-url>`,
+    `- Mark fixed: vernier mark ${indexed.stableId} fixed`
+  ].join("\n");
+}
+
+function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
+  if (template === "generic") {
+    return [];
+  }
+
+  const count = batch ? "issues" : "issue";
+  const common = [
+    `Template: ${template}`,
+    ""
+  ];
+
+  if (template === "codex") {
+    return [
+      ...common,
+      "Codex instructions:",
+      `- Treat the Vernier ${count} as concrete UI repair evidence.`,
+      "- Inspect the existing code before editing.",
+      "- Prefer small, local changes and run relevant checks.",
+      ""
+    ];
+  }
+
+  if (template === "claude") {
+    return [
+      ...common,
+      "Claude Code instructions:",
+      `- Use the Vernier ${count} as visual evidence and preserve the user's intent.`,
+      "- Explain uncertainty when selector/source confidence is low.",
+      "- Keep the final summary issue-ID mapped.",
+      ""
+    ];
+  }
+
+  if (template === "cursor") {
+    return [
+      ...common,
+      "Cursor instructions:",
+      "- Use the selector/source evidence to open the closest relevant files.",
+      "- Prefer existing components, CSS variables, utility classes, and design tokens.",
+      ""
+    ];
+  }
+
+  if (template === "aider") {
+    return [
+      ...common,
+      "Aider instructions:",
+      "- Identify the likely files first, then make the smallest patch.",
+      "- Avoid broad rewrites unless the evidence shows a shared style bug.",
+      ""
+    ];
+  }
+
+  return [
+    ...common,
+    "Strict repair contract:",
+    "- Do not change unrelated behavior.",
+    "- Do not invent new design values when token/class evidence exists.",
+    "- Verify the fix or state exactly why verification was not run.",
+    ""
+  ];
+}
+
+function templatePostscript(template: AgentTemplate): string[] {
+  if (template === "generic") {
+    return [];
+  }
+
+  return [
+    "",
+    "Template-specific output:",
+    "- List files changed.",
+    "- Map each change to the Vernier issue ID.",
+    "- Include the check command and result."
+  ];
 }
 
 export function renderGitHubIssueTitle(indexed: IndexedVernierIssue): string {
@@ -365,6 +478,82 @@ function formatStructuredEvidence(issue: VernierIssue): string[] {
   }
 
   return [`- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`];
+}
+
+function likelyChangeType(issue: VernierIssue): string {
+  const measurement = issue.measurement;
+
+  if (!measurement) {
+    return "manual UI inspection";
+  }
+
+  if (measurement.kind === "annotation") {
+    return measurement.label ? `annotation: ${measurement.label}` : "annotation-guided visual fix";
+  }
+
+  if (measurement.kind === "delta") {
+    const deltas = [
+      Math.abs(measurement.delta.left),
+      Math.abs(measurement.delta.top),
+      Math.abs(measurement.delta.width),
+      Math.abs(measurement.delta.height)
+    ];
+
+    if (deltas.some((delta) => delta >= 2)) {
+      return "layout/spacing/alignment";
+    }
+  }
+
+  const tokenHints = measurement.kind === "single" ? measurement.designTokenHints : measurement.designTokenHints;
+  const classHints = measurement.kind === "single" ? measurement.classHints : measurement.classHints;
+
+  if (tokenHints.length > 0 || classHints.length > 0) {
+    return "style token/class adjustment";
+  }
+
+  if (measurement.kind === "single" && measurement.textMetrics) {
+    return "text styling/typography";
+  }
+
+  if (measurement.kind === "single" && measurement.layoutContext?.overflow?.clippedByParent) {
+    return "overflow/clipping";
+  }
+
+  return "component styling";
+}
+
+function combinedConfidence(selectorConfidence: string, sourceConfidence: string): "high" | "medium" | "low" {
+  if (selectorConfidence === "high" && (sourceConfidence === "high" || sourceConfidence === "medium")) {
+    return "high";
+  }
+
+  if (selectorConfidence === "low" || sourceConfidence === "low" || sourceConfidence === "unknown") {
+    return "low";
+  }
+
+  return "medium";
+}
+
+function suggestedPlanSteps(indexed: IndexedVernierIssue): string[] {
+  const issue = indexed.issue;
+  const steps = [
+    issue.source && issue.source !== "unresolved"
+      ? `Start at ${issue.source}.`
+      : `Search for ${issue.target?.testId ? `data-testid="${issue.target.testId}"` : issue.selector} and nearby text/component hints.`,
+    "Compare the captured evidence against the current implementation.",
+    "Prefer existing design tokens, utility classes, and authored CSS hints from the structured measurement.",
+    "Make the smallest targeted change."
+  ];
+
+  if (issue.target?.selectorConfidence === "low") {
+    steps.splice(1, 0, "Treat the selector as brittle; confirm the target by text, ancestry, screenshot, and source hints before editing.");
+  }
+
+  if (issue.measurement?.kind === "delta") {
+    steps.splice(2, 0, "Check the parent layout system before changing individual offsets.");
+  }
+
+  return steps;
 }
 
 function formatRedactionEvidence(issue: VernierIssue): string[] {

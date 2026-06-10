@@ -152,10 +152,11 @@ vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
 vernier note <issue-id> "Button should align with card title"
+vernier plan <issue-id>
 vernier github body <issue-id>
 vernier github create all --label ui-feedback
-vernier send --to codex
-vernier send <issue-id> --to codex
+vernier send --to codex --template codex
+vernier send <issue-id> --to codex --template strict
 vernier send all --to claude --all
 vernier latest
 vernier open
@@ -165,9 +166,11 @@ vernier open
 
 `vernier note <issue-id> "..."` updates the latest session JSON and regenerates `session.md`, which is useful when you want to refine a captured issue without recapturing the screenshot.
 
+`vernier plan <issue-id>` prints a lightweight patch plan: likely source, likely change type, evidence confidence, suggested approach, and verification commands.
+
 `vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues.
 
-`vernier send --to codex` sends todo issues in the latest session by default. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
+`vernier send --to codex` sends todo issues in the latest session by default. Use `--template generic|codex|claude|cursor|aider|strict` to tune handoff framing. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
 
 `vernier verify <issue-id>` prints the captured viewport, original evidence, target URL, screenshot path, and the follow-up mark commands. Add `--open` to open the captured route in your browser.
 

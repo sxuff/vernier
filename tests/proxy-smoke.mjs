@@ -419,6 +419,7 @@ try {
   const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
+  const planOutput = await runNode(["dist/cli.js", "plan", stableIssueId]);
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
   const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
@@ -432,6 +433,7 @@ try {
     `http://127.0.0.1:${targetPort}`
   ]);
   const sendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--print"]);
+  const templatedSendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--to", "codex", "--template", "codex", "--print"]);
   const sendAllOutput = await runNode(["dist/cli.js", "send", "--to", "codex", "--print"]);
   const markOutput = await runNode(["dist/cli.js", "mark", stableIssueId, "fixed"]);
   const todoIssuesOutput = await runNode(["dist/cli.js", "issues", "--todo"]);
@@ -474,8 +476,8 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create")) {
-    throw new Error(`Expected help command to document GitHub export:\n${helpOutput}`);
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("--template generic|codex")) {
+    throw new Error(`Expected help command to document GitHub export, plan, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
@@ -531,6 +533,9 @@ try {
   if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
     throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);
   }
+  if (!planOutput.includes(`Vernier patch plan for ${stableIssueId}`) || !planOutput.includes("Likely change type:") || !planOutput.includes("Suggested checks:")) {
+    throw new Error(`Expected plan command to print a patch plan:\n${planOutput}`);
+  }
   if (
     !githubBodyOutput.includes(`Title: [Vernier] make it blue instead`) ||
     !githubBodyOutput.includes("## Vernier UI Feedback") ||
@@ -548,6 +553,9 @@ try {
   }
   if (!sendOutput.includes("Fix the UI issue captured by Vernier.") || !sendOutput.includes(stableIssueId)) {
     throw new Error(`Expected send --print to produce issue task:\n${sendOutput}`);
+  }
+  if (!templatedSendOutput.includes("Template: codex") || !templatedSendOutput.includes("Codex instructions:") || !templatedSendOutput.includes(stableIssueId)) {
+    throw new Error(`Expected send --template codex to produce Codex-specific task:\n${templatedSendOutput}`);
   }
   if (!sendAllOutput.includes("Fix the UI issues captured by Vernier.") || !sendAllOutput.includes(stableIssueId)) {
     throw new Error(`Expected send --to codex --print to produce all-issues task:\n${sendAllOutput}`);

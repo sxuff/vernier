@@ -18,6 +18,7 @@ import { injectVernierOverlay } from "./core/html";
 import {
   filterIssuesByStatus,
   findLatestIssue,
+  type AgentTemplate,
   type IssueStatus,
   listLatestIssues,
   markLatestIssue,
@@ -25,6 +26,7 @@ import {
   renderGitHubIssueBody,
   renderGitHubIssueTitle,
   renderIssueList,
+  renderIssuePlan,
   renderIssueTask,
   renderIssueVerification,
   renderIssuesTask,
@@ -287,7 +289,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "copy") {
-    const task = renderIssueTask(await findLatestIssue(process.cwd(), readRequiredReference(args, "copy")));
+    const task = renderIssueTask(await findLatestIssue(process.cwd(), readRequiredReference(args, "copy")), readAgentTemplate(args));
 
     if (args.includes("--print")) {
       console.log(task);
@@ -311,6 +313,11 @@ async function main(): Promise<void> {
 
   if (command === "note") {
     await updateIssueNote(args);
+    return;
+  }
+
+  if (command === "plan") {
+    console.log(renderIssuePlan(await findLatestIssue(process.cwd(), readRequiredReference(args, "plan"))));
     return;
   }
 
@@ -1843,6 +1850,16 @@ function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
   return "all";
 }
 
+function readAgentTemplate(args: string[], fallbackAgent?: string): AgentTemplate {
+  const value = readOption(args, "--template") ?? fallbackAgent ?? "generic";
+
+  if (value === "generic" || value === "codex" || value === "claude" || value === "cursor" || value === "aider" || value === "strict") {
+    return value;
+  }
+
+  throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --template value: ${value}`, "Use generic, codex, claude, cursor, aider, or strict.");
+}
+
 function readRequiredReference(args: string[], command: string): string {
   const reference = readPositionalArgs(args)[0];
 
@@ -1861,9 +1878,10 @@ async function sendIssueToAgent(args: string[], config: VernierConfig): Promise<
     throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier send <issue-id> --to codex|claude", "Set agents.default in vernier.config.json or VERNIER_AGENT to avoid passing --to every time.");
   }
 
+  const template = readAgentTemplate(args, agent);
   const task = reference === "all"
-    ? await createIssuesSendTask(args)
-    : renderIssueTask(await findLatestIssue(process.cwd(), reference));
+    ? await createIssuesSendTask(args, template)
+    : renderIssueTask(await findLatestIssue(process.cwd(), reference), template);
 
   if (args.includes("--print")) {
     console.log(task);
@@ -1881,7 +1899,7 @@ async function sendIssueToAgent(args: string[], config: VernierConfig): Promise<
   console.log("Copied the Vernier task to clipboard instead. Paste it into the Codex app or install the CLI.");
 }
 
-async function createIssuesSendTask(args: string[]): Promise<string> {
+async function createIssuesSendTask(args: string[], template: AgentTemplate): Promise<string> {
   const issues = filterIssuesByStatus(await listLatestIssues(process.cwd()), args.includes("--all") ? "all" : "todo");
 
   if (issues.length === 0) {
@@ -1890,7 +1908,7 @@ async function createIssuesSendTask(args: string[]): Promise<string> {
       : "No todo issues in latest Vernier session. Use --all to include fixed issues.";
   }
 
-  return renderIssuesTask(issues);
+  return renderIssuesTask(issues, template);
 }
 
 async function runAgent(agent: "codex" | "claude", task: string): Promise<"started" | "missing"> {
@@ -2579,7 +2597,7 @@ function isIssueStatus(value: string | undefined): value is IssueStatus {
 
 function readPositionalArgs(args: string[]): string[] {
   const positional: string[] = [];
-  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label"]);
+  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template"]);
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -2655,8 +2673,9 @@ function printHelp(): void {
       "  vernier detect [--ports 5173,3000,6006]",
       "  vernier issues [--todo|--fixed|--all]",
       "  vernier show <issue-id>",
-      "  vernier copy <issue-id> [--print]",
+      "  vernier copy <issue-id> [--template generic|codex|claude|cursor|aider|strict] [--print]",
       "  vernier note <issue-id> \"updated note\"",
+      "  vernier plan <issue-id>",
       "  vernier github body|create [all|<issue-id>] [--label ui-feedback]",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
@@ -2666,7 +2685,7 @@ function printHelp(): void {
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",
       "  vernier audit a11y|layout [--json]",
       "  vernier mcp",
-      "  vernier send [all|<issue-id>] --to codex|claude [--all] [--print]",
+      "  vernier send [all|<issue-id>] --to codex|claude [--template generic|codex|claude|cursor|aider|strict] [--all] [--print]",
       "  vernier latest",
       "  vernier open",
       "",

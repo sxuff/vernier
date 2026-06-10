@@ -239,6 +239,66 @@ export function renderIssuesTask(issues: IndexedVernierIssue[]): string {
   ].join("\n");
 }
 
+export function renderGitHubIssueTitle(indexed: IndexedVernierIssue): string {
+  return `[Vernier] ${summarizeIssue(indexed.issue)}`;
+}
+
+export function renderGitHubIssueBody(indexed: IndexedVernierIssue): string {
+  const { issue, session } = indexed;
+
+  return [
+    "## Vernier UI Feedback",
+    "",
+    `- Vernier issue ID: ${indexed.stableId}`,
+    `- Original issue number: ${issue.id}`,
+    `- Status: ${indexed.status}`,
+    `- Route: ${session.route}`,
+    `- URL: ${session.url}`,
+    `- Viewport: ${formatViewport(session)}`,
+    `- Type: ${issue.kind}`,
+    "",
+    "## User Note",
+    "",
+    issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+    "",
+    "## Target",
+    "",
+    `- Selector: \`${issue.selector}\``,
+    `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
+    `- Source: ${issue.source}`,
+    `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+    `- Source resolver: ${issue.target?.sourceResolver ?? "unknown"}`,
+    `- Component: ${issue.target?.componentName ?? "unknown"}`,
+    `- Element context: ${formatTarget(indexed)}`,
+    "",
+    "## Evidence",
+    "",
+    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatRedactionEvidence(issue),
+    `- Screenshot: \`${path.relative(process.cwd(), indexed.screenshotPath)}\``,
+    "",
+    "<details>",
+    "<summary>Structured measurement JSON</summary>",
+    "",
+    "```json",
+    JSON.stringify(issue.measurement ?? issue.target, null, 2),
+    "```",
+    "",
+    "</details>",
+    "",
+    "## Reproduction",
+    "",
+    `1. Open \`${session.url}\`.`,
+    `2. Set the viewport to ${formatViewport(session)}.`,
+    "3. Inspect the selector and screenshot above.",
+    "",
+    "## Verification",
+    "",
+    `- Run: \`vernier verify ${indexed.stableId} --compare --target <local-app-url>\``,
+    `- Mark fixed: \`vernier mark ${indexed.stableId} fixed\``
+  ].join("\n");
+}
+
 export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl: string): string {
   const { issue, session } = indexed;
 

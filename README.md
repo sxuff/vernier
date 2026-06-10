@@ -152,6 +152,8 @@ vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
 vernier note <issue-id> "Button should align with card title"
+vernier github body <issue-id>
+vernier github create all --label ui-feedback
 vernier send --to codex
 vernier send <issue-id> --to codex
 vernier send all --to claude --all
@@ -162,6 +164,8 @@ vernier open
 `vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting.
 
 `vernier note <issue-id> "..."` updates the latest session JSON and regenerates `session.md`, which is useful when you want to refine a captured issue without recapturing the screenshot.
+
+`vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues.
 
 `vernier send --to codex` sends todo issues in the latest session by default. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
 

@@ -419,6 +419,7 @@ try {
   const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
+  const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
   const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
   const configSendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--config", configPath, "--print"]);
@@ -473,6 +474,9 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
+  if (!helpOutput.includes("vernier github body|create")) {
+    throw new Error(`Expected help command to document GitHub export:\n${helpOutput}`);
+  }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
@@ -526,6 +530,14 @@ try {
   }
   if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
     throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);
+  }
+  if (
+    !githubBodyOutput.includes(`Title: [Vernier] make it blue instead`) ||
+    !githubBodyOutput.includes("## Vernier UI Feedback") ||
+    !githubBodyOutput.includes("Selector: `[data-testid=\"bad-button\"]`") ||
+    !githubBodyOutput.includes(`vernier verify ${stableIssueId} --compare`)
+  ) {
+    throw new Error(`Expected github body to print GitHub-ready issue content:\n${githubBodyOutput}`);
   }
   if (
     !verifyOutput.includes(`Verify Vernier issue ${stableIssueId}.`) ||

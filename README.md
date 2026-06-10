@@ -142,6 +142,7 @@ vernier show <issue-id>
 vernier verify <issue-id>
 vernier verify <issue-id> --target http://localhost:3000 --open
 vernier verify <issue-id> --target http://localhost:3000 --compare
+vernier verify <issue-id> --target http://localhost:3000 --compare --viewports mobile,tablet,desktop
 vernier replay latest
 vernier doctor
 vernier clean --keep 20 --dry-run
@@ -174,7 +175,7 @@ vernier open
 
 `vernier verify <issue-id>` prints the captured viewport, original evidence, target URL, screenshot path, and the follow-up mark commands. Add `--open` to open the captured route in your browser.
 
-`vernier verify <issue-id> --compare` reopens the captured route at the captured viewport, finds the selector, remeasures it, and writes local artifacts under `.ui-feedback/sessions/<session>/verification/<issue-id>/`.
+`vernier verify <issue-id> --compare` reopens the captured route at the captured viewport, finds the selector, remeasures it, and writes local artifacts under `.ui-feedback/sessions/<session>/verification/<issue-id>/`. Add `--viewports mobile,tablet,desktop` or explicit sizes like `390x844,768x1024,1440x900@2` to compare the same issue across responsive breakpoints.
 
 `vernier replay latest` opens a local read-only viewer for the latest session, including screenshots, structured evidence, statuses, and verification reports.
 

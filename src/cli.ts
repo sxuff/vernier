@@ -12,7 +12,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
-import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "./schema";
+import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement, VernierSession } from "./schema";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -381,7 +381,7 @@ async function verifyIssue(args: string[], config: VernierConfig): Promise<void>
   const targetUrl = createIssueTargetUrl(resolveTargetOption(args, config), issue.session.route);
 
   if (args.includes("--compare")) {
-    console.log(await compareIssue(issue, targetUrl, readTolerance(args, config)));
+    console.log(await compareIssue(issue, targetUrl, readTolerance(args, config), readCompareViewports(args, issue.session.viewport)));
     return;
   }
 
@@ -1485,7 +1485,8 @@ function replayContentType(relativePath: string): string {
 async function compareIssue(
   indexed: Awaited<ReturnType<typeof findLatestIssue>>,
   targetUrl: string,
-  tolerancePx: number
+  tolerancePx: number,
+  viewports: CompareViewport[]
 ): Promise<string> {
   if (!indexed.issue.measurement || indexed.issue.measurement.kind === "annotation") {
     return [
@@ -1501,22 +1502,51 @@ async function compareIssue(
 
   try {
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({
-      viewport: {
-        width: indexed.session.viewport.width,
-        height: indexed.session.viewport.height
-      },
-      deviceScaleFactor: indexed.session.viewport.devicePixelRatio
-    });
 
-    await page.goto(targetUrl, { waitUntil: "networkidle" });
-    const report = await remeasureIssue(page, indexed.issue, tolerancePx);
-    const artifactDirectory = path.join(indexed.sessionDirectory, "verification", indexed.stableId);
-    await writeVerificationArtifacts(artifactDirectory, indexed, report, page);
+    if (viewports.length === 1 && viewports[0]!.label === "captured") {
+      const { report, artifactDirectory } = await compareIssueAtViewport(browser, indexed, targetUrl, tolerancePx, viewports[0]!, path.join(indexed.sessionDirectory, "verification", indexed.stableId));
+      return renderCompareReport(indexed.stableId, targetUrl, artifactDirectory, report);
+    }
 
-    return renderCompareReport(indexed.stableId, targetUrl, artifactDirectory, report);
+    const results = [];
+    for (const viewport of viewports) {
+      const artifactDirectory = path.join(indexed.sessionDirectory, "verification", indexed.stableId, "viewports", viewportArtifactName(viewport));
+      results.push(await compareIssueAtViewport(browser, indexed, targetUrl, tolerancePx, viewport, artifactDirectory));
+    }
+
+    const summaryDirectory = path.join(indexed.sessionDirectory, "verification", indexed.stableId, "viewports");
+    await writeMultiViewportReport(summaryDirectory, indexed.stableId, targetUrl, results);
+
+    return renderMultiViewportCompareReport(indexed.stableId, targetUrl, summaryDirectory, results);
   } finally {
     await browser?.close();
+  }
+}
+
+async function compareIssueAtViewport(
+  browser: Browser,
+  indexed: Awaited<ReturnType<typeof findLatestIssue>>,
+  targetUrl: string,
+  tolerancePx: number,
+  viewport: CompareViewport,
+  artifactDirectory: string
+): Promise<{ viewport: CompareViewport; report: CompareReport; artifactDirectory: string }> {
+  const page = await browser.newPage({
+    viewport: {
+      width: viewport.width,
+      height: viewport.height
+    },
+    deviceScaleFactor: viewport.devicePixelRatio
+  });
+
+  try {
+    await page.goto(targetUrl, { waitUntil: "networkidle" });
+    const report = await remeasureIssue(page, indexed.issue, tolerancePx);
+    await writeVerificationArtifacts(artifactDirectory, indexed, report, page, viewport);
+
+    return { viewport, report, artifactDirectory };
+  } finally {
+    await page.close();
   }
 }
 
@@ -1528,6 +1558,13 @@ interface CompareReport {
   differences: Array<{ field: string; original: unknown; current: unknown; delta?: number; withinTolerance?: boolean }>;
   tolerancePx: number;
   suggestedStatus: IssueStatus;
+}
+
+interface CompareViewport {
+  label: string;
+  width: number;
+  height: number;
+  devicePixelRatio: number;
 }
 
 async function remeasureIssue(page: Page, issue: VernierIssue, tolerancePx: number): Promise<CompareReport> {
@@ -1701,24 +1738,28 @@ async function writeVerificationArtifacts(
   artifactDirectory: string,
   indexed: Awaited<ReturnType<typeof findLatestIssue>>,
   report: CompareReport,
-  page: Page
+  page: Page,
+  viewport?: CompareViewport
 ): Promise<void> {
   await mkdir(artifactDirectory, { recursive: true });
   await copyFile(indexed.screenshotPath, path.join(artifactDirectory, "before.png"));
   await page.screenshot({ path: path.join(artifactDirectory, "after.png"), fullPage: true });
-  await writeFile(path.join(artifactDirectory, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
-  await writeFile(path.join(artifactDirectory, "report.md"), `${renderCompareReport(indexed.stableId, "", artifactDirectory, report)}\n`);
+  const reportWithViewport = viewport ? { viewport, ...report } : report;
+  await writeFile(path.join(artifactDirectory, "report.json"), `${JSON.stringify(reportWithViewport, null, 2)}\n`);
+  await writeFile(path.join(artifactDirectory, "report.md"), `${renderCompareReport(indexed.stableId, "", artifactDirectory, report, viewport)}\n`);
 }
 
 function renderCompareReport(
   issueId: string,
   targetUrl: string,
   artifactDirectory: string,
-  report: CompareReport
+  report: CompareReport,
+  viewport?: CompareViewport
 ): string {
   return [
     `Issue ${issueId}`,
     targetUrl ? `URL: ${targetUrl}` : null,
+    viewport ? `Viewport: ${formatCompareViewport(viewport)}` : null,
     `Selector found: ${report.selectorFound ? "yes" : "no"}`,
     report.referenceFound === undefined ? null : `Reference found: ${report.referenceFound ? "yes" : "no"}`,
     `Tolerance: ${report.tolerancePx}px`,
@@ -1732,6 +1773,57 @@ function renderCompareReport(
   ].filter((line): line is string => line !== null).join("\n");
 }
 
+async function writeMultiViewportReport(
+  summaryDirectory: string,
+  issueId: string,
+  targetUrl: string,
+  results: Array<{ viewport: CompareViewport; report: CompareReport; artifactDirectory: string }>
+): Promise<void> {
+  await mkdir(summaryDirectory, { recursive: true });
+  const summary = {
+    issueId,
+    targetUrl,
+    comparedAt: new Date().toISOString(),
+    viewports: results.map((result) => ({
+      viewport: result.viewport,
+      artifactDirectory: result.artifactDirectory,
+      selectorFound: result.report.selectorFound,
+      suggestedStatus: result.report.suggestedStatus,
+      differenceCount: result.report.differences.length
+    }))
+  };
+
+  await writeFile(path.join(summaryDirectory, "report.json"), `${JSON.stringify(summary, null, 2)}\n`);
+  await writeFile(path.join(summaryDirectory, "report.md"), `${renderMultiViewportCompareReport(issueId, targetUrl, summaryDirectory, results)}\n`);
+}
+
+function renderMultiViewportCompareReport(
+  issueId: string,
+  targetUrl: string,
+  summaryDirectory: string,
+  results: Array<{ viewport: CompareViewport; report: CompareReport; artifactDirectory: string }>
+): string {
+  return [
+    `Issue ${issueId}`,
+    `URL: ${targetUrl}`,
+    `Viewports compared: ${results.length}`,
+    `Artifacts: ${summaryDirectory}`,
+    "",
+    ...results.flatMap((result) => [
+      `## ${formatCompareViewport(result.viewport)}`,
+      `Selector found: ${result.report.selectorFound ? "yes" : "no"}`,
+      result.report.referenceFound === undefined ? null : `Reference found: ${result.report.referenceFound ? "yes" : "no"}`,
+      `Suggested status: ${result.report.suggestedStatus}`,
+      `Artifacts: ${result.artifactDirectory}`,
+      "Differences:",
+      ...result.report.differences.map((difference) =>
+        `- ${difference.field}: ${String(difference.original)} -> ${String(difference.current)}${typeof difference.delta === "number" ? ` (${formatSignedNumber(difference.delta)})` : ""} ${difference.withinTolerance ? "ok" : "changed"}`
+      ),
+      ""
+    ].filter((line): line is string => line !== null))
+  ].join("\n");
+}
+
 function readTolerance(args: string[], config: VernierConfig): number {
   const value = readOption(args, "--tolerance") ?? String(config.verification?.bboxTolerancePx ?? 2);
   const tolerance = Number(value);
@@ -1741,6 +1833,70 @@ function readTolerance(args: string[], config: VernierConfig): number {
   }
 
   return tolerance;
+}
+
+function readCompareViewports(args: string[], captured: VernierSession["viewport"]): CompareViewport[] {
+  const value = readOption(args, "--viewports");
+
+  if (!value) {
+    return [{
+      label: "captured",
+      width: captured.width,
+      height: captured.height,
+      devicePixelRatio: captured.devicePixelRatio
+    }];
+  }
+
+  const viewports = value.split(",").map((item) => parseCompareViewport(item.trim())).filter((item): item is CompareViewport => item !== null);
+
+  if (viewports.length === 0) {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --viewports value: ${value}`, "Use names like mobile,tablet,desktop or sizes like 390x844,768x1024,1440x900@2.");
+  }
+
+  return viewports;
+}
+
+function parseCompareViewport(value: string): CompareViewport | null {
+  if (value === "mobile") {
+    return { label: "mobile", width: 390, height: 844, devicePixelRatio: 1 };
+  }
+
+  if (value === "tablet") {
+    return { label: "tablet", width: 768, height: 1024, devicePixelRatio: 1 };
+  }
+
+  if (value === "desktop") {
+    return { label: "desktop", width: 1440, height: 900, devicePixelRatio: 1 };
+  }
+
+  const match = value.match(/^(\d{2,5})x(\d{2,5})(?:@(\d+(?:\.\d+)?))?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  const devicePixelRatio = match[3] ? Number(match[3]) : 1;
+
+  if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(devicePixelRatio) || width <= 0 || height <= 0 || devicePixelRatio <= 0) {
+    return null;
+  }
+
+  return {
+    label: value,
+    width,
+    height,
+    devicePixelRatio
+  };
+}
+
+function viewportArtifactName(viewport: CompareViewport): string {
+  return `${viewport.label}-${viewport.width}x${viewport.height}@${viewport.devicePixelRatio}x`.replace(/[^a-zA-Z0-9@._-]/g, "-");
+}
+
+function formatCompareViewport(viewport: CompareViewport): string {
+  return `${viewport.label} ${viewport.width}x${viewport.height} @${viewport.devicePixelRatio}x`;
 }
 
 function roundNumber(value: number): number {
@@ -2597,7 +2753,7 @@ function isIssueStatus(value: string | undefined): value is IssueStatus {
 
 function readPositionalArgs(args: string[]): string[] {
   const positional: string[] = [];
-  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template"]);
+  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template", "--viewports"]);
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -2679,7 +2835,7 @@ function printHelp(): void {
       "  vernier github body|create [all|<issue-id>] [--label ui-feedback]",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
-      "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2]",
+      "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2] [--viewports mobile,tablet,desktop|390x844,1440x900]",
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",

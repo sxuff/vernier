@@ -356,6 +356,24 @@ try {
   if (compareReport.selectorFound !== true || !compareMarkdown.includes(`Issue ${sessionJson.issues[1].stableId}`)) {
     throw new Error(`Expected verify --compare artifacts to include report data:\n${compareMarkdown}`);
   }
+  const multiCompareOutput = await runNode([
+    "dist/cli.js",
+    "verify",
+    sessionJson.issues[1].stableId,
+    "--target",
+    `http://127.0.0.1:${proxyPort}`,
+    "--compare",
+    "--viewports",
+    "390x844,desktop"
+  ]);
+  const multiArtifactDirectory = multiCompareOutput.match(/Artifacts: (.+)/)?.[1]?.trim();
+  if (!multiCompareOutput.includes("Viewports compared: 2") || !multiArtifactDirectory) {
+    throw new Error(`Expected verify --compare --viewports to print multi-viewport summary:\n${multiCompareOutput}`);
+  }
+  const multiCompareReport = JSON.parse(await readFile(path.join(multiArtifactDirectory, "report.json"), "utf8"));
+  if (multiCompareReport.viewports?.length !== 2) {
+    throw new Error(`Expected multi-viewport report artifacts:\n${JSON.stringify(multiCompareReport, null, 2)}`);
+  }
 
   const replay = spawn(
     process.execPath,

@@ -16,6 +16,13 @@ import { auditLatestSession } from "./cli/commands/audit";
 import { cleanSessions } from "./cli/commands/clean";
 import { runDoctor } from "./cli/commands/doctor";
 import { handleGitHubCommand } from "./cli/commands/github";
+import {
+  copyIssueCommand,
+  listIssuesCommand,
+  planIssueCommand,
+  sendIssueToAgent,
+  showIssueCommand
+} from "./cli/commands/handoff";
 import { markIssue, updateIssueNote } from "./cli/commands/issues";
 import { startMcpServer } from "./cli/commands/mcp";
 import { startReplayViewer } from "./cli/commands/replay";
@@ -23,17 +30,10 @@ import { VernierError } from "./cli/lib/errors";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
-  filterIssuesByStatus,
   findLatestIssue,
-  type AgentTemplate,
   type IssueStatus,
   listLatestIssues,
-  renderIssueDetail,
-  renderIssueList,
-  renderIssuePlan,
-  renderIssueTask,
-  renderIssueVerification,
-  renderIssuesTask
+  renderIssueVerification
 } from "./core/issues";
 import {
   createVernierOverlayScript,
@@ -272,30 +272,22 @@ async function main(): Promise<void> {
   }
 
   if (command === "issues") {
-    console.log(renderIssueList(filterIssuesByStatus(await listLatestIssues(process.cwd()), readIssueStatusFilter(args))));
+    await listIssuesCommand(process.cwd(), args);
     return;
   }
 
   if (command === "show") {
-    console.log(renderIssueDetail(await findLatestIssue(process.cwd(), readRequiredReference(args, "show"))));
+    await showIssueCommand(process.cwd(), args);
     return;
   }
 
   if (command === "copy") {
-    const task = renderIssueTask(await findLatestIssue(process.cwd(), readRequiredReference(args, "copy")), readAgentTemplate(args));
-
-    if (args.includes("--print")) {
-      console.log(task);
-      return;
-    }
-
-    await copyToClipboard(task);
-    console.log("Copied Vernier issue task to clipboard.");
+    await copyIssueCommand(process.cwd(), args);
     return;
   }
 
   if (command === "send") {
-    await sendIssueToAgent(args, context.config);
+    await sendIssueToAgent(process.cwd(), args, context.config);
     return;
   }
 
@@ -310,7 +302,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "plan") {
-    console.log(renderIssuePlan(await findLatestIssue(process.cwd(), readRequiredReference(args, "plan"))));
+    await planIssueCommand(process.cwd(), args);
     return;
   }
 
@@ -1170,141 +1162,6 @@ function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
-  if (args.includes("--todo")) {
-    return "todo";
-  }
-
-  if (args.includes("--fixed")) {
-    return "fixed";
-  }
-
-  return "all";
-}
-
-function readAgentTemplate(args: string[], fallbackAgent?: string): AgentTemplate {
-  const value = readOption(args, "--template") ?? fallbackAgent ?? "generic";
-
-  if (value === "generic" || value === "codex" || value === "claude" || value === "cursor" || value === "aider" || value === "strict") {
-    return value;
-  }
-
-  throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --template value: ${value}`, "Use generic, codex, claude, cursor, aider, or strict.");
-}
-
-function readRequiredReference(args: string[], command: string): string {
-  const reference = readPositionalArgs(args)[0];
-
-  if (!reference) {
-    throw new Error(`Usage: vernier ${command} <issue-id>`);
-  }
-
-  return reference;
-}
-
-async function sendIssueToAgent(args: string[], config: VernierConfig): Promise<void> {
-  const reference = readPositionalArgs(args)[0] ?? "all";
-  const agent = readOption(args, "--to") ?? process.env.VERNIER_AGENT ?? config.agents?.default;
-
-  if (agent !== "codex" && agent !== "claude") {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier send <issue-id> --to codex|claude", "Set agents.default in vernier.config.json or VERNIER_AGENT to avoid passing --to every time.");
-  }
-
-  const template = readAgentTemplate(args, agent);
-  const task = reference === "all"
-    ? await createIssuesSendTask(args, template)
-    : renderIssueTask(await findLatestIssue(process.cwd(), reference), template);
-
-  if (args.includes("--print")) {
-    console.log(task);
-    return;
-  }
-
-  const result = await runAgent(agent, task);
-
-  if (result === "started") {
-    return;
-  }
-
-  await copyToClipboard(task);
-  console.log(`Could not find the ${agent} CLI on PATH.`);
-  console.log("Copied the Vernier task to clipboard instead. Paste it into the Codex app or install the CLI.");
-}
-
-async function createIssuesSendTask(args: string[], template: AgentTemplate): Promise<string> {
-  const issues = filterIssuesByStatus(await listLatestIssues(process.cwd()), args.includes("--all") ? "all" : "todo");
-
-  if (issues.length === 0) {
-    return args.includes("--all")
-      ? "No issues in latest Vernier session."
-      : "No todo issues in latest Vernier session. Use --all to include fixed issues.";
-  }
-
-  return renderIssuesTask(issues, template);
-}
-
-async function runAgent(agent: "codex" | "claude", task: string): Promise<"started" | "missing"> {
-  const executable = agent === "codex" ? "codex" : "claude";
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, [task], {
-      cwd: process.cwd(),
-      stdio: "inherit"
-    });
-
-    child.on("error", (error) => {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        resolve("missing");
-        return;
-      }
-
-      reject(new Error(`Could not start ${executable}: ${error.message}`));
-    });
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve("started");
-        return;
-      }
-
-      reject(new Error(`${executable} exited with code ${code}`));
-    });
-  });
-}
-
-async function copyToClipboard(value: string): Promise<void> {
-  const commands =
-    process.platform === "win32"
-      ? [["clip.exe"]]
-      : process.platform === "darwin"
-        ? [["pbcopy"]]
-        : [
-            ["wl-copy"],
-            ["xclip", "-selection", "clipboard"],
-            ["xsel", "--clipboard", "--input"]
-          ];
-
-  for (const command of commands) {
-    if (await tryClipboardCommand(command, value)) {
-      return;
-    }
-  }
-
-  throw new Error("No clipboard command available. Run with --print to write the task to stdout.");
-}
-
-function tryClipboardCommand(command: string[], value: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const child = spawn(command[0]!, command.slice(1), {
-      stdio: ["pipe", "ignore", "ignore"],
-      shell: process.platform === "win32"
-    });
-
-    child.on("error", () => resolve(false));
-    child.on("exit", (code) => resolve(code === 0));
-    child.stdin.end(value);
-  });
-}
-
 async function detectLocalApps(args: string[], config: VernierConfig): Promise<void> {
   const apps = await scanLocalApps(parseDetectPorts(args, config));
 
@@ -1891,6 +1748,16 @@ function readOption(args: string[], name: string): string | null {
 
 function isIssueStatus(value: string | undefined): value is IssueStatus {
   return value === "todo" || value === "fixed";
+}
+
+function readRequiredReference(args: string[], command: string): string {
+  const reference = readPositionalArgs(args)[0];
+
+  if (!reference) {
+    throw new Error(`Usage: vernier ${command} <issue-id>`);
+  }
+
+  return reference;
 }
 
 function readPositionalArgs(args: string[]): string[] {

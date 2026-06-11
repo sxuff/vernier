@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { writeSession } from "../dist/index.js";
+import { writeSession, resolveFeedbackDirectory } from "../dist/index.js";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "vernier-session-writer-"));
 const createdAt = "2026-06-11T12:34:56.789Z";
@@ -36,6 +36,7 @@ assert(inventory.length === 2, "screenshot inventory should include full-page an
 const customDirectory = await writeSession(root, createSession("s-customsession", "i-customissue", createdAt), { outDir: ".vernier-feedback" });
 assert(customDirectory.includes(".vernier-feedback"), "custom outDir should be used for session writes");
 await assertFile(path.join(root, ".vernier-feedback", "latest", "session.json"), "custom outDir should have a latest session");
+assertStructuredError(() => resolveFeedbackDirectory(root, "../escape"), "VERNIER_INVALID_CONFIG");
 
 console.log("session writer verified");
 
@@ -48,6 +49,17 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function assertStructuredError(action, code) {
+  try {
+    action();
+  } catch (error) {
+    assert(error?.code === code, `expected ${code}, got ${error?.code}`);
+    return;
+  }
+
+  throw new Error(`expected ${code}`);
 }
 
 function createSession(sessionId, issueId, timestamp) {

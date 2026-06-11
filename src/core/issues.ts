@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { VernierIssue, VernierSession } from "../schema";
+import { VernierError } from "./errors";
 import { renderSessionMarkdown } from "./session-writer";
 
 export type IssueStatus = "todo" | "fixed";
@@ -39,7 +40,7 @@ export async function findLatestIssue(root: string, reference: string): Promise<
   const issue = findIssueByReference(issues, reference);
 
   if (!issue) {
-    throw new Error(`Unknown Vernier issue: ${reference}`);
+    throw unknownIssueError(reference);
   }
 
   return issue;
@@ -50,7 +51,7 @@ export async function markLatestIssue(root: string, reference: string, status: I
   const issue = findIssueByReference(issues, reference);
 
   if (!issue) {
-    throw new Error(`Unknown Vernier issue: ${reference}`);
+    throw unknownIssueError(reference);
   }
 
   const statuses = await readIssueStatuses(issue.sessionDirectory);
@@ -69,7 +70,7 @@ export async function updateLatestIssueNote(root: string, reference: string, not
   const indexed = findIssueByReference(issues, reference);
 
   if (!indexed) {
-    throw new Error(`Unknown Vernier issue: ${reference}`);
+    throw unknownIssueError(reference);
   }
 
   indexed.issue.note = note.trim();
@@ -589,7 +590,7 @@ async function findLatestSessionFile(root: string): Promise<{ filePath: string; 
   const candidates = await findSessionFiles(root);
 
   if (candidates.length === 0) {
-    throw new Error(`No Vernier session found under ${root}`);
+    throw new VernierError("VERNIER_NO_SESSION", `No Vernier session found under ${root}`, "Open your app with Vernier, add an issue, then export a session.");
   }
 
   candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
@@ -598,6 +599,10 @@ async function findLatestSessionFile(root: string): Promise<{ filePath: string; 
     filePath: candidates[0]!.filePath,
     sessionDirectory: path.dirname(candidates[0]!.filePath)
   };
+}
+
+function unknownIssueError(reference: string): VernierError {
+  return new VernierError("VERNIER_UNKNOWN_ISSUE", `Unknown Vernier issue: ${reference}`, "Run `vernier issues` to list stable issue IDs from the latest session.");
 }
 
 async function findSessionFiles(

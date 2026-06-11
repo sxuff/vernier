@@ -1,6 +1,7 @@
 import { cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { VernierError } from "./errors";
 import type { SessionOutputOptions } from "./overlay-options";
 import type { VernierSession } from "../schema";
 
@@ -47,7 +48,7 @@ export async function writeSession(root: string, session: VernierSession, option
 
 export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackDirectory): string {
   if (path.isAbsolute(outDir)) {
-    throw new Error("outDir must be relative to the project root");
+    throw new VernierError("VERNIER_INVALID_CONFIG", "outDir must be relative to the project root", "Use a relative directory like .ui-feedback or .vernier-feedback.");
   }
 
   const resolvedRoot = path.resolve(root);
@@ -55,7 +56,7 @@ export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackD
   const relative = path.relative(resolvedRoot, resolved);
 
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("outDir must stay inside the project root");
+    throw new VernierError("VERNIER_INVALID_CONFIG", "outDir must stay inside the project root", "Choose an output directory inside the current project.");
   }
 
   return resolved;
@@ -217,7 +218,7 @@ async function writeDataUrl(filePath: string, dataUrl: string): Promise<void> {
   const base64 = dataUrl.split(",")[1];
 
   if (!base64) {
-    throw new Error(`Invalid data URL for ${filePath}`);
+    throw new VernierError("VERNIER_INVALID_SESSION", `Invalid data URL for ${filePath}`, "Exported screenshots must be base64 data URLs.");
   }
 
   await writeFile(filePath, Buffer.from(base64, "base64"));

@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, VernierIssue, VernierSession } from "./schema";
 import { auditLatestSession } from "./cli/commands/audit";
+import { attachToLocalApp, detectLocalApps } from "./cli/commands/attach";
 import { cleanSessions } from "./cli/commands/clean";
 import { runDoctor } from "./cli/commands/doctor";
 import { handleGitHubCommand } from "./cli/commands/github";
@@ -65,16 +66,9 @@ interface CliContext {
   verbose: boolean;
 }
 
-interface DetectedApp {
-  url: string;
-  label: string;
-  status: number;
-}
-
 const require = createRequire(import.meta.url);
 const defaultTarget = "http://localhost:5173";
 const defaultPort = 3333;
-const defaultDetectPorts = [5173, 3000, 3001, 4173, 4200, 4321, 5000, 5174, 6006, 8000, 8080];
 const maxProxyBodyBytes = 30 * 1024 * 1024;
 const maxPortFallbackAttempts = 20;
 
@@ -262,12 +256,12 @@ async function main(): Promise<void> {
   }
 
   if (command === "attach") {
-    await attachToLocalApp(args, context.config);
+    await attachToLocalApp(args, context.config, { parseProxyOptions, resolveTargetOption, startProxyServer });
     return;
   }
 
   if (command === "detect") {
-    await detectLocalApps(args, context.config);
+    await detectLocalApps(args, context.config, { resolveTargetOption });
     return;
   }
 
@@ -1160,149 +1154,6 @@ function roundNumber(value: number): number {
 
 function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
-}
-
-async function detectLocalApps(args: string[], config: VernierConfig): Promise<void> {
-  const apps = await scanLocalApps(parseDetectPorts(args, config));
-
-  if (apps.length === 0) {
-    console.log("No local web apps found.");
-    console.log(`Try: vernier --target ${resolveTargetOption([], config)}`);
-    return;
-  }
-
-  console.log("Found local web apps:");
-  for (const app of apps) {
-    console.log(`  ${app.url}  ${app.label} (${app.status})`);
-  }
-
-  console.log("");
-  console.log("Attach Vernier:");
-  console.log(`  vernier attach --target ${apps[0].url}`);
-}
-
-async function attachToLocalApp(args: string[], config: VernierConfig): Promise<void> {
-  const target = await resolveAttachTarget(args, config);
-  const options = parseProxyOptions(["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")], config);
-
-  await startProxyServer(options, { open: !args.includes("--no-open") });
-}
-
-async function resolveAttachTarget(args: string[], config: VernierConfig): Promise<string> {
-  const explicitTarget = readOption(args, "--target") ?? readPositionalTarget(args);
-
-  if (explicitTarget) {
-    return explicitTarget;
-  }
-
-  if (config.target || process.env.VERNIER_TARGET) {
-    return resolveTargetOption(args, config);
-  }
-
-  const apps = await scanLocalApps(parseDetectPorts(args, config));
-
-  if (apps.length === 0) {
-    throw new VernierError(
-      "VERNIER_NO_LOCAL_APP",
-      "No local web apps found.",
-      `Start your app, or run: vernier attach --target ${resolveTargetOption([], config)}`
-    );
-  }
-
-  console.log(`[vernier] detected ${apps[0].label} at ${apps[0].url}`);
-  return apps[0].url;
-}
-
-async function scanLocalApps(ports: number[]): Promise<DetectedApp[]> {
-  return (await Promise.all(ports.map((port) => detectPort(port)))).filter(
-    (app): app is DetectedApp => Boolean(app)
-  );
-}
-
-function parseDetectPorts(args: string[], config: VernierConfig): number[] {
-  const portsValue = readOption(args, "--ports");
-
-  if (!portsValue) {
-    return config.detectPorts ?? readEnvPorts() ?? defaultDetectPorts;
-  }
-
-  const ports = portsValue.split(",").map((value) => Number(value.trim()));
-
-  if (ports.some((port) => !Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --ports value: ${portsValue}`, "Use a comma-separated list of TCP ports, for example --ports 5173,3000,6006.");
-  }
-
-  return [...new Set(ports)];
-}
-
-function readEnvPorts(): number[] | null {
-  const portsValue = process.env.VERNIER_PORTS;
-
-  if (!portsValue) {
-    return null;
-  }
-
-  const ports = portsValue.split(",").map((value) => Number(value.trim()));
-
-  if (ports.some((port) => !Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid VERNIER_PORTS value: ${portsValue}`, "Use a comma-separated list of TCP ports, for example VERNIER_PORTS=5173,3000,6006.");
-  }
-
-  return [...new Set(ports)];
-}
-
-async function detectPort(port: number): Promise<DetectedApp | null> {
-  const url = `http://127.0.0.1:${port}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 700);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-      headers: { accept: "text/html,*/*" }
-    });
-    const contentType = response.headers.get("content-type") ?? "";
-    const server = response.headers.get("server") ?? "";
-    const poweredBy = response.headers.get("x-powered-by") ?? "";
-    const body = contentType.includes("text") || contentType.includes("html") ? await response.text() : "";
-
-    return {
-      url,
-      status: response.status,
-      label: classifyDetectedApp(port, body, server, poweredBy)
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function classifyDetectedApp(port: number, body: string, server: string, poweredBy: string): string {
-  const hints = `${body}\n${server}\n${poweredBy}`.toLowerCase();
-
-  if (hints.includes("/@vite/client") || hints.includes("vite")) {
-    return "Vite";
-  }
-
-  if (hints.includes("__next") || poweredBy.toLowerCase().includes("next")) {
-    return "Next.js";
-  }
-
-  if (hints.includes("storybook") || port === 6006) {
-    return "Storybook";
-  }
-
-  if (hints.includes("astro")) {
-    return "Astro";
-  }
-
-  if (hints.includes("webpack")) {
-    return "Webpack dev server";
-  }
-
-  return "HTTP app";
 }
 
 function parseProxyOptions(args: string[], config: VernierConfig = {}): ProxyOptions {

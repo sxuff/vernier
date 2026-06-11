@@ -24,6 +24,7 @@
     "dist"
   ],
   "scripts": {
+    "prebuild": "node scripts/build-overlay-bundle.mjs",
     "build": "tsup",
     "dev:example": "npm --prefix examples/react-vite run dev",
     "dev:proxy": "npm run build && node dist/cli.js",
@@ -48,11 +49,12 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@vitejs/plugin-react": "^5.0.0",
     "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "esbuild": "^0.27.7",
     "playwright": "^1.56.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

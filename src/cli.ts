@@ -16,8 +16,10 @@ import type { BoundingBox, VernierIssue, VernierSession } from "./schema";
 import { auditLatestSession } from "./cli/commands/audit";
 import { cleanSessions } from "./cli/commands/clean";
 import { runDoctor } from "./cli/commands/doctor";
+import { markIssue, updateIssueNote } from "./cli/commands/issues";
 import { startMcpServer } from "./cli/commands/mcp";
 import { startReplayViewer } from "./cli/commands/replay";
+import { VernierError } from "./cli/lib/errors";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -26,7 +28,6 @@ import {
   type AgentTemplate,
   type IssueStatus,
   listLatestIssues,
-  markLatestIssue,
   renderIssueDetail,
   renderGitHubIssueBody,
   renderGitHubIssueTitle,
@@ -34,8 +35,7 @@ import {
   renderIssuePlan,
   renderIssueTask,
   renderIssueVerification,
-  renderIssuesTask,
-  updateLatestIssueNote
+  renderIssuesTask
 } from "./core/issues";
 import {
   createVernierOverlayScript,
@@ -79,16 +79,6 @@ const defaultPort = 3333;
 const defaultDetectPorts = [5173, 3000, 3001, 4173, 4200, 4321, 5000, 5174, 6006, 8000, 8080];
 const maxProxyBodyBytes = 30 * 1024 * 1024;
 const maxPortFallbackAttempts = 20;
-
-class VernierError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public hint?: string
-  ) {
-    super(message);
-  }
-}
 
 async function createCliContext(args: string[]): Promise<CliContext> {
   const verbose = args.includes("--verbose") || process.env.VERNIER_DEBUG === "1" || process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true;
@@ -312,12 +302,12 @@ async function main(): Promise<void> {
   }
 
   if (command === "mark") {
-    await markIssue(args);
+    await markIssue(process.cwd(), args);
     return;
   }
 
   if (command === "note") {
-    await updateIssueNote(args);
+    await updateIssueNote(process.cwd(), args);
     return;
   }
 
@@ -1180,31 +1170,6 @@ function roundNumber(value: number): number {
 
 function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
-}
-
-async function markIssue(args: string[]): Promise<void> {
-  const [reference, status] = readPositionalArgs(args);
-
-  if (!reference || !isIssueStatus(status)) {
-    throw new Error("Usage: vernier mark <issue-id> todo|fixed");
-  }
-
-  const issue = await markLatestIssue(process.cwd(), reference, status);
-
-  console.log(`Marked ${issue.stableId} ${status}.`);
-}
-
-async function updateIssueNote(args: string[]): Promise<void> {
-  const [reference, ...noteParts] = readPositionalArgs(args);
-  const note = noteParts.join(" ").trim();
-
-  if (!reference || !note) {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier note <issue-id> \"updated note\"", "Use quotes around notes with spaces.");
-  }
-
-  const issue = await updateLatestIssueNote(process.cwd(), reference, note);
-
-  console.log(`Updated ${issue.stableId} note.`);
 }
 
 async function handleGitHubCommand(args: string[]): Promise<void> {

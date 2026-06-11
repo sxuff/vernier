@@ -144,6 +144,7 @@ vernier verify <issue-id> --target http://localhost:3000 --open
 vernier verify <issue-id> --target http://localhost:3000 --compare
 vernier verify <issue-id> --target http://localhost:3000 --compare --viewports mobile,tablet,desktop
 vernier capture --target http://localhost:3000 --routes /,/pricing --viewports mobile,desktop
+vernier diff .ui-feedback/captures/capture-a .ui-feedback/captures/capture-b
 vernier replay latest
 vernier doctor
 vernier clean --keep 20 --dry-run
@@ -179,6 +180,8 @@ vernier open
 `vernier verify <issue-id> --compare` reopens the captured route at the captured viewport, finds the selector, remeasures it, and writes local artifacts under `.ui-feedback/sessions/<session>/verification/<issue-id>/`. Add `--viewports mobile,tablet,desktop` or explicit sizes like `390x844,768x1024,1440x900@2` to compare the same issue across responsive breakpoints.
 
 `vernier capture --routes /,/pricing --viewports mobile,desktop` performs batch screenshot capture against an already-running target app and writes artifacts under `.ui-feedback/captures/<timestamp>/`.
+
+`vernier diff <left> <right>` compares two Vernier feedback sessions or two batch capture directories and reports added, removed, or changed issues/screenshots.
 
 `vernier replay latest` opens a local read-only viewer for the latest session, including screenshots, structured evidence, statuses, and verification reports.
 

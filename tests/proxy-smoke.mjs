@@ -392,6 +392,10 @@ try {
   if (captureReport.screenshotCount !== 2 || captureReport.records?.some((record) => !record.screenshotName)) {
     throw new Error(`Expected capture report to include two screenshot records:\n${JSON.stringify(captureReport, null, 2)}`);
   }
+  const captureDiffOutput = await runNode(["dist/cli.js", "diff", captureDirectory, captureDirectory]);
+  if (!captureDiffOutput.includes("Vernier capture diff") || !captureDiffOutput.includes("No differences.")) {
+    throw new Error(`Expected diff command to compare capture artifacts:\n${captureDiffOutput}`);
+  }
 
   const replay = spawn(
     process.execPath,

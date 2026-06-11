@@ -336,6 +336,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "diff") {
+    console.log(await diffArtifacts(args));
+    return;
+  }
+
   if (command === "replay") {
     await startReplayViewer(args);
     return;
@@ -462,6 +467,25 @@ async function captureRoutes(args: string[], config: VernierConfig): Promise<str
     `Viewports: ${viewports.map(formatCompareViewport).join(", ")}`,
     `Artifacts: ${captureDirectory}`
   ].join("\n");
+}
+
+async function diffArtifacts(args: string[]): Promise<string> {
+  const [leftReference, rightReference] = readPositionalArgs(args);
+
+  if (!leftReference || !rightReference) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier diff <left-session-or-capture> <right-session-or-capture>", "Use `latest` for the latest feedback session, or pass artifact directories.");
+  }
+
+  const left = await readDiffArtifact(leftReference);
+  const right = await readDiffArtifact(rightReference);
+
+  if (left.kind !== right.kind) {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Cannot diff ${left.kind} against ${right.kind}.`, "Compare two sessions or two captures.");
+  }
+
+  return left.kind === "session" && right.kind === "session"
+    ? renderSessionDiff(left, right)
+    : renderCaptureDiff(left as DiffCaptureArtifact, right as DiffCaptureArtifact);
 }
 
 async function startReplayViewer(args: string[]): Promise<void> {
@@ -2046,6 +2070,193 @@ function slugifyCapturePart(value: string): string {
     .toLowerCase() || "root";
 }
 
+type DiffArtifact = DiffSessionArtifact | DiffCaptureArtifact;
+
+interface DiffSessionArtifact {
+  kind: "session";
+  path: string;
+  session: VernierSession;
+}
+
+interface DiffCaptureArtifact {
+  kind: "capture";
+  path: string;
+  capture: {
+    createdAt?: string;
+    target?: string;
+    screenshotCount?: number;
+    records?: Array<{
+      route: string;
+      url: string;
+      viewport: CompareViewport;
+      screenshotName: string;
+      status: number | null;
+      title: string;
+    }>;
+  };
+}
+
+async function readDiffArtifact(reference: string): Promise<DiffArtifact> {
+  const directory = reference === "latest"
+    ? path.join(process.cwd(), ".ui-feedback", "latest")
+    : path.resolve(process.cwd(), reference);
+
+  try {
+    const session = JSON.parse(await readFile(path.join(directory, "session.json"), "utf8")) as VernierSession;
+    return { kind: "session", path: directory, session };
+  } catch {
+    // Not a feedback session, try batch capture next.
+  }
+
+  try {
+    const capture = JSON.parse(await readFile(path.join(directory, "capture.json"), "utf8")) as DiffCaptureArtifact["capture"];
+    return { kind: "capture", path: directory, capture };
+  } catch {
+    throw new VernierError("VERNIER_NO_ARTIFACT", `No Vernier session or capture artifact found at ${directory}`, "Pass a directory containing session.json or capture.json.");
+  }
+}
+
+function renderSessionDiff(left: DiffSessionArtifact, right: DiffSessionArtifact): string {
+  const leftIssues = new Map(left.session.issues.map((issue) => [issue.stableId, issue]));
+  const rightIssues = new Map(right.session.issues.map((issue) => [issue.stableId, issue]));
+  const ids = [...new Set([...leftIssues.keys(), ...rightIssues.keys()])].sort();
+  const lines = [
+    "Vernier session diff",
+    `Left: ${left.path}`,
+    `Right: ${right.path}`,
+    `Route: ${left.session.route} -> ${right.session.route}`,
+    `Viewport: ${left.session.viewport.width}x${left.session.viewport.height} -> ${right.session.viewport.width}x${right.session.viewport.height}`,
+    ""
+  ];
+  let differenceCount = 0;
+
+  for (const id of ids) {
+    const before = leftIssues.get(id);
+    const after = rightIssues.get(id);
+
+    if (!before) {
+      differenceCount += 1;
+      lines.push(`+ ${id}: added ${summarizeDiffIssue(after!)}`);
+      continue;
+    }
+
+    if (!after) {
+      differenceCount += 1;
+      lines.push(`- ${id}: removed ${summarizeDiffIssue(before)}`);
+      continue;
+    }
+
+    const changes = diffIssueFields(before, after);
+
+    if (changes.length > 0) {
+      differenceCount += changes.length;
+      lines.push(`~ ${id}: ${changes.join("; ")}`);
+    }
+  }
+
+  if (differenceCount === 0) {
+    lines.push("No differences.");
+  }
+
+  return lines.join("\n");
+}
+
+function renderCaptureDiff(left: DiffCaptureArtifact, right: DiffCaptureArtifact): string {
+  const leftRecords = new Map((left.capture.records ?? []).map((record) => [captureRecordKey(record), record]));
+  const rightRecords = new Map((right.capture.records ?? []).map((record) => [captureRecordKey(record), record]));
+  const keys = [...new Set([...leftRecords.keys(), ...rightRecords.keys()])].sort();
+  const lines = [
+    "Vernier capture diff",
+    `Left: ${left.path}`,
+    `Right: ${right.path}`,
+    `Target: ${left.capture.target ?? "unknown"} -> ${right.capture.target ?? "unknown"}`,
+    ""
+  ];
+  let differenceCount = 0;
+
+  for (const key of keys) {
+    const before = leftRecords.get(key);
+    const after = rightRecords.get(key);
+
+    if (!before) {
+      differenceCount += 1;
+      lines.push(`+ ${key}: added screenshot ${after!.screenshotName}`);
+      continue;
+    }
+
+    if (!after) {
+      differenceCount += 1;
+      lines.push(`- ${key}: removed screenshot ${before.screenshotName}`);
+      continue;
+    }
+
+    const changes = diffCaptureRecordFields(before, after);
+
+    if (changes.length > 0) {
+      differenceCount += changes.length;
+      lines.push(`~ ${key}: ${changes.join("; ")}`);
+    }
+  }
+
+  if (differenceCount === 0) {
+    lines.push("No differences.");
+  }
+
+  return lines.join("\n");
+}
+
+function summarizeDiffIssue(issue: VernierIssue): string {
+  return `${issue.kind} ${issue.note || issue.selector}`;
+}
+
+function diffIssueFields(left: VernierIssue, right: VernierIssue): string[] {
+  const changes: string[] = [];
+
+  if (left.note !== right.note) {
+    changes.push(`note changed: ${left.note || "(empty)"} -> ${right.note || "(empty)"}`);
+  }
+  if (left.selector !== right.selector) {
+    changes.push(`selector changed: ${left.selector} -> ${right.selector}`);
+  }
+  if (left.source !== right.source) {
+    changes.push(`source changed: ${left.source} -> ${right.source}`);
+  }
+  if (left.kind !== right.kind) {
+    changes.push(`kind changed: ${left.kind} -> ${right.kind}`);
+  }
+  if (left.screenshot?.hash !== right.screenshot?.hash) {
+    changes.push("screenshot hash changed");
+  }
+  if (JSON.stringify(left.measurement) !== JSON.stringify(right.measurement)) {
+    changes.push("measurement changed");
+  }
+
+  return changes;
+}
+
+function captureRecordKey(record: NonNullable<DiffCaptureArtifact["capture"]["records"]>[number]): string {
+  return `${record.route} ${formatCompareViewport(record.viewport)}`;
+}
+
+function diffCaptureRecordFields(
+  left: NonNullable<DiffCaptureArtifact["capture"]["records"]>[number],
+  right: NonNullable<DiffCaptureArtifact["capture"]["records"]>[number]
+): string[] {
+  const changes: string[] = [];
+
+  if (left.status !== right.status) {
+    changes.push(`status changed: ${left.status ?? "unknown"} -> ${right.status ?? "unknown"}`);
+  }
+  if (left.title !== right.title) {
+    changes.push(`title changed: ${left.title || "untitled"} -> ${right.title || "untitled"}`);
+  }
+  if (left.screenshotName !== right.screenshotName) {
+    changes.push(`screenshot changed: ${left.screenshotName} -> ${right.screenshotName}`);
+  }
+
+  return changes;
+}
+
 function roundNumber(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -2984,6 +3195,7 @@ function printHelp(): void {
       "  vernier verify <issue-id> [--target <url>] [--open]",
       "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2] [--viewports mobile,tablet,desktop|390x844,1440x900]",
       "  vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]",
+      "  vernier diff <left-session-or-capture> <right-session-or-capture>",
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",

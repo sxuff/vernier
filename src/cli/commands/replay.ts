@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { listLatestIssues } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 
 interface ReplayDependencies {
   root: string;
@@ -12,7 +13,8 @@ interface ReplayDependencies {
 }
 
 export async function startReplayViewer(args: string[], dependencies: ReplayDependencies): Promise<void> {
-  const reference = readPositionalArgs(args)[0];
+  const parsed = parseArgs(args, { valueOptions: ["--port"] });
+  const reference = parsed.positionals()[0];
 
   if (reference && reference !== "latest") {
     throw new Error("Usage: vernier replay latest [--port 3340|auto] [--no-open]");
@@ -27,7 +29,7 @@ export async function startReplayViewer(args: string[], dependencies: ReplayDepe
 
   console.log(`[vernier] replay viewer listening on ${url}`);
 
-  if (!args.includes("--no-open")) {
+  if (!parsed.flag("--no-open")) {
     await dependencies.openUrl(url);
   }
 }
@@ -274,7 +276,7 @@ function replayContentType(relativePath: string): string {
 }
 
 function parsePortOption(args: string[], fallbackPort: number): number | "auto" {
-  const portValue = readOption(args, "--port");
+  const portValue = parseArgs(args, { valueOptions: ["--port"] }).option("--port");
 
   if (!portValue) {
     return fallbackPort;
@@ -291,20 +293,6 @@ function parsePortOption(args: string[], fallbackPort: number): number | "auto" 
   }
 
   return port;
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  if (index === -1) {
-    return null;
-  }
-
-  return args[index + 1] ?? null;
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  return args.filter((arg) => !arg.startsWith("--"));
 }
 
 function sendText(response: ServerResponse, statusCode: number, message: string): void {

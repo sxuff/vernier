@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
+import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 import { injectVernierOverlay } from "../../core/html";
 import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/overlay-options";
@@ -50,7 +51,7 @@ export function parseProxyOptions(args: string[], config: ProxyConfig = {}): Pro
 }
 
 function parsePortOption(args: string[], fallbackPort: number | "auto"): number | "auto" {
-  const portValue = readOption(args, "--port") ?? process.env.VERNIER_PORT ?? String(fallbackPort);
+  const portValue = parseArgs(args, { valueOptions: ["--port"] }).option("--port") ?? process.env.VERNIER_PORT ?? String(fallbackPort);
   const port = portValue === "auto" ? "auto" : Number(portValue);
 
   if (port !== "auto" && (!Number.isInteger(port) || port < 1 || port > 65535)) {
@@ -61,7 +62,8 @@ function parsePortOption(args: string[], fallbackPort: number | "auto"): number 
 }
 
 export function resolveTargetOption(args: string[], config: ProxyConfig): string {
-  return readOption(args, "--target") ?? readPositionalTarget(args) ?? process.env.VERNIER_TARGET ?? config.target ?? defaultTarget;
+  const parsed = parseArgs(args, { valueOptions: ["--target", "--port", "--config"] });
+  return parsed.option("--target") ?? parsed.positionals().find(isUrlLike) ?? process.env.VERNIER_TARGET ?? config.target ?? defaultTarget;
 }
 
 function resolveDefaultPort(config: ProxyConfig): number | "auto" {
@@ -474,16 +476,6 @@ async function sendFile(response: ServerResponse, filePath: string, contentType:
 
 function resolveHtml2CanvasPath(): string {
   return require.resolve("html2canvas/dist/html2canvas.esm.js");
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  return index >= 0 ? args[index + 1] ?? null : null;
-}
-
-function readPositionalTarget(args: string[]): string | null {
-  return args.find((arg) => !arg.startsWith("-") && isUrlLike(arg)) ?? null;
 }
 
 export function isUrlLike(value: string): boolean {

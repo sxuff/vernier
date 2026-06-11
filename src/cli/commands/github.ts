@@ -9,10 +9,12 @@ import {
   renderGitHubIssueBody,
   renderGitHubIssueTitle
 } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
 export async function handleGitHubCommand(root: string, args: string[]): Promise<void> {
-  const [action = "body", reference = "all"] = readPositionalArgs(args);
+  const parsed = parseArgs(args, { valueOptions: ["--label"] });
+  const [action = "body", reference = "all"] = parsed.positionals();
 
   if (action !== "body" && action !== "create") {
     throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback]", "Use `vernier github body <issue-id>` to preview without network.");
@@ -25,7 +27,7 @@ export async function handleGitHubCommand(root: string, args: string[]): Promise
     return;
   }
 
-  await createGitHubIssues(issues, readOption(args, "--label") ?? "ui-feedback");
+  await createGitHubIssues(issues, parsed.option("--label") ?? "ui-feedback");
 }
 
 async function resolveGitHubIssues(root: string, reference: string): Promise<Awaited<ReturnType<typeof listLatestIssues>>> {
@@ -105,18 +107,4 @@ function runProcess(executable: string, args: string[]): Promise<string> {
       reject(new VernierError("VERNIER_GH_FAILED", `${executable} exited with code ${code}`, stderr.trim() || "Run gh auth status to check authentication."));
     });
   });
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  if (index === -1) {
-    return null;
-  }
-
-  return args[index + 1] ?? null;
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  return args.filter((arg) => !arg.startsWith("--"));
 }

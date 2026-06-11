@@ -1,8 +1,10 @@
 import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "../../schema";
 import { listLatestIssues } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 
 export async function auditLatestSession(root: string, args: string[]): Promise<string> {
-  const [kind = "a11y"] = readPositionalArgs(args);
+  const parsed = parseArgs(args);
+  const [kind = "a11y"] = parsed.positionals();
 
   if (kind !== "a11y" && kind !== "layout") {
     throw new Error("Usage: vernier audit a11y|layout [--json]");
@@ -21,7 +23,7 @@ export async function auditLatestSession(root: string, args: string[]): Promise<
       findings
     };
 
-    return args.includes("--json") ? JSON.stringify(report, null, 2) : renderLayoutAudit(report);
+    return parsed.flag("--json") ? JSON.stringify(report, null, 2) : renderLayoutAudit(report);
   }
 
   const findings = issues.flatMap((issue) => auditIssueAccessibility(issue.issue, issue.stableId));
@@ -34,7 +36,7 @@ export async function auditLatestSession(root: string, args: string[]): Promise<
     findings
   };
 
-  return args.includes("--json") ? JSON.stringify(report, null, 2) : renderA11yAudit(report);
+  return parsed.flag("--json") ? JSON.stringify(report, null, 2) : renderA11yAudit(report);
 }
 
 interface LayoutFinding {
@@ -379,8 +381,4 @@ function formatSignedNumber(value: number): string {
   const rounded = Math.round(value * 100) / 100;
 
   return rounded > 0 ? `+${rounded}` : String(rounded);
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  return args.filter((arg) => !arg.startsWith("--"));
 }

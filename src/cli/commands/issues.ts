@@ -1,8 +1,9 @@
 import { markLatestIssue, type IssueStatus, updateLatestIssueNote } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
 export async function markIssue(root: string, args: string[]): Promise<void> {
-  const [reference, status] = readPositionalArgs(args);
+  const [reference, status] = parseArgs(args).positionals();
 
   if (!reference || !isIssueStatus(status)) {
     throw new Error("Usage: vernier mark <issue-id> todo|fixed");
@@ -14,7 +15,7 @@ export async function markIssue(root: string, args: string[]): Promise<void> {
 }
 
 export async function updateIssueNote(root: string, args: string[]): Promise<void> {
-  const [reference, ...noteParts] = readPositionalArgs(args);
+  const [reference, ...noteParts] = parseArgs(args).positionals();
   const note = noteParts.join(" ").trim();
 
   if (!reference || !note) {
@@ -24,10 +25,6 @@ export async function updateIssueNote(root: string, args: string[]): Promise<voi
   const issue = await updateLatestIssueNote(root, reference, note);
 
   console.log(`Updated ${issue.stableId} note.`);
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  return args.filter((arg) => !arg.startsWith("--"));
 }
 
 function isIssueStatus(value: string | undefined): value is IssueStatus {

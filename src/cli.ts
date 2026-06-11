@@ -28,6 +28,7 @@ import {
 } from "./cli/commands/proxy";
 import { startReplayViewer } from "./cli/commands/replay";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
+import { parseArgs } from "./cli/lib/args";
 import { VernierError } from "./cli/lib/errors";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { normalizeOverlayRuntimeOptions, type OverlayRuntimeOptions } from "./core/overlay-options";
@@ -53,7 +54,8 @@ interface CliContext {
 }
 
 async function createCliContext(args: string[]): Promise<CliContext> {
-  const verbose = args.includes("--verbose") || process.env.VERNIER_DEBUG === "1" || process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true;
+  const parsed = parseArgs(args);
+  const verbose = parsed.flag("--verbose") || process.env.VERNIER_DEBUG === "1" || process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true;
   const config = await loadConfig(args, verbose);
 
   return { config, verbose };
@@ -74,7 +76,7 @@ async function loadConfig(args: string[], verbose: boolean): Promise<VernierConf
 }
 
 async function findConfigPath(args: string[]): Promise<string | null> {
-  const explicit = readOption(args, "--config");
+  const explicit = parseArgs(args, { valueOptions: ["--config"] }).option("--config");
 
   if (explicit) {
     const resolved = path.resolve(process.cwd(), explicit);
@@ -356,12 +358,6 @@ async function main(): Promise<void> {
 
   printHelp();
   process.exit(command ? 1 : 0);
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  return index >= 0 ? args[index + 1] ?? null : null;
 }
 
 function expectConfigStringArray(value: unknown, field: string): string[] {

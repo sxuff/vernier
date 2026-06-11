@@ -1,4 +1,5 @@
 import { VernierError } from "../lib/errors";
+import { parseArgs } from "../lib/args";
 
 interface AttachConfig {
   target?: string;
@@ -57,7 +58,7 @@ export async function attachToLocalApp(
   const proxyArgs = ["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")];
   const options = dependencies.parseProxyOptions(proxyArgs, config);
 
-  await dependencies.startProxyServer(options, { open: !args.includes("--no-open") });
+  await dependencies.startProxyServer(options, { open: !parseArgs(args).flag("--no-open") });
 }
 
 async function resolveAttachTarget(
@@ -65,7 +66,8 @@ async function resolveAttachTarget(
   config: AttachConfig,
   dependencies: Pick<AttachDependencies, "resolveTargetOption">
 ): Promise<string> {
-  const explicitTarget = readOption(args, "--target") ?? readPositionalTarget(args);
+  const parsed = parseArgs(args, { valueOptions: ["--target", "--ports", "--port"] });
+  const explicitTarget = parsed.option("--target") ?? parsed.positionals().find(isUrlLike);
 
   if (explicitTarget) {
     return explicitTarget;
@@ -96,7 +98,7 @@ async function scanLocalApps(ports: number[]): Promise<DetectedApp[]> {
 }
 
 function parseDetectPorts(args: string[], config: AttachConfig): number[] {
-  const portsValue = readOption(args, "--ports");
+  const portsValue = parseArgs(args, { valueOptions: ["--ports"] }).option("--ports");
 
   if (!portsValue) {
     return config.detectPorts ?? readEnvPorts() ?? defaultDetectPorts;
@@ -179,16 +181,6 @@ function classifyDetectedApp(port: number, body: string, server: string, powered
   }
 
   return "HTTP app";
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  return index >= 0 ? args[index + 1] ?? null : null;
-}
-
-function readPositionalTarget(args: string[]): string | null {
-  return args.find((arg) => !arg.startsWith("-") && isUrlLike(arg)) ?? null;
 }
 
 function isUrlLike(value: string): boolean {

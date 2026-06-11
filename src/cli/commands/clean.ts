@@ -1,5 +1,6 @@
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { parseArgs } from "../lib/args";
 
 export async function cleanSessions(root: string, args: string[]): Promise<string> {
   const options = parseCleanOptions(args);
@@ -47,19 +48,20 @@ interface SessionDirectoryEntry {
 }
 
 function parseCleanOptions(args: string[]): CleanOptions {
-  const keepValue = readOption(args, "--keep") ?? "20";
+  const parsed = parseArgs(args, { valueOptions: ["--keep", "--older-than"] });
+  const keepValue = parsed.option("--keep") ?? "20";
   const keep = Number(keepValue);
 
   if (!Number.isInteger(keep) || keep < 0) {
     throw new Error(`Invalid --keep value: ${keepValue}`);
   }
 
-  const olderThanValue = readOption(args, "--older-than");
+  const olderThanValue = parsed.option("--older-than");
 
   return {
     keep,
     olderThanMs: olderThanValue ? parseDuration(olderThanValue) : null,
-    dryRun: args.includes("--dry-run")
+    dryRun: parsed.flag("--dry-run")
   };
 }
 
@@ -124,14 +126,4 @@ function uniqueSessionDirectories(entries: SessionDirectoryEntry[]): SessionDire
   }
 
   return result;
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  if (index === -1) {
-    return null;
-  }
-
-  return args[index + 1] ?? null;
 }

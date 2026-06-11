@@ -11,6 +11,7 @@ import {
   renderIssueTask,
   renderIssuesTask
 } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
 export interface HandoffConfig {
@@ -30,7 +31,7 @@ export async function showIssueCommand(root: string, args: string[]): Promise<vo
 export async function copyIssueCommand(root: string, args: string[]): Promise<void> {
   const task = renderIssueTask(await findLatestIssue(root, readRequiredReference(args, "copy")), readAgentTemplate(args));
 
-  if (args.includes("--print")) {
+  if (parseArgs(args).flag("--print")) {
     console.log(task);
     return;
   }
@@ -44,8 +45,9 @@ export async function planIssueCommand(root: string, args: string[]): Promise<vo
 }
 
 export async function sendIssueToAgent(root: string, args: string[], config: HandoffConfig): Promise<void> {
-  const reference = readPositionalArgs(args)[0] ?? "all";
-  const agent = readOption(args, "--to") ?? process.env.VERNIER_AGENT ?? config.agents?.default;
+  const parsed = parseArgs(args, { valueOptions: ["--to", "--template"] });
+  const reference = parsed.positionals()[0] ?? "all";
+  const agent = parsed.option("--to") ?? process.env.VERNIER_AGENT ?? config.agents?.default;
 
   if (agent !== "codex" && agent !== "claude") {
     throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier send <issue-id> --to codex|claude", "Set agents.default in vernier.config.json or VERNIER_AGENT to avoid passing --to every time.");
@@ -56,7 +58,7 @@ export async function sendIssueToAgent(root: string, args: string[], config: Han
     ? await createIssuesSendTask(root, args, template)
     : renderIssueTask(await findLatestIssue(root, reference), template);
 
-  if (args.includes("--print")) {
+  if (parsed.flag("--print")) {
     console.log(task);
     return;
   }
@@ -73,10 +75,11 @@ export async function sendIssueToAgent(root: string, args: string[], config: Han
 }
 
 async function createIssuesSendTask(root: string, args: string[], template: AgentTemplate): Promise<string> {
-  const issues = filterIssuesByStatus(await listLatestIssues(root), args.includes("--all") ? "all" : "todo");
+  const parsed = parseArgs(args);
+  const issues = filterIssuesByStatus(await listLatestIssues(root), parsed.flag("--all") ? "all" : "todo");
 
   if (issues.length === 0) {
-    return args.includes("--all")
+    return parsed.flag("--all")
       ? "No issues in latest Vernier session."
       : "No todo issues in latest Vernier session. Use --all to include fixed issues.";
   }
@@ -85,11 +88,13 @@ async function createIssuesSendTask(root: string, args: string[], template: Agen
 }
 
 function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
-  if (args.includes("--todo")) {
+  const parsed = parseArgs(args);
+
+  if (parsed.flag("--todo")) {
     return "todo";
   }
 
-  if (args.includes("--fixed")) {
+  if (parsed.flag("--fixed")) {
     return "fixed";
   }
 
@@ -97,7 +102,7 @@ function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
 }
 
 function readAgentTemplate(args: string[], fallbackAgent?: string): AgentTemplate {
-  const value = readOption(args, "--template") ?? fallbackAgent ?? "generic";
+  const value = parseArgs(args, { valueOptions: ["--template"] }).option("--template") ?? fallbackAgent ?? "generic";
 
   if (value === "generic" || value === "codex" || value === "claude" || value === "cursor" || value === "aider" || value === "strict") {
     return value;
@@ -107,7 +112,7 @@ function readAgentTemplate(args: string[], fallbackAgent?: string): AgentTemplat
 }
 
 function readRequiredReference(args: string[], command: string): string {
-  const reference = readPositionalArgs(args)[0];
+  const reference = parseArgs(args, { valueOptions: ["--template", "--to"] }).positionals()[0];
 
   if (!reference) {
     throw new Error(`Usage: vernier ${command} <issue-id>`);
@@ -176,36 +181,4 @@ function tryClipboardCommand(command: string[], value: string): Promise<boolean>
     child.on("exit", (code) => resolve(code === 0));
     child.stdin.end(value);
   });
-}
-
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  if (index === -1) {
-    return null;
-  }
-
-  return args[index + 1] ?? null;
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  const positional: string[] = [];
-  const optionsWithValues = new Set(["--template", "--to"]);
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
-
-    if (arg.startsWith("--")) {
-      if (optionsWithValues.has(arg)) {
-        index += 1;
-      }
-      continue;
-    }
-
-    if (!arg.startsWith("-")) {
-      positional.push(arg);
-    }
-  }
-
-  return positional;
 }

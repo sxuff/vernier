@@ -7,6 +7,7 @@ import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import { parseArgs } from "../lib/args";
+import { debugLog } from "../lib/debug";
 import { VernierError } from "../lib/errors";
 import { injectVernierOverlay } from "../../core/html";
 import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/overlay-options";
@@ -94,8 +95,10 @@ export async function startProxyServer(options: ProxyOptions, settings: { open: 
   console.log(`[vernier] proxy listening on ${proxyUrl}`);
   console.log(`[vernier] forwarding to ${options.target.origin}`);
   console.log(`[vernier] sessions write to ${options.root}`);
+  debugLog("proxy", `target=${options.target.toString()} port=${port} root=${options.root} outDir=${options.outDir ?? ".ui-feedback"}`);
 
   if (settings.open) {
+    debugLog("proxy", `opening ${proxyUrl}`);
     await openUrl(proxyUrl);
   }
 }
@@ -124,6 +127,7 @@ export function listenWithPortFallback(server: ReturnType<typeof createServer>, 
       const busyPort = port;
       port += 1;
       attempts += 1;
+      debugLog("proxy", `port ${busyPort} busy, trying ${port}`);
       console.log(`[vernier] Port ${busyPort} is busy.`);
       console.log(`[vernier] Using http://127.0.0.1:${port} instead.`);
       listen();
@@ -139,10 +143,12 @@ async function handleProxyRequest(
   response: ServerResponse
 ): Promise<void> {
   if (await handleVernierSessionRequest(options.root, request, response, { outDir: options.outDir })) {
+    debugLog("session", `${request.method ?? "GET"} ${request.url ?? ""}`);
     return;
   }
 
   const requestPath = request.url?.split("?")[0];
+  debugLog("proxy", `${request.method ?? "GET"} ${request.url ?? ""}`);
 
   if (requestPath === vernierOverlayPath) {
     sendJavaScript(
@@ -164,10 +170,12 @@ async function handleProxyRequest(
     await forwardRequest(options, request, response);
   } catch (error) {
     if (error instanceof ProxyRequestError) {
+      debugLog("proxy", `request failed ${error.statusCode}: ${error.message}`);
       sendText(response, error.statusCode, error.message);
       return;
     }
 
+    debugLog("proxy", `target error: ${error instanceof Error ? error.message : String(error)}`);
     sendProxyError(response, options.target, error);
   }
 }
@@ -179,6 +187,7 @@ function handleProxyUpgrade(
   head: Buffer
 ): void {
   const targetUrl = new URL(request.url ?? "/", options.target);
+  debugLog("proxy", `upgrade ${request.url ?? ""} -> ${targetUrl.toString()}`);
   const targetPort = Number(targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80));
   const upstream = targetUrl.protocol === "https:"
     ? connectTls(targetPort, targetUrl.hostname)
@@ -196,6 +205,7 @@ function handleProxyUpgrade(
   });
 
   upstream.on("error", () => {
+    debugLog("proxy", `upgrade failed ${targetUrl.toString()}`);
     socket.destroy();
   });
   socket.on("error", () => {
@@ -234,6 +244,7 @@ async function forwardRequest(
   response: ServerResponse
 ): Promise<void> {
   const targetUrl = new URL(request.url ?? "/", options.target);
+  debugLog("proxy", `forward ${request.method ?? "GET"} ${targetUrl.toString()}`);
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readRequestBody(request);
   const upstream = await fetch(targetUrl, {
     method: request.method,

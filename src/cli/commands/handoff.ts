@@ -115,7 +115,7 @@ function readRequiredReference(args: string[], command: string): string {
   const reference = parseArgs(args, { valueOptions: ["--template", "--to"] }).positionals()[0];
 
   if (!reference) {
-    throw new Error(`Usage: vernier ${command} <issue-id>`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Usage: vernier ${command} <issue-id>`, "Use `vernier issues` to find an issue id.");
   }
 
   return reference;
@@ -167,7 +167,7 @@ async function copyToClipboard(value: string): Promise<void> {
     }
   }
 
-  throw new Error("No clipboard command available. Run with --print to write the task to stdout.");
+  throw new VernierError("VERNIER_CLIPBOARD_UNAVAILABLE", "No clipboard command available.", "Run with --print to write the task to stdout.");
 }
 
 function tryClipboardCommand(command: string[], value: string): Promise<boolean> {

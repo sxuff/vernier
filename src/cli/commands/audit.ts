@@ -1,13 +1,14 @@
 import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "../../schema";
 import { listLatestIssues } from "../../core/issues";
 import { parseArgs } from "../lib/args";
+import { VernierError } from "../lib/errors";
 
 export async function auditLatestSession(root: string, args: string[]): Promise<string> {
   const parsed = parseArgs(args);
   const [kind = "a11y"] = parsed.positionals();
 
   if (kind !== "a11y" && kind !== "layout") {
-    throw new Error("Usage: vernier audit a11y|layout [--json]");
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier audit a11y|layout [--json]", "Use `vernier audit a11y` or `vernier audit layout`.");
   }
 
   const issues = await listLatestIssues(root);

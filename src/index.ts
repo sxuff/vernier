@@ -10,3 +10,4 @@ export { createAgentPrompt, readLatestSessionMarkdown } from "./core/handoff";
 export type { VernierIssue, VernierSession } from "./schema";
 export { parseArgs } from "./cli/lib/args";
 export type { ParsedArgs } from "./cli/lib/args";
+export { debugLog, isDebugEnabled, setDebugEnabled } from "./cli/lib/debug";

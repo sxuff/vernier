@@ -5,6 +5,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { listLatestIssues } from "../../core/issues";
 import { parseArgs } from "../lib/args";
+import { VernierError } from "../lib/errors";
 
 interface ReplayDependencies {
   root: string;
@@ -17,7 +18,7 @@ export async function startReplayViewer(args: string[], dependencies: ReplayDepe
   const reference = parsed.positionals()[0];
 
   if (reference && reference !== "latest") {
-    throw new Error("Usage: vernier replay latest [--port 3340|auto] [--no-open]");
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier replay latest [--port 3340|auto] [--no-open]", "Only the latest replay target is supported right now.");
   }
 
   const requestedPort = parsePortOption(args, 3340);
@@ -95,7 +96,7 @@ async function sendSessionFile(
   const filePath = path.resolve(sessionDirectory, relativePath);
 
   if (filePath !== safeRoot && !filePath.startsWith(`${safeRoot}${path.sep}`)) {
-    throw new Error("Unsafe replay path");
+    throw new VernierError("VERNIER_UNSAFE_PATH", "Unsafe replay path", "Replay can only serve files inside the selected Vernier session directory.");
   }
 
   response.statusCode = 200;
@@ -289,7 +290,7 @@ function parsePortOption(args: string[], fallbackPort: number): number | "auto" 
   const port = Number(portValue);
 
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid --port value: ${portValue}`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --port value: ${portValue}`, "Use a port from 1 to 65535, or --port auto.");
   }
 
   return port;

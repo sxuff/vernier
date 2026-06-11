@@ -1,6 +1,7 @@
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "../lib/args";
+import { VernierError } from "../lib/errors";
 
 export async function cleanSessions(root: string, args: string[]): Promise<string> {
   const options = parseCleanOptions(args);
@@ -21,7 +22,7 @@ export async function cleanSessions(root: string, args: string[]): Promise<strin
       const resolved = path.resolve(target.path);
 
       if (!resolved.startsWith(`${safeSessionsDirectory}${path.sep}`)) {
-        throw new Error(`Refusing to remove unsafe path: ${target.path}`);
+        throw new VernierError("VERNIER_UNSAFE_PATH", `Refusing to remove unsafe path: ${target.path}`, "Clean only removes session directories under .ui-feedback/sessions.");
       }
 
       await rm(resolved, { recursive: true, force: true });
@@ -53,7 +54,7 @@ function parseCleanOptions(args: string[]): CleanOptions {
   const keep = Number(keepValue);
 
   if (!Number.isInteger(keep) || keep < 0) {
-    throw new Error(`Invalid --keep value: ${keepValue}`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --keep value: ${keepValue}`, "Use a non-negative integer, for example --keep 20.");
   }
 
   const olderThanValue = parsed.option("--older-than");
@@ -69,7 +70,7 @@ function parseDuration(value: string): number {
   const match = value.match(/^(\d+)([dhm])$/);
 
   if (!match) {
-    throw new Error(`Invalid --older-than value: ${value}. Use values like 14d, 12h, or 30m.`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --older-than value: ${value}`, "Use values like 14d, 12h, or 30m.");
   }
 
   const amount = Number(match[1]);

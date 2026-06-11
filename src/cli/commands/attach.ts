@@ -1,5 +1,6 @@
 import { VernierError } from "../lib/errors";
 import { parseArgs } from "../lib/args";
+import { debugLog } from "../lib/debug";
 
 interface AttachConfig {
   target?: string;
@@ -55,6 +56,7 @@ export async function attachToLocalApp(
   dependencies: AttachDependencies
 ): Promise<void> {
   const target = await resolveAttachTarget(args, config, dependencies);
+  debugLog("attach", `target=${target}`);
   const proxyArgs = ["--target", target, ...args.filter((arg) => arg !== "--open" && arg !== "--no-open")];
   const options = dependencies.parseProxyOptions(proxyArgs, config);
 
@@ -92,6 +94,7 @@ async function resolveAttachTarget(
 }
 
 async function scanLocalApps(ports: number[]): Promise<DetectedApp[]> {
+  debugLog("detect", `scanning ports ${ports.join(",")}`);
   return (await Promise.all(ports.map((port) => detectPort(port)))).filter(
     (app): app is DetectedApp => Boolean(app)
   );
@@ -151,6 +154,7 @@ async function detectPort(port: number): Promise<DetectedApp | null> {
       label: classifyDetectedApp(port, body, server, poweredBy)
     };
   } catch {
+    debugLog("detect", `port ${port} unavailable`);
     return null;
   } finally {
     clearTimeout(timeout);

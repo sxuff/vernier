@@ -6,7 +6,7 @@ export async function markIssue(root: string, args: string[]): Promise<void> {
   const [reference, status] = parseArgs(args).positionals();
 
   if (!reference || !isIssueStatus(status)) {
-    throw new Error("Usage: vernier mark <issue-id> todo|fixed");
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier mark <issue-id> todo|fixed", "Use `vernier issues` to find an issue id.");
   }
 
   const issue = await markLatestIssue(root, reference, status);

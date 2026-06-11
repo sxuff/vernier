@@ -29,6 +29,7 @@ import {
 import { startReplayViewer } from "./cli/commands/replay";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
 import { parseArgs } from "./cli/lib/args";
+import { debugLog, setDebugEnabled } from "./cli/lib/debug";
 import { VernierError } from "./cli/lib/errors";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { normalizeOverlayRuntimeOptions, type OverlayRuntimeOptions } from "./core/overlay-options";
@@ -56,6 +57,7 @@ interface CliContext {
 async function createCliContext(args: string[]): Promise<CliContext> {
   const parsed = parseArgs(args);
   const verbose = parsed.flag("--verbose") || process.env.VERNIER_DEBUG === "1" || process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true;
+  setDebugEnabled(verbose);
   const config = await loadConfig(args, verbose);
 
   return { config, verbose };
@@ -65,13 +67,13 @@ async function loadConfig(args: string[], verbose: boolean): Promise<VernierConf
   const configPath = await findConfigPath(args);
 
   if (!configPath) {
-    debugLog(verbose, "config", "no config file found");
+    debugLog("config", "no config file found");
     return {};
   }
 
   const loaded = await readConfigFile(configPath);
   const config = validateConfig(loaded, configPath);
-  debugLog(verbose, "config", `loaded ${configPath}`);
+  debugLog("config", `loaded ${configPath}`);
   return config;
 }
 
@@ -225,12 +227,6 @@ function expectConfigAgent(value: unknown, field: string): "codex" | "claude" {
   }
 
   return value;
-}
-
-function debugLog(enabled: boolean, namespace: string, message: string): void {
-  if (enabled) {
-    console.error(`[vernier:${namespace}] ${message}`);
-  }
 }
 
 async function main(): Promise<void> {
@@ -432,9 +428,13 @@ main().catch((error) => {
     if (error.hint) {
       console.error(`Hint: ${error.hint}`);
     }
+    debugLog("error", error.stack ?? error.message);
     process.exit(1);
   }
 
   console.error(error instanceof Error ? error.message : error);
+  if (error instanceof Error) {
+    debugLog("error", error.stack ?? error.message);
+  }
   process.exit(1);
 });

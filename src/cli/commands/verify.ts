@@ -209,7 +209,7 @@ async function remeasureIssue(page: Page, issue: VernierIssue, tolerancePx: numb
   const measurement = issue.measurement;
 
   if (!measurement || measurement.kind === "annotation") {
-    throw new Error("Cannot compare an issue without element measurement data.");
+    throw new VernierError("VERNIER_UNSUPPORTED_ISSUE", "Cannot compare an issue without element measurement data.", "Annotation-only issues can be reviewed manually with `vernier show <issue-id>`.");
   }
 
   const selector = measurement.kind === "delta" ? measurement.target.selector : issue.selector;
@@ -815,7 +815,7 @@ function readRequiredReference(args: string[], command: string): string {
   const reference = parseArgs(args, { valueOptions: verifyValueOptions }).positionals()[0];
 
   if (!reference) {
-    throw new Error(`Usage: vernier ${command} <issue-id>`);
+    throw new VernierError("VERNIER_INVALID_OPTION", `Usage: vernier ${command} <issue-id>`, "Use `vernier issues` to find an issue id.");
   }
 
   return reference;

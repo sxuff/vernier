@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, VernierIssue, VernierSession } from "../../schema";
 import { findLatestIssue, type IssueStatus, renderIssueVerification } from "../../core/issues";
+import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 import { openUrl, parseUrlOption, resolveTargetOption } from "./proxy";
 
@@ -13,12 +14,15 @@ interface VerifyConfig {
   };
 }
 
+const verifyValueOptions = ["--target", "--port", "--config", "--tolerance", "--viewports", "--routes"];
+
 export async function verifyIssue(args: string[], config: VerifyConfig): Promise<void> {
+  const parsed = parseArgs(args, { valueOptions: verifyValueOptions });
   const reference = readRequiredReference(args, "verify");
   const issue = await findLatestIssue(process.cwd(), reference);
   const targetUrl = createIssueTargetUrl(resolveTargetOption(args, config), issue.session.route);
 
-  if (args.includes("--compare")) {
+  if (parsed.flag("--compare")) {
     console.log(await compareIssue(issue, targetUrl, readTolerance(args, config), readCompareViewports(args, issue.session.viewport)));
     return;
   }
@@ -27,7 +31,7 @@ export async function verifyIssue(args: string[], config: VerifyConfig): Promise
 
   console.log(verification);
 
-  if (args.includes("--open")) {
+  if (parsed.flag("--open")) {
     await openUrl(targetUrl);
   }
 }
@@ -98,7 +102,7 @@ export async function captureRoutes(args: string[], config: VerifyConfig): Promi
 }
 
 export async function diffArtifacts(args: string[]): Promise<string> {
-  const [leftReference, rightReference] = readPositionalArgs(args);
+  const [leftReference, rightReference] = parseArgs(args).positionals();
 
   if (!leftReference || !rightReference) {
     throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier diff <left-session-or-capture> <right-session-or-capture>", "Use `latest` for the latest feedback session, or pass artifact directories.");
@@ -459,7 +463,7 @@ function renderMultiViewportCompareReport(
 }
 
 function readTolerance(args: string[], config: VerifyConfig): number {
-  const value = readOption(args, "--tolerance") ?? String(config.verification?.bboxTolerancePx ?? 2);
+  const value = parseArgs(args, { valueOptions: verifyValueOptions }).option("--tolerance") ?? String(config.verification?.bboxTolerancePx ?? 2);
   const tolerance = Number(value);
 
   if (!Number.isFinite(tolerance) || tolerance < 0) {
@@ -470,7 +474,7 @@ function readTolerance(args: string[], config: VerifyConfig): number {
 }
 
 function readCompareViewports(args: string[], captured: VernierSession["viewport"]): CompareViewport[] {
-  const value = readOption(args, "--viewports");
+  const value = parseArgs(args, { valueOptions: verifyValueOptions }).option("--viewports");
 
   if (!value) {
     return [{
@@ -491,7 +495,7 @@ function readCompareViewports(args: string[], captured: VernierSession["viewport
 }
 
 function readCaptureViewports(args: string[]): CompareViewport[] {
-  const value = readOption(args, "--viewports");
+  const value = parseArgs(args, { valueOptions: verifyValueOptions }).option("--viewports");
 
   if (!value) {
     return [parseCompareViewport("desktop")!];
@@ -507,7 +511,8 @@ function readCaptureViewports(args: string[]): CompareViewport[] {
 }
 
 function readCaptureRoutes(args: string[]): string[] {
-  const value = readOption(args, "--routes") ?? readPositionalArgs(args)[0];
+  const parsed = parseArgs(args, { valueOptions: verifyValueOptions });
+  const value = parsed.option("--routes") ?? parsed.positionals()[0];
 
   if (!value) {
     throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]", "Provide a comma-separated --routes list.");
@@ -806,42 +811,14 @@ function formatSignedNumber(value: number): string {
 }
 
 
-function readOption(args: string[], name: string): string | null {
-  const index = args.indexOf(name);
-
-  return index >= 0 ? args[index + 1] ?? null : null;
-}
-
 function readRequiredReference(args: string[], command: string): string {
-  const reference = readPositionalArgs(args)[0];
+  const reference = parseArgs(args, { valueOptions: verifyValueOptions }).positionals()[0];
 
   if (!reference) {
     throw new Error(`Usage: vernier ${command} <issue-id>`);
   }
 
   return reference;
-}
-
-function readPositionalArgs(args: string[]): string[] {
-  const positional: string[] = [];
-  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template", "--viewports", "--routes"]);
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
-
-    if (arg.startsWith("--")) {
-      if (optionsWithValues.has(arg)) {
-        index += 1;
-      }
-      continue;
-    }
-
-    if (!arg.startsWith("-")) {
-      positional.push(arg);
-    }
-  }
-
-  return positional;
 }
 
 function createIssueTargetUrl(target: string, route: string): string {

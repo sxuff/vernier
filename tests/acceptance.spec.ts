@@ -55,6 +55,9 @@ test("exports measured UI feedback session", async ({ page }) => {
   });
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.move(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
+  await expect(page.locator("[data-vernier-guide-layer]")).toBeVisible();
+  await expect(page.locator("[data-vernier-guide-label='center +12px']")).toBeVisible();
+  await expect(page.locator("[data-vernier-guide-label='gap +20px']")).toBeVisible();
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.locator("[data-vernier-note]").fill("align these card edges");
   await page.locator("[data-vernier-add-issue]").click();

@@ -8,6 +8,7 @@ import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import { VernierError } from "../lib/errors";
 import { injectVernierOverlay } from "../../core/html";
+import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/overlay-options";
 import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
@@ -15,15 +16,18 @@ import {
 } from "../../core/overlay-script";
 import { handleVernierSessionRequest } from "../../core/session-handler";
 
-export interface ProxyOptions {
+export interface ProxyOptions extends SessionOutputOptions {
   target: URL;
   port: number | "auto";
   root: string;
+  overlay?: OverlayRuntimeOptions;
 }
 
 export interface ProxyConfig {
   target?: string;
   port?: number | "auto";
+  overlay?: OverlayRuntimeOptions;
+  outDir?: string;
 }
 
 const require = createRequire(import.meta.url);
@@ -39,7 +43,9 @@ export function parseProxyOptions(args: string[], config: ProxyConfig = {}): Pro
   return {
     target: parseUrlOption(targetValue, "target"),
     port,
-    root: process.cwd()
+    root: process.cwd(),
+    overlay: config.overlay,
+    outDir: config.outDir
   };
 }
 
@@ -130,7 +136,7 @@ async function handleProxyRequest(
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
-  if (await handleVernierSessionRequest(options.root, request, response)) {
+  if (await handleVernierSessionRequest(options.root, request, response, { outDir: options.outDir })) {
     return;
   }
 
@@ -139,7 +145,10 @@ async function handleProxyRequest(
   if (requestPath === vernierOverlayPath) {
     sendJavaScript(
       response,
-      createVernierOverlayScript({ html2canvasImportPath: vernierHtml2CanvasPath })
+      createVernierOverlayScript({
+        html2canvasImportPath: vernierHtml2CanvasPath,
+        runtimeOptions: options.overlay
+      })
     );
     return;
   }

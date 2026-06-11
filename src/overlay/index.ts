@@ -1,5 +1,6 @@
 import { createAnnotationLayer } from "./annotation";
 import { measureDelta, measureElement } from "./measure";
+import { matchesOverlayHotkey } from "./options";
 import { createPicker } from "./picker";
 import { createSessionController } from "./session";
 import { createOverlayRoot, renderIssueList, renderMeasurementPanel, setButtonEnabled } from "./ui";
@@ -174,9 +175,7 @@ export function startVernierOverlay(): void {
   }
 
   window.addEventListener("keydown", (event) => {
-    const pressedToggle = (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f";
-
-    if (!pressedToggle) {
+    if (!matchesOverlayHotkey(event)) {
       return;
     }
 

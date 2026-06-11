@@ -1,11 +1,15 @@
 import { cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import type { SessionOutputOptions } from "./overlay-options";
 import type { VernierSession } from "../schema";
 
-export async function writeSession(root: string, session: VernierSession): Promise<string> {
+const defaultFeedbackDirectory = ".ui-feedback";
+
+export async function writeSession(root: string, session: VernierSession, options: SessionOutputOptions = {}): Promise<string> {
+  const feedbackDirectory = resolveFeedbackDirectory(root, options.outDir);
   const slug = `${session.createdAt.replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}-${slugify(session.route)}`;
-  const baseDirectory = path.join(root, ".ui-feedback", "sessions", slug);
+  const baseDirectory = path.join(feedbackDirectory, "sessions", slug);
   const screenshotsDirectory = path.join(baseDirectory, "screenshots");
 
   await mkdir(screenshotsDirectory, { recursive: true });
@@ -21,7 +25,7 @@ export async function writeSession(root: string, session: VernierSession): Promi
         createdBy: "vernier",
         createdAt: session.createdAt,
         sessionId: session.sessionId,
-        privacy: "Screenshots and UI feedback are written only to this local .ui-feedback directory."
+        privacy: `Screenshots and UI feedback are written only to this local ${path.basename(feedbackDirectory)} directory.`
       },
       null,
       2
@@ -36,9 +40,25 @@ export async function writeSession(root: string, session: VernierSession): Promi
     path.join(screenshotsDirectory, session.fullPageScreenshotName),
     session.fullPageScreenshotDataUrl
   );
-  await updateLatestLink(root, baseDirectory);
+  await updateLatestLink(feedbackDirectory, baseDirectory);
 
   return baseDirectory;
+}
+
+export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackDirectory): string {
+  if (path.isAbsolute(outDir)) {
+    throw new Error("outDir must be relative to the project root");
+  }
+
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(resolvedRoot, outDir);
+  const relative = path.relative(resolvedRoot, resolved);
+
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("outDir must stay inside the project root");
+  }
+
+  return resolved;
 }
 
 export function renderSessionMarkdown(session: VernierSession): string {
@@ -166,8 +186,8 @@ function titleCase(value: string): string {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-async function updateLatestLink(root: string, targetDirectory: string): Promise<void> {
-  const latestPath = path.join(root, ".ui-feedback", "latest");
+async function updateLatestLink(feedbackDirectory: string, targetDirectory: string): Promise<void> {
+  const latestPath = path.join(feedbackDirectory, "latest");
   let latestKind = "junction";
 
   await rm(latestPath, { recursive: true, force: true });
@@ -180,11 +200,11 @@ async function updateLatestLink(root: string, targetDirectory: string): Promise<
   }
 
   await writeFile(
-    path.join(root, ".ui-feedback", "latest.json"),
+    path.join(feedbackDirectory, "latest.json"),
     `${JSON.stringify(
       {
         kind: latestKind,
-        target: path.relative(path.join(root, ".ui-feedback"), targetDirectory),
+        target: path.relative(feedbackDirectory, targetDirectory),
         updatedAt: new Date().toISOString()
       },
       null,

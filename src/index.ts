@@ -3,6 +3,7 @@ export type { VernierPluginOptions } from "./plugin";
 export { vernier as default } from "./plugin";
 export { injectVernierOverlay } from "./core/html";
 export { createVernierOverlayScript } from "./core/overlay-script";
+export type { OverlayRuntimeOptions, SessionOutputOptions } from "./core/overlay-options";
 export { handleVernierSessionRequest } from "./core/session-handler";
 export { writeSession } from "./core/session-writer";
 export { createAgentPrompt, readLatestSessionMarkdown } from "./core/handoff";

@@ -30,14 +30,18 @@ import { startReplayViewer } from "./cli/commands/replay";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
 import { VernierError } from "./cli/lib/errors";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
+import { normalizeOverlayRuntimeOptions, type OverlayRuntimeOptions } from "./core/overlay-options";
+import { resolveFeedbackDirectory } from "./core/session-writer";
 
 interface VernierConfig {
   target?: string;
   port?: number | "auto";
+  outDir?: string;
   detectPorts?: number[];
   verification?: {
     bboxTolerancePx?: number;
   };
+  overlay?: OverlayRuntimeOptions;
   agents?: {
     default?: "codex" | "claude";
   };
@@ -130,6 +134,11 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
     result.port = expectConfigPort(config.port, "port");
   }
 
+  if (config.outDir !== undefined) {
+    result.outDir = expectConfigString(config.outDir, "outDir");
+    resolveFeedbackDirectory(process.cwd(), result.outDir);
+  }
+
   if (config.detectPorts !== undefined) {
     result.detectPorts = expectConfigPorts(config.detectPorts, "detectPorts");
   }
@@ -141,6 +150,15 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
     if (verification.bboxTolerancePx !== undefined) {
       result.verification.bboxTolerancePx = expectConfigNonNegativeNumber(verification.bboxTolerancePx, "verification.bboxTolerancePx");
     }
+  }
+
+  if (config.overlay !== undefined) {
+    const overlay = expectOptionalRecord(config.overlay, "overlay");
+    result.overlay = normalizeOverlayRuntimeOptions({
+      hotkey: overlay.hotkey === undefined ? undefined : expectConfigString(overlay.hotkey, "overlay.hotkey"),
+      styleProperties: overlay.styleProperties === undefined ? undefined : expectConfigStringArray(overlay.styleProperties, "overlay.styleProperties"),
+      redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact")
+    });
   }
 
   if (config.agents !== undefined) {
@@ -346,6 +364,14 @@ function readOption(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
+function expectConfigStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be an array of non-empty strings.`);
+  }
+
+  return value.map((item, index) => expectConfigString(item, `${field}[${index}]`));
+}
+
 async function openLatestSessionDirectory(root: string): Promise<void> {
   const latestDirectory = path.join(root, ".ui-feedback", "latest");
 
@@ -395,7 +421,7 @@ function printHelp(): void {
       "  vernier open",
       "",
       "Config:",
-      "  vernier.config.json|js|mjs|cjs can set target, port, detectPorts, verification.bboxTolerancePx, and agents.default.",
+      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, verification.bboxTolerancePx, and agents.default.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",
       `Latest session path: ${latestSessionMarkdownPath}`

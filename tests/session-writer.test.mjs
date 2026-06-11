@@ -33,6 +33,10 @@ assert(markdown.includes(`Session ID: ${second.sessionId}`), "markdown should in
 const inventory = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "screenshots.json"), "utf8"));
 assert(inventory.length === 2, "screenshot inventory should include full-page and issue screenshots");
 
+const customDirectory = await writeSession(root, createSession("s-customsession", "i-customissue", createdAt), { outDir: ".vernier-feedback" });
+assert(customDirectory.includes(".vernier-feedback"), "custom outDir should be used for session writes");
+await assertFile(path.join(root, ".vernier-feedback", "latest", "session.json"), "custom outDir should have a latest session");
+
 console.log("session writer verified");
 
 async function assertFile(filePath, message) {

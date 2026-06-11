@@ -1,4 +1,5 @@
 import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement, StackingContext, TextMetrics } from "../schema";
+import { getStylePropertyNames } from "./options";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
 import { createElementTarget } from "./target";
@@ -9,16 +10,7 @@ export interface MeasurementDraft {
 }
 
 export function stylePropertyNames(): string[] {
-  return [
-    "font-size",
-    "color",
-    "background-color",
-    "padding",
-    "margin",
-    "width",
-    "height",
-    "border-radius"
-  ];
+  return getStylePropertyNames();
 }
 
 export function measureElement(element: Element): MeasurementDraft {

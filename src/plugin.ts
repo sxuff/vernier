@@ -1,5 +1,6 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { injectVernierOverlay } from "./core/html";
+import type { OverlayRuntimeOptions, SessionOutputOptions } from "./core/overlay-options";
 import { createVernierOverlayScript, vernierOverlayPath } from "./core/overlay-script";
 import { registerSessionMiddleware } from "./middleware";
 
@@ -7,7 +8,7 @@ const virtualOverlayId = "virtual:vernier-overlay";
 const resolvedVirtualOverlayId = `\0${virtualOverlayId}`;
 const servedVirtualOverlayId = `/@id/${virtualOverlayId}`;
 
-export interface VernierPluginOptions {
+export interface VernierPluginOptions extends OverlayRuntimeOptions, SessionOutputOptions {
   enabled?: boolean;
 }
 
@@ -21,7 +22,7 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
       config = resolvedConfig;
     },
     configureServer(server) {
-      registerSessionMiddleware(server);
+      registerSessionMiddleware(server, { outDir: options.outDir });
     },
     resolveId(id) {
       if (id === virtualOverlayId) {
@@ -35,7 +36,14 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
         return null;
       }
 
-      return createVernierOverlayScript({ html2canvasImportPath: "html2canvas" });
+      return createVernierOverlayScript({
+        html2canvasImportPath: "html2canvas",
+        runtimeOptions: {
+          hotkey: options.hotkey,
+          styleProperties: options.styleProperties,
+          redact: options.redact
+        }
+      });
     },
     transformIndexHtml(html) {
       const isDevServer = config.command === "serve";

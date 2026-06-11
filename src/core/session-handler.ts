@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, ScreenshotArtifact, StackingContext, TextMetrics, VernierSession } from "../schema";
+import type { SessionOutputOptions } from "./overlay-options";
 import { writeSession } from "./session-writer";
 
 export const vernierSessionPath = "/__vernier/session";
@@ -10,7 +11,8 @@ const maxScreenshotBytes = 10 * 1024 * 1024;
 export async function handleVernierSessionRequest(
   root: string,
   request: IncomingMessage,
-  response: ServerResponse
+  response: ServerResponse,
+  options: SessionOutputOptions = {}
 ): Promise<boolean> {
   const requestPath = request.url?.split("?")[0];
 
@@ -25,7 +27,7 @@ export async function handleVernierSessionRequest(
 
   try {
     const session = validateSession(parseSessionJson(await readLimitedBody(request, maxBodyBytes)));
-    const sessionDirectory = await writeSession(root, session);
+    const sessionDirectory = await writeSession(root, session, options);
 
     sendJson(response, 200, { ok: true, sessionDirectory });
   } catch (error) {

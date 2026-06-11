@@ -1,4 +1,5 @@
 import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
+import { getRedactionSelectors } from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -309,10 +310,24 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   }
 
   function autoRedactionTargets(root: ParentNode): Element[] {
-    const selector = 'input[type="password"], [data-vernier-redact]';
-    const targets = Array.from(root.querySelectorAll(selector));
+    const selectors = getRedactionSelectors();
+    const targets = selectors.flatMap((selector) => {
+      try {
+        return Array.from(root.querySelectorAll(selector));
+      } catch {
+        return [];
+      }
+    });
 
-    return root instanceof Element && root.matches(selector) ? [root, ...targets] : targets;
+    const rootMatches = root instanceof Element && selectors.some((selector) => {
+      try {
+        return root.matches(selector);
+      } catch {
+        return false;
+      }
+    });
+
+    return rootMatches ? [root, ...targets] : targets;
   }
 
   function applyAutoRedaction(clonedDocument: Document): void {

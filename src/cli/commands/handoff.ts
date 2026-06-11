@@ -189,5 +189,23 @@ function readOption(args: string[], name: string): string | null {
 }
 
 function readPositionalArgs(args: string[]): string[] {
-  return args.filter((arg) => !arg.startsWith("--"));
+  const positional: string[] = [];
+  const optionsWithValues = new Set(["--template", "--to"]);
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+
+    if (arg.startsWith("--")) {
+      if (optionsWithValues.has(arg)) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (!arg.startsWith("-")) {
+      positional.push(arg);
+    }
+  }
+
+  return positional;
 }

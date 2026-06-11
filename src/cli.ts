@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { connect as connectNet } from "node:net";
@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement, VernierSession } from "./schema";
+import { cleanSessions } from "./cli/commands/clean";
+import { runDoctor } from "./cli/commands/doctor";
 import { createAgentPrompt, latestSessionMarkdownPath, readLatestSessionMarkdown } from "./core/handoff";
 import { injectVernierOverlay } from "./core/html";
 import {
@@ -507,172 +509,6 @@ async function startReplayViewer(args: string[]): Promise<void> {
   if (!args.includes("--no-open")) {
     await openUrl(url);
   }
-}
-
-async function runDoctor(root: string): Promise<string> {
-  const gitignorePath = path.join(root, ".gitignore");
-  const lines = ["Vernier doctor", ""];
-  let gitignore = "";
-
-  try {
-    gitignore = await readFile(gitignorePath, "utf8");
-  } catch {
-    lines.push("Warning: .gitignore was not found.");
-    lines.push("Hint: add .ui-feedback/ so captured screenshots are not committed.");
-  }
-
-  if (gitignore) {
-    if (gitignoreIgnoresFeedback(gitignore)) {
-      lines.push("OK: .ui-feedback is ignored by .gitignore.");
-    } else {
-      lines.push("Warning: .ui-feedback is not ignored by .gitignore.");
-      lines.push("Hint: add .ui-feedback/ so captured screenshots are not committed.");
-    }
-  }
-
-  const feedbackDirectory = path.join(root, ".ui-feedback");
-  try {
-    await access(feedbackDirectory);
-    lines.push(`OK: feedback directory exists at ${feedbackDirectory}`);
-  } catch {
-    lines.push("OK: no .ui-feedback directory yet.");
-  }
-
-  lines.push("OK: Vernier captures are local files; no network uploads are performed by Vernier.");
-
-  return lines.join("\n");
-}
-
-async function cleanSessions(root: string, args: string[]): Promise<string> {
-  const options = parseCleanOptions(args);
-  const sessionsDirectory = path.join(root, ".ui-feedback", "sessions");
-  const safeSessionsDirectory = path.resolve(sessionsDirectory);
-  const entries = await readSessionDirectories(sessionsDirectory);
-  const olderThanCutoff = options.olderThanMs === null ? null : Date.now() - options.olderThanMs;
-  const byKeep = entries.slice(options.keep);
-  const byAge = olderThanCutoff === null ? [] : entries.filter((entry) => entry.mtimeMs < olderThanCutoff);
-  const targets = uniqueSessionDirectories([...byKeep, ...byAge]);
-
-  if (targets.length === 0) {
-    return "No Vernier sessions to clean.";
-  }
-
-  if (!options.dryRun) {
-    for (const target of targets) {
-      const resolved = path.resolve(target.path);
-
-      if (!resolved.startsWith(`${safeSessionsDirectory}${path.sep}`)) {
-        throw new Error(`Refusing to remove unsafe path: ${target.path}`);
-      }
-
-      await rm(resolved, { recursive: true, force: true });
-    }
-  }
-
-  return [
-    options.dryRun ? "Dry run: would remove Vernier sessions:" : "Removed Vernier sessions:",
-    ...targets.map((target) => `- ${path.relative(root, target.path)}`),
-    "",
-    `${targets.length} session${targets.length === 1 ? "" : "s"} ${options.dryRun ? "would be removed" : "removed"}.`
-  ].join("\n");
-}
-
-interface CleanOptions {
-  keep: number;
-  olderThanMs: number | null;
-  dryRun: boolean;
-}
-
-interface SessionDirectoryEntry {
-  path: string;
-  mtimeMs: number;
-}
-
-function parseCleanOptions(args: string[]): CleanOptions {
-  const keepValue = readOption(args, "--keep") ?? "20";
-  const keep = Number(keepValue);
-
-  if (!Number.isInteger(keep) || keep < 0) {
-    throw new Error(`Invalid --keep value: ${keepValue}`);
-  }
-
-  const olderThanValue = readOption(args, "--older-than");
-
-  return {
-    keep,
-    olderThanMs: olderThanValue ? parseDuration(olderThanValue) : null,
-    dryRun: args.includes("--dry-run")
-  };
-}
-
-function parseDuration(value: string): number {
-  const match = value.match(/^(\d+)([dhm])$/);
-
-  if (!match) {
-    throw new Error(`Invalid --older-than value: ${value}. Use values like 14d, 12h, or 30m.`);
-  }
-
-  const amount = Number(match[1]);
-  const unit = match[2];
-  const multipliers: Record<string, number> = {
-    m: 60 * 1000,
-    h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000
-  };
-
-  return amount * multipliers[unit]!;
-}
-
-async function readSessionDirectories(sessionsDirectory: string): Promise<SessionDirectoryEntry[]> {
-  let entries;
-  try {
-    entries = await readdir(sessionsDirectory, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const directories = await Promise.all(entries.map(async (entry) => {
-    if (!entry.isDirectory()) {
-      return null;
-    }
-
-    const directoryPath = path.join(sessionsDirectory, entry.name);
-    const directoryStat = await stat(directoryPath);
-
-    return {
-      path: directoryPath,
-      mtimeMs: directoryStat.mtimeMs
-    };
-  }));
-
-  return directories
-    .filter((entry): entry is SessionDirectoryEntry => entry !== null)
-    .sort((left, right) => right.mtimeMs - left.mtimeMs);
-}
-
-function uniqueSessionDirectories(entries: SessionDirectoryEntry[]): SessionDirectoryEntry[] {
-  const seen = new Set<string>();
-  const result: SessionDirectoryEntry[] = [];
-
-  for (const entry of entries) {
-    const resolved = path.resolve(entry.path);
-
-    if (seen.has(resolved)) {
-      continue;
-    }
-
-    seen.add(resolved);
-    result.push(entry);
-  }
-
-  return result;
-}
-
-function gitignoreIgnoresFeedback(gitignore: string): boolean {
-  return gitignore
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => line === ".ui-feedback" || line === ".ui-feedback/" || line === "/.ui-feedback" || line === "/.ui-feedback/");
 }
 
 async function auditLatestSession(root: string, args: string[]): Promise<string> {

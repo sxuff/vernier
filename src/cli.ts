@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { connect as connectNet } from "node:net";
@@ -9,13 +9,13 @@ import { Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
 import path from "node:path";
-import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, VernierIssue, VernierSession } from "./schema";
 import { auditLatestSession } from "./cli/commands/audit";
 import { cleanSessions } from "./cli/commands/clean";
 import { runDoctor } from "./cli/commands/doctor";
+import { handleGitHubCommand } from "./cli/commands/github";
 import { markIssue, updateIssueNote } from "./cli/commands/issues";
 import { startMcpServer } from "./cli/commands/mcp";
 import { startReplayViewer } from "./cli/commands/replay";
@@ -29,8 +29,6 @@ import {
   type IssueStatus,
   listLatestIssues,
   renderIssueDetail,
-  renderGitHubIssueBody,
-  renderGitHubIssueTitle,
   renderIssueList,
   renderIssuePlan,
   renderIssueTask,
@@ -317,7 +315,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "github") {
-    await handleGitHubCommand(args);
+    await handleGitHubCommand(process.cwd(), args);
     return;
   }
 
@@ -1172,68 +1170,6 @@ function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
-async function handleGitHubCommand(args: string[]): Promise<void> {
-  const [action = "body", reference = "all"] = readPositionalArgs(args);
-
-  if (action !== "body" && action !== "create") {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback]", "Use `vernier github body <issue-id>` to preview without network.");
-  }
-
-  const issues = await resolveGitHubIssues(reference);
-
-  if (action === "body") {
-    console.log(renderGitHubIssuesPreview(issues));
-    return;
-  }
-
-  await createGitHubIssues(issues, readOption(args, "--label") ?? "ui-feedback");
-}
-
-async function resolveGitHubIssues(reference: string): Promise<Awaited<ReturnType<typeof listLatestIssues>>> {
-  if (reference === "all") {
-    return filterIssuesByStatus(await listLatestIssues(process.cwd()), "todo");
-  }
-
-  return [await findLatestIssue(process.cwd(), reference)];
-}
-
-function renderGitHubIssuesPreview(issues: Awaited<ReturnType<typeof listLatestIssues>>): string {
-  if (issues.length === 0) {
-    return "No todo issues in latest Vernier session.";
-  }
-
-  return issues.flatMap((issue, index) => [
-    index === 0 ? "" : "\n---\n",
-    `Title: ${renderGitHubIssueTitle(issue)}`,
-    "",
-    renderGitHubIssueBody(issue)
-  ]).join("\n").trim();
-}
-
-async function createGitHubIssues(
-  issues: Awaited<ReturnType<typeof listLatestIssues>>,
-  label: string
-): Promise<void> {
-  if (issues.length === 0) {
-    console.log("No todo issues in latest Vernier session.");
-    return;
-  }
-
-  const tempDirectory = await mkdtemp(path.join(tmpdir(), "vernier-github-"));
-
-  try {
-    for (const issue of issues) {
-      const bodyPath = path.join(tempDirectory, `${issue.stableId}.md`);
-      await writeFile(bodyPath, `${renderGitHubIssueBody(issue)}\n`);
-      const args = ["issue", "create", "--title", renderGitHubIssueTitle(issue), "--body-file", bodyPath, "--label", label];
-      const url = await runProcess("gh", args);
-      console.log(`Created GitHub issue for ${issue.stableId}: ${url.trim()}`);
-    }
-  } finally {
-    await rm(tempDirectory, { recursive: true, force: true });
-  }
-}
-
 function readIssueStatusFilter(args: string[]): IssueStatus | "all" {
   if (args.includes("--todo")) {
     return "todo";
@@ -1331,40 +1267,6 @@ async function runAgent(agent: "codex" | "claude", task: string): Promise<"start
       }
 
       reject(new Error(`${executable} exited with code ${code}`));
-    });
-  });
-}
-
-function runProcess(executable: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, {
-      cwd: process.cwd(),
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error) => {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        reject(new VernierError("VERNIER_GH_MISSING", "Could not find the gh CLI on PATH.", "Install and authenticate GitHub CLI, or run `vernier github body` to preview the issue body."));
-        return;
-      }
-
-      reject(new Error(`Could not start ${executable}: ${error.message}`));
-    });
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-
-      reject(new VernierError("VERNIER_GH_FAILED", `${executable} exited with code ${code}`, stderr.trim() || "Run gh auth status to check authentication."));
     });
   });
 }

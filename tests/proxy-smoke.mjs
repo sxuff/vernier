@@ -374,6 +374,24 @@ try {
   if (multiCompareReport.viewports?.length !== 2) {
     throw new Error(`Expected multi-viewport report artifacts:\n${JSON.stringify(multiCompareReport, null, 2)}`);
   }
+  const captureOutput = await runNode([
+    "dist/cli.js",
+    "capture",
+    "--target",
+    `http://127.0.0.1:${proxyPort}`,
+    "--routes",
+    "/",
+    "--viewports",
+    "390x844,desktop"
+  ]);
+  const captureDirectory = captureOutput.match(/Artifacts: (.+)/)?.[1]?.trim();
+  if (!captureOutput.includes("Captured 2 screenshots.") || !captureDirectory) {
+    throw new Error(`Expected capture command to report batch artifacts:\n${captureOutput}`);
+  }
+  const captureReport = JSON.parse(await readFile(path.join(captureDirectory, "capture.json"), "utf8"));
+  if (captureReport.screenshotCount !== 2 || captureReport.records?.some((record) => !record.screenshotName)) {
+    throw new Error(`Expected capture report to include two screenshot records:\n${JSON.stringify(captureReport, null, 2)}`);
+  }
 
   const replay = spawn(
     process.execPath,

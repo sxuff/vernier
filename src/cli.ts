@@ -331,6 +331,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "capture") {
+    console.log(await captureRoutes(args, context.config));
+    return;
+  }
+
   if (command === "replay") {
     await startReplayViewer(args);
     return;
@@ -392,6 +397,71 @@ async function verifyIssue(args: string[], config: VernierConfig): Promise<void>
   if (args.includes("--open")) {
     await openUrl(targetUrl);
   }
+}
+
+async function captureRoutes(args: string[], config: VernierConfig): Promise<string> {
+  const target = parseUrlOption(resolveTargetOption(args, config), "target");
+  const routes = readCaptureRoutes(args);
+  const viewports = readCaptureViewports(args);
+  const captureDirectory = path.join(process.cwd(), ".ui-feedback", "captures", new Date().toISOString().replace(/[:.]/g, "-"));
+  const screenshotsDirectory = path.join(captureDirectory, "screenshots");
+  const records: Array<{
+    route: string;
+    url: string;
+    viewport: CompareViewport;
+    screenshotName: string;
+    status: number | null;
+    title: string;
+  }> = [];
+  const { chromium } = await import("playwright");
+  let browser: Browser | null = null;
+
+  await mkdir(screenshotsDirectory, { recursive: true });
+
+  try {
+    browser = await chromium.launch({ headless: true });
+
+    for (const route of routes) {
+      for (const viewport of viewports) {
+        const page = await browser.newPage({
+          viewport: {
+            width: viewport.width,
+            height: viewport.height
+          },
+          deviceScaleFactor: viewport.devicePixelRatio
+        });
+
+        try {
+          const url = new URL(route, target).toString();
+          const response = await page.goto(url, { waitUntil: "networkidle" });
+          const screenshotName = `${slugifyCapturePart(route)}-${viewportArtifactName(viewport)}.png`;
+          await page.screenshot({ path: path.join(screenshotsDirectory, screenshotName), fullPage: true });
+          records.push({
+            route,
+            url,
+            viewport,
+            screenshotName,
+            status: response?.status() ?? null,
+            title: await page.title()
+          });
+        } finally {
+          await page.close();
+        }
+      }
+    }
+  } finally {
+    await browser?.close();
+  }
+
+  await writeCaptureReport(captureDirectory, target.toString(), records);
+
+  return [
+    `Captured ${records.length} screenshot${records.length === 1 ? "" : "s"}.`,
+    `Target: ${target.toString()}`,
+    `Routes: ${routes.join(", ")}`,
+    `Viewports: ${viewports.map(formatCompareViewport).join(", ")}`,
+    `Artifacts: ${captureDirectory}`
+  ].join("\n");
 }
 
 async function startReplayViewer(args: string[]): Promise<void> {
@@ -1856,6 +1926,38 @@ function readCompareViewports(args: string[], captured: VernierSession["viewport
   return viewports;
 }
 
+function readCaptureViewports(args: string[]): CompareViewport[] {
+  const value = readOption(args, "--viewports");
+
+  if (!value) {
+    return [parseCompareViewport("desktop")!];
+  }
+
+  const viewports = value.split(",").map((item) => parseCompareViewport(item.trim())).filter((item): item is CompareViewport => item !== null);
+
+  if (viewports.length === 0) {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --viewports value: ${value}`, "Use names like mobile,tablet,desktop or sizes like 390x844,768x1024,1440x900@2.");
+  }
+
+  return viewports;
+}
+
+function readCaptureRoutes(args: string[]): string[] {
+  const value = readOption(args, "--routes") ?? readPositionalArgs(args)[0];
+
+  if (!value) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]", "Provide a comma-separated --routes list.");
+  }
+
+  const routes = value.split(",").map((route) => route.trim()).filter(Boolean);
+
+  if (routes.length === 0) {
+    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --routes value: ${value}`, "Provide at least one route, for example --routes /,/pricing.");
+  }
+
+  return routes;
+}
+
 function parseCompareViewport(value: string): CompareViewport | null {
   if (value === "mobile") {
     return { label: "mobile", width: 390, height: 844, devicePixelRatio: 1 };
@@ -1897,6 +1999,51 @@ function viewportArtifactName(viewport: CompareViewport): string {
 
 function formatCompareViewport(viewport: CompareViewport): string {
   return `${viewport.label} ${viewport.width}x${viewport.height} @${viewport.devicePixelRatio}x`;
+}
+
+async function writeCaptureReport(
+  captureDirectory: string,
+  target: string,
+  records: Array<{
+    route: string;
+    url: string;
+    viewport: CompareViewport;
+    screenshotName: string;
+    status: number | null;
+    title: string;
+  }>
+): Promise<void> {
+  const report = {
+    createdAt: new Date().toISOString(),
+    target,
+    screenshotCount: records.length,
+    records
+  };
+
+  await writeFile(path.join(captureDirectory, "capture.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(path.join(captureDirectory, "capture.md"), `${[
+    "# Vernier Batch Capture",
+    "",
+    `Target: ${target}`,
+    `Screenshot count: ${records.length}`,
+    "",
+    ...records.map((record) => [
+      `## ${record.route} - ${formatCompareViewport(record.viewport)}`,
+      `URL: ${record.url}`,
+      `Status: ${record.status ?? "unknown"}`,
+      `Title: ${record.title || "untitled"}`,
+      `Screenshot: ./screenshots/${record.screenshotName}`,
+      ""
+    ].join("\n"))
+  ].join("\n")}\n`);
+}
+
+function slugifyCapturePart(value: string): string {
+  return value
+    .replace(/^https?:\/\//, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || "root";
 }
 
 function roundNumber(value: number): number {
@@ -2753,7 +2900,7 @@ function isIssueStatus(value: string | undefined): value is IssueStatus {
 
 function readPositionalArgs(args: string[]): string[] {
   const positional: string[] = [];
-  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template", "--viewports"]);
+  const optionsWithValues = new Set(["--target", "--port", "--ports", "--to", "--keep", "--older-than", "--tolerance", "--config", "--label", "--template", "--viewports", "--routes"]);
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -2836,6 +2983,7 @@ function printHelp(): void {
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
       "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2] [--viewports mobile,tablet,desktop|390x844,1440x900]",
+      "  vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]",
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",

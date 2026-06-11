@@ -69,6 +69,7 @@ export function renderSessionMarkdown(session: VernierSession): string {
       "",
       "Target:",
       `Selector: ${issue.selector}`,
+      ...formatTargetEvidence(issue),
       `Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
       `Source: ${issue.source}`,
       `Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
@@ -115,6 +116,19 @@ function formatTarget(issue: VernierSession["issues"][number]): string {
   ].filter(Boolean);
 
   return parts.join(" ");
+}
+
+function formatTargetEvidence(issue: VernierSession["issues"][number]): string[] {
+  const target = issue.target;
+
+  if (!target) {
+    return [];
+  }
+
+  return [
+    target.fallbackSelector ? `Fallback selector: ${target.fallbackSelector}` : null,
+    target.nearestLandmark ? `Nearest landmark: ${target.nearestLandmark}` : null
+  ].filter((line): line is string => line !== null);
 }
 
 function formatMeasured(measured: string): string[] {

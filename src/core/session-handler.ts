@@ -469,6 +469,7 @@ function validateTarget(value: unknown, field: string): VernierSession["issues"]
 
   return {
     selector: expectString(target.selector, `${field}.selector`),
+    fallbackSelector: expectOptionalString(target.fallbackSelector, `${field}.fallbackSelector`),
     selectorConfidence: expectConfidence(target.selectorConfidence, `${field}.selectorConfidence`),
     selectorReason: expectString(target.selectorReason, `${field}.selectorReason`),
     tag: expectString(target.tag, `${field}.tag`),
@@ -479,6 +480,7 @@ function validateTarget(value: unknown, field: string): VernierSession["issues"]
     accessibleName: expectOptionalString(target.accessibleName, `${field}.accessibleName`),
     testId: expectOptionalString(target.testId, `${field}.testId`),
     nearestTestId: expectOptionalString(target.nearestTestId, `${field}.nearestTestId`),
+    nearestLandmark: expectOptionalString(target.nearestLandmark, `${field}.nearestLandmark`),
     source: expectString(target.source, `${field}.source`),
     sourceConfidence: expectConfidence(target.sourceConfidence, `${field}.sourceConfidence`),
     sourceResolver: expectString(target.sourceResolver, `${field}.sourceResolver`),

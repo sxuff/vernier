@@ -1,9 +1,10 @@
 import type { ElementTarget } from "../schema";
-import { getStableSelector } from "./selector";
+import { getFallbackSelector, getStableSelector } from "./selector";
 import { resolveSource } from "./source";
 
 export function createElementTarget(element: Element): ElementTarget {
   const selector = getStableSelector(element);
+  const fallbackSelector = getFallbackSelector(element);
   const source = resolveSource(element);
   const testId = element.getAttribute("data-testid") ?? undefined;
   const role = element.getAttribute("role") ?? implicitRole(element) ?? undefined;
@@ -11,6 +12,7 @@ export function createElementTarget(element: Element): ElementTarget {
 
   return {
     selector,
+    fallbackSelector: fallbackSelector === selector ? undefined : fallbackSelector,
     selectorConfidence: selectorConfidence(selector),
     selectorReason: selectorReason(selector),
     tag: element.tagName.toLowerCase(),
@@ -21,6 +23,7 @@ export function createElementTarget(element: Element): ElementTarget {
     accessibleName,
     testId,
     nearestTestId: nearestAttribute(element, "data-testid"),
+    nearestLandmark: nearestLandmark(element),
     source: source.source,
     sourceConfidence: source.confidence,
     sourceResolver: source.resolver,
@@ -99,6 +102,22 @@ export function nearestAttribute(element: Element, attribute: string): string | 
   return undefined;
 }
 
+export function nearestLandmark(element: Element): string | undefined {
+  let current: Element | null = element;
+
+  while (current && current !== document.documentElement) {
+    const landmark = landmarkSummary(current);
+
+    if (landmark) {
+      return landmark;
+    }
+
+    current = current.parentElement;
+  }
+
+  return undefined;
+}
+
 export function ancestry(element: Element): ElementTarget["ancestry"] {
   const chain: ElementTarget["ancestry"] = [];
   let current: Element | null = element;
@@ -135,6 +154,27 @@ export function implicitRole(element: Element): string | null {
 
   if (tag === "nav") {
     return "navigation";
+  }
+
+  return null;
+}
+
+function landmarkSummary(element: Element): string | null {
+  const tag = element.tagName.toLowerCase();
+  const role = element.getAttribute("role");
+  const label = element.getAttribute("aria-label");
+  const landmarkRoles = new Set(["banner", "complementary", "contentinfo", "form", "main", "navigation", "region", "search"]);
+
+  if (tag === "main" || tag === "nav" || tag === "header" || tag === "footer" || tag === "aside" || tag === "form") {
+    return label ? `${tag}[aria-label="${label}"]` : tag;
+  }
+
+  if (tag === "section" && label) {
+    return `${tag}[aria-label="${label}"]`;
+  }
+
+  if (role && landmarkRoles.has(role)) {
+    return label ? `[role="${role}"][aria-label="${label}"]` : `[role="${role}"]`;
   }
 
   return null;

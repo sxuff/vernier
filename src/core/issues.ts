@@ -154,6 +154,7 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     "",
     "Target:",
     `Selector: ${issue.selector}`,
+    ...formatTargetEvidence(issue),
     `Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}`,
     `Source: ${issue.source}`,
     `Source confidence: ${indexed.issue.target?.sourceConfidence ?? "unknown"}`,
@@ -187,6 +188,7 @@ export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTem
     ...formatStructuredEvidence(issue),
     ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
+    ...formatTargetEvidence(issue).map((line) => `- ${line}`),
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
     `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
@@ -229,6 +231,7 @@ export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentT
       ...formatStructuredEvidence(indexed.issue),
       ...formatRedactionEvidence(indexed.issue),
       `- Selector: ${indexed.issue.selector}`,
+      ...formatTargetEvidence(indexed.issue).map((line) => `- ${line}`),
       `- Selector confidence: ${indexed.issue.target?.selectorConfidence ?? "unknown"}${indexed.issue.target?.selectorReason ? ` (${indexed.issue.target.selectorReason})` : ""}`,
       `- Source: ${indexed.issue.source}`,
       `- Source confidence: ${indexed.issue.target?.sourceConfidence ?? "unknown"}`,
@@ -377,6 +380,7 @@ export function renderGitHubIssueBody(indexed: IndexedVernierIssue): string {
     "## Target",
     "",
     `- Selector: \`${issue.selector}\``,
+    ...formatTargetEvidence(issue).map((line) => `- ${line}`),
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
     `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
@@ -431,6 +435,7 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     ...formatStructuredEvidence(issue),
     ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
+    ...formatTargetEvidence(issue).map((line) => `- ${line}`),
     `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
     `- Source: ${issue.source}`,
     `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
@@ -462,6 +467,19 @@ function formatTarget(indexed: IndexedVernierIssue): string {
   ].filter(Boolean);
 
   return parts.join(" ");
+}
+
+function formatTargetEvidence(issue: VernierIssue): string[] {
+  const target = issue.target;
+
+  if (!target) {
+    return [];
+  }
+
+  return [
+    target.fallbackSelector ? `Fallback selector: ${target.fallbackSelector}` : null,
+    target.nearestLandmark ? `Nearest landmark: ${target.nearestLandmark}` : null
+  ].filter((line): line is string => line !== null);
 }
 
 function formatStructuredMeasurement(issue: VernierIssue): string[] {

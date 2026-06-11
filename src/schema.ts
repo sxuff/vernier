@@ -1,5 +1,6 @@
 export interface ElementTarget {
   selector: string;
+  fallbackSelector?: string;
   selectorConfidence: "high" | "medium" | "low";
   selectorReason: string;
   tag: string;
@@ -10,6 +11,7 @@ export interface ElementTarget {
   accessibleName?: string;
   testId?: string;
   nearestTestId?: string;
+  nearestLandmark?: string;
   source: string;
   sourceConfidence: "high" | "medium" | "low";
   sourceResolver: string;

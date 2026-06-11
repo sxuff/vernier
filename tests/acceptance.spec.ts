@@ -109,10 +109,12 @@ test("exports measured UI feedback session", async ({ page }) => {
         };
       };
       target: {
+        fallbackSelector?: string;
         selectorConfidence: string;
         tag: string;
         source: string;
         nearestTestId?: string;
+        nearestLandmark?: string;
         sourceResolver: string;
         ownerChain: string[];
         ancestry: unknown[];
@@ -135,6 +137,8 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionJson.issues[0]?.target.tag).toBe("article");
   expect(sessionJson.issues[0]?.target.source).toBe("src/components/RevenueCard.tsx:42");
   expect(sessionJson.issues[0]?.target.nearestTestId).toBe("revenue-card");
+  expect(sessionJson.issues[0]?.target.fallbackSelector).toContain("article:nth-of-type(2)");
+  expect(sessionJson.issues[0]?.target.nearestLandmark).toBe('section[aria-label="Dashboard metrics"]');
   expect(sessionJson.issues[0]?.target.sourceResolver).toBe("data-vernier-source");
   expect(Array.isArray(sessionJson.issues[0]?.target.ownerChain)).toBe(true);
   expect(sessionJson.issues[0]?.target.ancestry.length).toBeGreaterThan(0);

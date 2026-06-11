@@ -70,6 +70,8 @@ The proxy injects Vernier into HTML responses and forwards everything else to yo
 
 Your target app must already be running. If the target app is down, Vernier keeps running and shows a 502 page explaining that the target refused the connection.
 
+Vernier mounts its browser chrome in a Shadow DOM host so app-level CSS resets and component styles do not distort the overlay, and Vernier styles do not leak back into your app.
+
 Optional defaults can live in `vernier.config.json`:
 
 ```json

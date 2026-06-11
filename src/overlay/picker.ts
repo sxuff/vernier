@@ -40,7 +40,10 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
   }
 
   function isOverlayElement(element: Element | null): boolean {
-    return element === null || element === root || root.contains(element);
+    const rootNode = root.getRootNode();
+    const host = rootNode instanceof ShadowRoot ? rootNode.host : null;
+
+    return element === null || element === root || root.contains(element) || element === host;
   }
 
   function getCandidate(event: MouseEvent): Element | null {

@@ -5,11 +5,18 @@ import { createSessionController } from "./session";
 import { createOverlayRoot, renderIssueList, renderMeasurementPanel, setButtonEnabled } from "./ui";
 
 export function startVernierOverlay(): void {
-  if (document.querySelector("[data-vernier-root]")) {
+  if (document.querySelector("[data-vernier-host]")) {
     return;
   }
 
   const overlay = createOverlayRoot();
+  const host = document.createElement("div");
+  host.dataset.vernierHost = "true";
+  host.style.position = "fixed";
+  host.style.inset = "0";
+  host.style.zIndex = "2147483647";
+  host.style.pointerEvents = "none";
+  const shadowRoot = host.attachShadow({ mode: "open" });
   const session = createSessionController(overlay.noteInput);
   let selectedIssueId: number | null = null;
 
@@ -35,7 +42,8 @@ export function startVernierOverlay(): void {
       session.setMeasurementDraft("delta", secondElement, measurement.text, measurement.measurement);
     }
   });
-  document.documentElement.append(overlay.root);
+  shadowRoot.append(overlay.root);
+  document.documentElement.append(host);
 
   overlay.modeSelect.addEventListener("change", () => {
     picker.clear();

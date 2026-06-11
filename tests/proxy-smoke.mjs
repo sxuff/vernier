@@ -122,6 +122,12 @@ try {
 
   await page.goto(`http://127.0.0.1:${proxyPort}/`, { waitUntil: "networkidle" });
   await page.locator("[data-vernier-root]").waitFor({ state: "attached" });
+  const overlayMountedInShadow = await page.evaluate(() =>
+    Boolean(document.querySelector("[data-vernier-host]")?.shadowRoot?.querySelector("[data-vernier-root]"))
+  );
+  if (!overlayMountedInShadow) {
+    throw new Error("Expected Vernier overlay root to mount inside a Shadow DOM host.");
+  }
   await page.evaluate(() => {
     window.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -145,7 +151,7 @@ try {
   await page.locator("[data-vernier-note]").fill("align these cards");
   await page.locator("[data-vernier-add-issue]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 1");
+  await waitForLocatorText(page, "[data-vernier-status]", "Added issue 1");
 
   await page.mouse.move(usage.x + usage.width / 2, usage.y + usage.height / 2);
   await page.mouse.click(usage.x + usage.width / 2, usage.y + usage.height / 2);
@@ -153,11 +159,11 @@ try {
   await page.mouse.click(revenue.x + revenue.width / 2, revenue.y + revenue.height / 2);
   await page.locator("[data-vernier-note]").fill("align these cards");
   await page.locator("[data-vernier-add-issue]").click();
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 2");
+  await waitForLocatorText(page, "[data-vernier-status]", "Added issue 2");
   await page.locator("[data-vernier-issue-id='2']").click();
   await page.locator("[data-vernier-note]").fill("edited delta note");
   await page.locator("[data-vernier-save-issue]").click();
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Saved issue 2");
+  await waitForLocatorText(page, "[data-vernier-status]", "Saved issue 2");
 
   await page.locator("[data-vernier-mode]").selectOption("pen");
   await page.locator("[data-vernier-annotation-label]").selectOption("misaligned");
@@ -167,7 +173,7 @@ try {
   await page.mouse.up();
   await page.locator("[data-vernier-note]").fill("freehand annotation");
   await page.locator("[data-vernier-add-issue]").click();
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 3");
+  await waitForLocatorText(page, "[data-vernier-status]", "Added issue 3");
 
   await page.locator("[data-vernier-mode]").selectOption("redact");
   await page.mouse.move(260, 160);
@@ -176,13 +182,13 @@ try {
   await page.mouse.up();
   await page.locator("[data-vernier-note]").fill("manual redaction");
   await page.locator("[data-vernier-add-issue]").click();
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Added issue 4");
+  await waitForLocatorText(page, "[data-vernier-status]", "Added issue 4");
 
   await page.locator("[data-vernier-export]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Exported");
+  await waitForLocatorText(page, "[data-vernier-status]", "Exported");
   await page.locator("[data-vernier-export]").click();
-  await page.waitForFunction(() => document.querySelector("[data-vernier-status]")?.textContent === "Exported");
+  await waitForLocatorText(page, "[data-vernier-status]", "Exported");
   await browser.close();
 
   const sessionDirectories = await readdir(path.join(feedbackRoot, "sessions"));
@@ -938,6 +944,23 @@ function waitForOutput(process, text) {
       reject(new Error(`Proxy exited early with code ${code}`));
     });
   });
+}
+
+async function waitForLocatorText(page, selector, expectedText) {
+  const deadline = Date.now() + 30_000;
+  const locator = page.locator(selector);
+
+  while (Date.now() < deadline) {
+    const text = await locator.textContent().catch(() => null);
+
+    if (text === expectedText) {
+      return;
+    }
+
+    await page.waitForTimeout(50);
+  }
+
+  throw new Error(`Timed out waiting for ${selector} to equal ${expectedText}`);
 }
 
 function runNode(args) {

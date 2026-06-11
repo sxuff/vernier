@@ -18,10 +18,14 @@ export function startVernierOverlay(): void {
   host.style.pointerEvents = "none";
   const shadowRoot = host.attachShadow({ mode: "open" });
   const session = createSessionController(overlay.noteInput);
+  const teardownController = new AbortController();
   let selectedIssueId: number | null = null;
 
+  window.addEventListener("pagehide", () => teardownController.abort(), { once: true });
+  teardownController.signal.addEventListener("abort", () => host.remove(), { once: true });
   updateControls();
   const annotation = createAnnotationLayer(overlay.root, {
+    signal: teardownController.signal,
     getLabel() {
       return overlay.annotationLabelSelect.value || undefined;
     },
@@ -31,6 +35,7 @@ export function startVernierOverlay(): void {
     }
   });
   const picker = createPicker(overlay.root, {
+    signal: teardownController.signal,
     onSelect(element) {
       const measurement = measureElement(element);
       renderMeasurementPanel(overlay.panel, measurement.text);
@@ -177,7 +182,7 @@ export function startVernierOverlay(): void {
 
     event.preventDefault();
     toggle();
-  });
+  }, { signal: teardownController.signal });
 
   console.info("[vernier] active");
 

@@ -1,10 +1,12 @@
 export interface Picker {
   clear(): void;
+  destroy(): void;
 }
 
 export interface PickerOptions {
   onSelect(element: Element): void;
   onCompare(firstElement: Element, secondElement: Element): void;
+  signal?: AbortSignal;
 }
 
 export function createPicker(root: HTMLElement, options: PickerOptions): Picker {
@@ -34,6 +36,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
   label.hidden = true;
 
   root.append(highlight, label);
+  options.signal?.addEventListener("abort", destroy, { once: true });
 
   function isActive(): boolean {
     return root.dataset.vernierActive === "true" && !root.hidden;
@@ -103,7 +106,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
 
       renderTarget(getCandidate(event));
     },
-    true
+    { capture: true, signal: options.signal }
   );
 
   window.addEventListener(
@@ -138,7 +141,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
       event.preventDefault();
       event.stopImmediatePropagation();
     },
-    true
+    { capture: true, signal: options.signal }
   );
 
   window.addEventListener(
@@ -151,8 +154,14 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
       event.preventDefault();
       clear();
     },
-    true
+    { capture: true, signal: options.signal }
   );
 
-  return { clear };
+  return { clear, destroy };
+
+  function destroy(): void {
+    clear();
+    highlight.remove();
+    label.remove();
+  }
 }

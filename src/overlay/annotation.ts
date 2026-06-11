@@ -3,11 +3,13 @@ import type { AnnotationMeasurement } from "../schema";
 export interface AnnotationLayer {
   setMode(mode: string): void;
   clear(): void;
+  destroy(): void;
 }
 
 interface AnnotationOptions {
   onDraft(measured: string, measurement: AnnotationMeasurement): void;
   getLabel?: () => string | undefined;
+  signal?: AbortSignal;
 }
 
 interface Point {
@@ -33,6 +35,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
 
   const context = canvas.getContext("2d");
   root.append(canvas);
+  options.signal?.addEventListener("abort", destroy, { once: true });
 
   function setMode(nextMode: string): void {
     mode = nextMode;
@@ -151,7 +154,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     points = [toPoint(event)];
     canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
-  });
+  }, { signal: options.signal });
 
   canvas.addEventListener("pointermove", (event) => {
     if (!drawing) {
@@ -161,7 +164,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     points.push(toPoint(event));
     draw();
     event.preventDefault();
-  });
+  }, { signal: options.signal });
 
   canvas.addEventListener("pointerup", (event) => {
     if (!drawing) {
@@ -173,15 +176,20 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     draw();
     finishDraft();
     event.preventDefault();
-  });
+  }, { signal: options.signal });
 
   window.addEventListener("resize", () => {
     canvas.width = window.innerWidth * window.devicePixelRatio;
     canvas.height = window.innerHeight * window.devicePixelRatio;
     draw();
-  });
+  }, { signal: options.signal });
 
-  return { setMode, clear };
+  return { setMode, clear, destroy };
+
+  function destroy(): void {
+    clear();
+    canvas.remove();
+  }
 
   function getBounds(boundPoints: Point[]): { x: number; y: number; w: number; h: number } {
     const xs = boundPoints.map((point) => point.x);

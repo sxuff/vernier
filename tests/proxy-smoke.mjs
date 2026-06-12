@@ -508,6 +508,8 @@ try {
   const exportZipOutput = await runNode(["dist/cli.js", "export", "--format", "zip", "--out", exportedZipPath]);
   const exportedJson = JSON.parse(await readFile(exportedJsonPath, "utf8"));
   const exportedZipEntries = readZipEntryNames(await readFile(exportedZipPath));
+  const importOutput = await runNode(["dist/cli.js", "import", exportedZipPath, "--out-dir", ".ui-feedback-imported"]);
+  const importedJson = JSON.parse(await readFile(path.join(root, ".ui-feedback-imported", "latest", "session.json"), "utf8"));
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
   const fixLoopOutput = await runNode(["dist/cli.js", "fix-loop", stableIssueId, "--to", "codex", "--target", `http://127.0.0.1:${targetPort}`, "--print"]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
@@ -574,8 +576,8 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
-    throw new Error(`Expected help command to document GitHub export, export, plan, fix-loop, and templates:\n${helpOutput}`);
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+    throw new Error(`Expected help command to document GitHub export, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
@@ -651,6 +653,9 @@ try {
   }
   if (!exportJsonOutput.includes(exportedJsonPath) || !exportZipOutput.includes(exportedZipPath) || !exportedZipEntries.includes("session.md") || !exportedZipEntries.includes("session.json") || !exportedZipEntries.some((entry) => entry.startsWith("screenshots/"))) {
     throw new Error(`Expected export zip to include session files:\n${exportZipOutput}\n${exportedZipEntries.join("\n")}`);
+  }
+  if (!importOutput.includes("Imported Vernier session") || importedJson.issues[0]?.note !== "make it blue instead") {
+    throw new Error(`Expected import to restore exported session as latest:\n${importOutput}\n${JSON.stringify(importedJson, null, 2)}`);
   }
   if (
     !githubBodyOutput.includes(`Title: [Vernier] make it blue instead`) ||

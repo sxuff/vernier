@@ -178,6 +178,8 @@ vernier note <issue-id> "Button should align with card title"
 vernier plan <issue-id>
 vernier export --format zip
 vernier export --format json --out latest-session.json
+vernier import .ui-feedback/exports/latest-session.zip
+vernier import path/to/session-directory
 vernier github body <issue-id>
 vernier github create all --label ui-feedback
 vernier fix-loop <issue-id> --to codex --target http://localhost:3000
@@ -197,6 +199,8 @@ Add `--json` to `vernier issues`, `vernier status`, or `vernier detect` when you
 `vernier plan <issue-id>` prints a lightweight patch plan: likely source, likely change type, evidence confidence, suggested approach, and verification commands.
 
 `vernier export --format md|json|zip` exports the latest session artifact for sharing or archiving. Markdown and JSON print to stdout unless `--out` is provided; zip writes a portable archive by default under `.ui-feedback/exports/`.
+
+`vernier import <session-directory-or-zip>` copies a Vernier session into `.ui-feedback/sessions/` and makes it the latest session. This is useful when someone sends you a zip report or when you want to replay archived evidence locally.
 
 `vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues.
 

@@ -10,6 +10,7 @@ import { runDoctor } from "./cli/commands/doctor";
 import { exportLatestSession } from "./cli/commands/export";
 import { runFixLoop } from "./cli/commands/fix-loop";
 import { handleGitHubCommand } from "./cli/commands/github";
+import { importSessionArtifact } from "./cli/commands/import";
 import {
   copyIssueCommand,
   listIssuesCommand,
@@ -312,6 +313,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "import") {
+    console.log(await importSessionArtifact(process.cwd(), args));
+    return;
+  }
+
   if (command === "fix-loop") {
     await runFixLoop(process.cwd(), args, context.config);
     return;
@@ -429,6 +435,7 @@ function printHelp(): void {
       "  vernier note <issue-id> \"updated note\"",
       "  vernier plan <issue-id>",
       "  vernier export [--format md|json|zip] [--out <path>]",
+      "  vernier import <session-directory-or-zip> [--out-dir .ui-feedback]",
       "  vernier github body|create [all|<issue-id>] [--label ui-feedback]",
       "  vernier fix-loop [all|<issue-id>] --to codex|claude [--target <url>] [--print]",
       "  vernier mark <issue-id> todo|fixed",

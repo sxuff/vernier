@@ -688,14 +688,17 @@ try {
     !auditOutput.includes("A11y audit:") ||
     !auditOutput.includes("tap-target") ||
     !auditOutput.includes("accessible-name") ||
-    auditJson.findingCount < 2
+    !auditOutput.includes("focus-ring") ||
+    auditJson.findingCount < 3
   ) {
     throw new Error(`Expected audit a11y to flag fixture accessibility findings:\n${auditOutput}\n${JSON.stringify(auditJson, null, 2)}`);
   }
   if (
     !layoutAuditOutput.includes("Layout audit:") ||
     !layoutAuditOutput.includes("layout-context") ||
-    layoutAuditJson.findingCount < 1
+    !layoutAuditOutput.includes("text-overflow") ||
+    !layoutAuditOutput.includes("stacking-context") ||
+    layoutAuditJson.findingCount < 3
   ) {
     throw new Error(`Expected audit layout to flag fixture layout findings:\n${layoutAuditOutput}\n${JSON.stringify(layoutAuditJson, null, 2)}`);
   }
@@ -850,7 +853,11 @@ async function writeNestedSessionFixture(baseSession) {
           computedStyle: {
             color: "rgb(120, 120, 120)",
             "background-color": "rgb(130, 130, 130)",
-            "font-size": "14px"
+            "font-size": "14px",
+            outline: "0px none",
+            "outline-style": "none",
+            "outline-width": "0px",
+            "box-shadow": "none"
           },
           authoredHints: [],
           classHints: [],

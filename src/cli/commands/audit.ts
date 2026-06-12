@@ -1,4 +1,4 @@
-import type { BoundingBox, LayoutContext, VernierIssue, VernierMeasurement } from "../../schema";
+import type { BoundingBox, LayoutContext, StackingContext, TextMetrics, VernierIssue, VernierMeasurement } from "../../schema";
 import { listLatestIssues } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
@@ -42,7 +42,7 @@ export async function auditLatestSession(root: string, args: string[]): Promise<
 
 interface LayoutFinding {
   issueId: string;
-  rule: "overflow" | "spacing" | "layout-context";
+  rule: "overflow" | "spacing" | "layout-context" | "text-overflow" | "stacking-context";
   severity: "low" | "medium" | "high";
   message: string;
   selector: string;
@@ -61,7 +61,7 @@ interface LayoutAuditReport {
 
 interface A11yFinding {
   issueId: string;
-  rule: "contrast" | "tap-target" | "accessible-name";
+  rule: "contrast" | "tap-target" | "accessible-name" | "focus-ring";
   severity: "low" | "medium" | "high";
   message: string;
   selector: string;
@@ -118,6 +118,18 @@ function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFin
   const backgroundColor = computedStyle?.["background-color"];
   const hasText = Boolean(target.text || target.accessibleName || (measurement?.kind === "single" && measurement.text));
 
+  if (isLikelyInteractive(issue) && computedStyle && hasSuppressedFocusRing(computedStyle)) {
+    findings.push({
+      issueId: stableId,
+      rule: "focus-ring",
+      severity: "medium",
+      message: "Interactive target appears to suppress the browser focus indicator.",
+      selector,
+      expected: "visible focus outline or custom focus style",
+      actual: formatFocusRing(computedStyle)
+    });
+  }
+
   if (hasText && color && backgroundColor) {
     const contrast = contrastRatio(color, backgroundColor);
 
@@ -168,6 +180,8 @@ function auditIssueLayout(issue: VernierIssue, stableId: string): LayoutFinding[
   const findings: LayoutFinding[] = [];
   const measurement = issue.measurement;
   const context = measurementLayoutContext(measurement);
+  const textMetrics = measurementTextMetrics(measurement);
+  const stackingContext = measurementStackingContext(measurement);
   const selector = issue.selector;
 
   if (context?.overflow?.horizontalPageScroll) {
@@ -191,6 +205,23 @@ function auditIssueLayout(issue: VernierIssue, stableId: string): LayoutFinding[
       selector,
       expected: "element fully visible inside parent",
       actual: `parent overflow ${context.overflow.x}/${context.overflow.y}`
+    });
+  }
+
+  if (context?.overflow?.clippedByParent && textMetrics) {
+    findings.push({
+      issueId: stableId,
+      rule: "text-overflow",
+      severity: "medium",
+      message: "Captured text metrics plus parent clipping suggest possible hidden or truncated text.",
+      selector,
+      expected: "text fully visible or intentionally truncated with affordance",
+      actual: [
+        `overflow: ${context.overflow.x}/${context.overflow.y}`,
+        `text-overflow: ${textMetrics.textOverflow}`,
+        `white-space: ${textMetrics.whiteSpace}`,
+        textMetrics.renderedLineCount ? `lines: ${textMetrics.renderedLineCount}` : null
+      ].filter(Boolean).join(", ")
     });
   }
 
@@ -227,6 +258,24 @@ function auditIssueLayout(issue: VernierIssue, stableId: string): LayoutFinding[
         `display: ${context.parentDisplay}`,
         context.parentGap ? `gap: ${context.parentGap}` : null,
         context.parentPadding ? `padding: ${context.parentPadding}` : null
+      ].filter(Boolean).join(", ")
+    });
+  }
+
+  if (stackingContext && createsStackingContext(stackingContext)) {
+    findings.push({
+      issueId: stableId,
+      rule: "stacking-context",
+      severity: "low",
+      message: "Captured stacking context may affect popovers, overlays, or clipped elements near this issue.",
+      selector,
+      expected: "z-index and stacking ancestors are intentional",
+      actual: [
+        `position: ${stackingContext.position}`,
+        `z-index: ${stackingContext.zIndex}`,
+        `opacity: ${stackingContext.opacity}`,
+        `transform: ${stackingContext.transform}`,
+        stackingContext.stackingAncestors.length ? `ancestors: ${stackingContext.stackingAncestors.length}` : null
       ].filter(Boolean).join(", ")
     });
   }
@@ -305,6 +354,22 @@ function measurementLayoutContext(measurement: VernierMeasurement | undefined): 
   return measurement.layoutContext;
 }
 
+function measurementTextMetrics(measurement: VernierMeasurement | undefined): TextMetrics | undefined {
+  if (!measurement || measurement.kind === "annotation") {
+    return undefined;
+  }
+
+  return measurement.textMetrics;
+}
+
+function measurementStackingContext(measurement: VernierMeasurement | undefined): StackingContext | undefined {
+  if (!measurement || measurement.kind === "annotation") {
+    return undefined;
+  }
+
+  return measurement.stackingContext;
+}
+
 function isLikelyInteractive(issue: VernierIssue): boolean {
   const target = issue.target;
   const tag = target.tag.toLowerCase();
@@ -312,6 +377,33 @@ function isLikelyInteractive(issue: VernierIssue): boolean {
 
   return ["button", "a", "input", "select", "textarea", "summary"].includes(tag) ||
     ["button", "link", "checkbox", "radio", "switch", "menuitem", "tab"].includes(role ?? "");
+}
+
+function hasSuppressedFocusRing(computedStyle: Record<string, string>): boolean {
+  const outlineStyle = computedStyle["outline-style"]?.toLowerCase();
+  const outlineWidth = computedStyle["outline-width"]?.toLowerCase();
+  const outline = computedStyle.outline?.toLowerCase();
+  const boxShadow = computedStyle["box-shadow"]?.toLowerCase();
+
+  return (outlineStyle === "none" || outlineWidth === "0px" || outline === "none" || outline === "0px none") &&
+    (!boxShadow || boxShadow === "none");
+}
+
+function formatFocusRing(computedStyle: Record<string, string>): string {
+  return [
+    computedStyle.outline ? `outline: ${computedStyle.outline}` : null,
+    computedStyle["outline-style"] ? `outline-style: ${computedStyle["outline-style"]}` : null,
+    computedStyle["outline-width"] ? `outline-width: ${computedStyle["outline-width"]}` : null,
+    computedStyle["box-shadow"] ? `box-shadow: ${computedStyle["box-shadow"]}` : null
+  ].filter(Boolean).join(", ") || "outline not captured";
+}
+
+function createsStackingContext(context: StackingContext): boolean {
+  return context.zIndex !== "auto" ||
+    context.opacity !== "1" ||
+    context.transform !== "none" ||
+    context.isolation === "isolate" ||
+    context.stackingAncestors.length > 0;
 }
 
 function contrastRatio(foreground: string, background: string): number | null {

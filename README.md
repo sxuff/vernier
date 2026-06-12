@@ -133,7 +133,7 @@ Vernier writes:
 
 Annotations store viewport data and normalized relative points so future adapters can re-anchor or replay them across browser sizes.
 
-Screenshots automatically mask password inputs and elements marked with `data-vernier-redact`. Set `overlay.captureFullPage` to `false` when you want the exported overview screenshot cropped to the current viewport instead of the whole page.
+Screenshots automatically mask password inputs and elements marked with `data-vernier-redact`. Vernier shows a one-time local screenshot warning before the first export. Set `overlay.captureFullPage` to `false` when you want the exported overview screenshot cropped to the current viewport instead of the whole page.
 
 Element measurements include computed styles, authored CSS hints, layout context, text metrics, stacking context, utility-like class hints, and nearby CSS custom properties that match captured values. This helps agents reuse existing classes and design tokens instead of inventing one-off values.
 

@@ -21,6 +21,7 @@ export function startVernierOverlay(): void {
   const session = createSessionController(overlay.noteInput);
   const teardownController = new AbortController();
   let selectedIssueId: number | null = null;
+  let exportWarningAcknowledged = hasAcknowledgedExportWarning();
 
   window.addEventListener("pagehide", () => teardownController.abort(), { once: true });
   teardownController.signal.addEventListener("abort", () => host.remove(), { once: true });
@@ -141,11 +142,20 @@ export function startVernierOverlay(): void {
   });
 
   overlay.exportButton.addEventListener("click", () => {
+    if (!exportWarningAcknowledged) {
+      exportWarningAcknowledged = true;
+      rememberExportWarning();
+      overlay.status.textContent = "Vernier will save local screenshots under .ui-feedback. Review sensitive data before committing.";
+      overlay.exportButton.textContent = "Export anyway";
+      return;
+    }
+
     overlay.status.textContent = "Exporting...";
     void session
       .exportSession()
       .then(() => {
         overlay.status.textContent = "Exported";
+        overlay.exportButton.textContent = "Export";
       })
       .catch((error: unknown) => {
         overlay.status.textContent = error instanceof Error ? error.message : "Export failed";
@@ -225,5 +235,21 @@ export function startVernierOverlay(): void {
     overlay.copyFallback.focus();
     overlay.copyFallback.select();
     overlay.status.textContent = "Copy from selected text";
+  }
+
+  function hasAcknowledgedExportWarning(): boolean {
+    try {
+      return window.localStorage.getItem("vernierExportWarningAcknowledged") === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberExportWarning(): void {
+    try {
+      window.localStorage.setItem("vernierExportWarningAcknowledged", "true");
+    } catch {
+      // Non-persistent contexts still get the in-memory acknowledgement.
+    }
   }
 }

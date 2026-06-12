@@ -163,6 +163,7 @@ try {
   const page = await browser.newPage();
 
   await page.goto(`http://127.0.0.1:${proxyPort}/`, { waitUntil: "networkidle" });
+  await page.evaluate(() => window.localStorage.removeItem("vernierExportWarningAcknowledged"));
   await page.locator("[data-vernier-root]").waitFor({ state: "attached" });
   const overlayMountedInShadow = await page.evaluate(() =>
     Boolean(document.querySelector("[data-vernier-host]")?.shadowRoot?.querySelector("[data-vernier-root]"))
@@ -226,6 +227,8 @@ try {
   await page.locator("[data-vernier-add-issue]").click();
   await waitForLocatorText(page, "[data-vernier-status]", "Added issue 4");
 
+  await page.locator("[data-vernier-export]").click();
+  await waitForLocatorText(page, "[data-vernier-status]", "Vernier will save local screenshots under .ui-feedback. Review sensitive data before committing.");
   await page.locator("[data-vernier-export]").click();
   await page.locator("[data-vernier-status]").waitFor({ state: "visible" });
   await waitForLocatorText(page, "[data-vernier-status]", "Exported");

@@ -13,6 +13,7 @@ test("themes overlay chrome in dark color scheme", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
   await page.waitForLoadState("networkidle");
+  await page.evaluate(() => window.localStorage.removeItem("vernierExportWarningAcknowledged"));
   await page.locator("[data-vernier-root]").waitFor({ state: "attached" });
   await page.evaluate(() => {
     window.dispatchEvent(
@@ -114,6 +115,9 @@ test("exports measured UI feedback session", async ({ page }) => {
   const copiedPrompt = await page.evaluate(() => window.localStorage.getItem("vernierClipboard") ?? "");
   expect(copiedPrompt).toContain("Use the Vernier UI feedback session below.");
   expect(copiedPrompt).toContain("align these card edges");
+  await page.locator("[data-vernier-export]").click();
+  await expect(page.locator("[data-vernier-status]")).toContainText("Vernier will save local screenshots");
+  await expect(page.locator("[data-vernier-export]")).toHaveText("Export anyway");
   await page.locator("[data-vernier-export]").click();
 
   await expect(page.locator("[data-vernier-status]")).toHaveText("Exported");

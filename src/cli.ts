@@ -448,7 +448,7 @@ function printHelp(): void {
       "  vernier plan <issue-id>",
       "  vernier export [--format md|json|zip] [--out <path>]",
       "  vernier import <session-directory-or-zip> [--out-dir .ui-feedback]",
-      "  vernier github body|create [all|<issue-id>] [--label ui-feedback]",
+      "  vernier github body|create [all|<issue-id>] [--label ui-feedback] [--dry-run]",
       "  vernier fix-loop [all|<issue-id>] --to codex|claude [--target <url>] [--print]",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",

@@ -184,7 +184,7 @@ vernier export --format json --out latest-session.json
 vernier import .ui-feedback/exports/latest-session.zip
 vernier import path/to/session-directory
 vernier github body <issue-id>
-vernier github create all --label ui-feedback
+vernier github create all --label ui-feedback --dry-run
 vernier fix-loop <issue-id> --to codex --target http://localhost:3000
 vernier send --to codex --template codex
 vernier send <issue-id> --to codex --template strict
@@ -209,7 +209,7 @@ Add `--json` to `vernier issues`, `vernier status`, or `vernier detect` when you
 
 `vernier import <session-directory-or-zip>` copies a Vernier session into `.ui-feedback/sessions/` and makes it the latest session. This is useful when someone sends you a zip report or when you want to replay archived evidence locally.
 
-`vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues.
+`vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues; add `--dry-run` to preview the exact issues without network or auth.
 
 `vernier fix-loop <issue-id> --to codex --target http://localhost:3000` sends a Vernier repair task to the selected agent, waits for it to exit, runs `vernier verify --compare`, and marks the issue fixed only when the measured result is inside tolerance. Add `--print` to inspect the task without launching an agent.
 

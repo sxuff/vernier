@@ -574,6 +574,7 @@ try {
   const importOutput = await runNode(["dist/cli.js", "import", exportedZipPath, "--out-dir", ".ui-feedback-imported"]);
   const importedJson = JSON.parse(await readFile(path.join(root, ".ui-feedback-imported", "latest", "session.json"), "utf8"));
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
+  const githubDryRunOutput = await runNode(["dist/cli.js", "github", "create", "all", "--label", "ui-feedback", "--dry-run"]);
   const fixLoopOutput = await runNode(["dist/cli.js", "fix-loop", stableIssueId, "--to", "codex", "--target", `http://127.0.0.1:${targetPort}`, "--print"]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
   const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
@@ -639,7 +640,7 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("[--dry-run]") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
     throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
@@ -733,6 +734,9 @@ try {
     !githubBodyOutput.includes(`vernier verify ${stableIssueId} --compare`)
   ) {
     throw new Error(`Expected github body to print GitHub-ready issue content:\n${githubBodyOutput}`);
+  }
+  if (!githubDryRunOutput.includes("Dry run: would create") || !githubDryRunOutput.includes("GitHub issue") || !githubDryRunOutput.includes("Label: ui-feedback") || !githubDryRunOutput.includes("Issue: i-")) {
+    throw new Error(`Expected github create --dry-run to preview GitHub creation:\n${githubDryRunOutput}`);
   }
   if (
     !fixLoopOutput.includes("Fix-loop contract:") ||

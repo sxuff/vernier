@@ -17,7 +17,7 @@ export async function handleGitHubCommand(root: string, args: string[]): Promise
   const [action = "body", reference = "all"] = parsed.positionals();
 
   if (action !== "body" && action !== "create") {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback]", "Use `vernier github body <issue-id>` to preview without network.");
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback] [--dry-run]", "Use `vernier github body <issue-id>` or `vernier github create --dry-run` to preview without network.");
   }
 
   const issues = await resolveGitHubIssues(root, reference);
@@ -27,7 +27,7 @@ export async function handleGitHubCommand(root: string, args: string[]): Promise
     return;
   }
 
-  await createGitHubIssues(issues, parsed.option("--label") ?? "ui-feedback");
+  await createGitHubIssues(issues, parsed.option("--label") ?? "ui-feedback", parsed.flag("--dry-run"));
 }
 
 async function resolveGitHubIssues(root: string, reference: string): Promise<Awaited<ReturnType<typeof listLatestIssues>>> {
@@ -53,10 +53,16 @@ function renderGitHubIssuesPreview(issues: Awaited<ReturnType<typeof listLatestI
 
 async function createGitHubIssues(
   issues: Awaited<ReturnType<typeof listLatestIssues>>,
-  label: string
+  label: string,
+  dryRun: boolean
 ): Promise<void> {
   if (issues.length === 0) {
     console.log("No todo issues in latest Vernier session.");
+    return;
+  }
+
+  if (dryRun) {
+    console.log(renderGitHubCreateDryRun(issues, label));
     return;
   }
 
@@ -73,6 +79,21 @@ async function createGitHubIssues(
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });
   }
+}
+
+function renderGitHubCreateDryRun(issues: Awaited<ReturnType<typeof listLatestIssues>>, label: string): string {
+  return [
+    `Dry run: would create ${issues.length} GitHub issue${issues.length === 1 ? "" : "s"}.`,
+    `Label: ${label}`,
+    "",
+    ...issues.flatMap((issue, index) => [
+      index === 0 ? "" : "\n---\n",
+      `Issue: ${issue.stableId}`,
+      `Title: ${renderGitHubIssueTitle(issue)}`,
+      "",
+      renderGitHubIssueBody(issue)
+    ])
+  ].join("\n").trim();
 }
 
 function runProcess(executable: string, args: string[]): Promise<string> {

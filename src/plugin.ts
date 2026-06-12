@@ -41,7 +41,8 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
         runtimeOptions: {
           hotkey: options.hotkey,
           styleProperties: options.styleProperties,
-          redact: options.redact
+          redact: options.redact,
+          captureFullPage: options.captureFullPage
         }
       });
     },

@@ -1,10 +1,19 @@
 import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
-import { getRedactionSelectors, getSessionEndpoint } from "./options";
+import { getRedactionSelectors, getSessionEndpoint, shouldCaptureFullPage } from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
   element: HTMLElement,
-  options?: { backgroundColor?: string | null; onclone?: (document: Document) => void }
+  options?: {
+    backgroundColor?: string | null;
+    onclone?: (document: Document) => void;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    windowWidth?: number;
+    windowHeight?: number;
+  }
 ) => Promise<HTMLCanvasElement>;
 
 type IssueKind = "single" | "delta" | "annotation";
@@ -234,6 +243,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     try {
       canvas = await html2canvas(element as HTMLElement, {
         backgroundColor: null,
+        ...viewportCropOptions(kind),
         onclone(clonedDocument) {
           applyAutoRedaction(clonedDocument);
         }
@@ -257,6 +267,28 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     } catch (error) {
       throw new Error(`Full-page screenshot capture failed: ${formatCaptureError(error)}`);
     }
+  }
+
+  function viewportCropOptions(kind: ScreenshotArtifact["kind"]): {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    windowWidth?: number;
+    windowHeight?: number;
+  } {
+    if (kind !== "full-page" || shouldCaptureFullPage()) {
+      return {};
+    }
+
+    return {
+      x: window.scrollX,
+      y: window.scrollY,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight
+    };
   }
 
   async function createScreenshotArtifact(

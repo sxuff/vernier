@@ -168,7 +168,8 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
       hotkey: overlay.hotkey === undefined ? undefined : expectConfigString(overlay.hotkey, "overlay.hotkey"),
       styleProperties: overlay.styleProperties === undefined ? undefined : expectConfigStringArray(overlay.styleProperties, "overlay.styleProperties"),
       redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact"),
-      sessionEndpoint: overlay.sessionEndpoint === undefined ? undefined : expectConfigString(overlay.sessionEndpoint, "overlay.sessionEndpoint")
+      sessionEndpoint: overlay.sessionEndpoint === undefined ? undefined : expectConfigString(overlay.sessionEndpoint, "overlay.sessionEndpoint"),
+      captureFullPage: overlay.captureFullPage === undefined ? undefined : expectConfigBoolean(overlay.captureFullPage, "overlay.captureFullPage")
     });
   }
 
@@ -411,6 +412,14 @@ function expectConfigStringArray(value: unknown, field: string): string[] {
   return value.map((item, index) => expectConfigString(item, `${field}[${index}]`));
 }
 
+function expectConfigBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be a boolean.`);
+  }
+
+  return value;
+}
+
 async function openLatestSessionDirectory(root: string): Promise<void> {
   const latestDirectory = path.join(root, ".ui-feedback", "latest");
 
@@ -468,7 +477,7 @@ function printHelp(): void {
       "  vernier open",
       "",
       "Config:",
-      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
+      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",
       `Latest session path: ${latestSessionMarkdownPath}`

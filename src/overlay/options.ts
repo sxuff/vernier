@@ -39,6 +39,10 @@ export function getSessionEndpoint(): string {
   return getOverlayOptions().sessionEndpoint ?? "/__vernier/session";
 }
 
+export function shouldCaptureFullPage(): boolean {
+  return getOverlayOptions().captureFullPage ?? true;
+}
+
 export function matchesOverlayHotkey(event: KeyboardEvent): boolean {
   const configured = getOverlayOptions().hotkey;
 

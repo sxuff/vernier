@@ -536,6 +536,7 @@ try {
     port: "auto",
     detectPorts: [targetPort],
     verification: { bboxTolerancePx: 5 },
+    overlay: { captureFullPage: false },
     agents: { default: "codex" }
   }, null, 2)}\n`);
 
@@ -639,6 +640,9 @@ try {
   }
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
+  }
+  if (!helpOutput.includes("overlay.captureFullPage")) {
+    throw new Error(`Expected help command to document overlay capture config:\n${helpOutput}`);
   }
   if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("[--dry-run]") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
     throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);

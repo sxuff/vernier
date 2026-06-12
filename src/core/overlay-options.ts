@@ -3,6 +3,7 @@ export interface OverlayRuntimeOptions {
   styleProperties?: string[];
   redact?: string[];
   sessionEndpoint?: string;
+  captureFullPage?: boolean;
 }
 
 export interface SessionOutputOptions {
@@ -28,6 +29,10 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
 
   if (typeof options.sessionEndpoint === "string" && options.sessionEndpoint.trim()) {
     normalized.sessionEndpoint = options.sessionEndpoint.trim();
+  }
+
+  if (typeof options.captureFullPage === "boolean") {
+    normalized.captureFullPage = options.captureFullPage;
   }
 
   return normalized;

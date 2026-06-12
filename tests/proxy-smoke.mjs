@@ -584,7 +584,9 @@ try {
   const exportedZipPath = path.join(feedbackRoot, "latest-session.zip");
   const exportZipOutput = await runNode(["dist/cli.js", "export", "--format", "zip", "--out", exportedZipPath]);
   const exportedJson = JSON.parse(await readFile(exportedJsonPath, "utf8"));
-  const exportedZipEntries = readZipEntryNames(await readFile(exportedZipPath));
+  const exportedZipBuffer = await readFile(exportedZipPath);
+  const exportedZipEntries = readZipEntryNames(exportedZipBuffer);
+  const exportedZipManifest = JSON.parse(readZipTextEntry(exportedZipBuffer, "export-manifest.json"));
   const importOutput = await runNode(["dist/cli.js", "import", exportedZipPath, "--out-dir", ".ui-feedback-imported"]);
   const importedJson = JSON.parse(await readFile(path.join(root, ".ui-feedback-imported", "latest", "session.json"), "utf8"));
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
@@ -744,8 +746,18 @@ try {
   if (!exportMarkdownOutput.includes("make it blue instead") || exportedJson.issues[0]?.note !== "make it blue instead") {
     throw new Error(`Expected export md/json to include latest edited session:\n${exportMarkdownOutput}\n${JSON.stringify(exportedJson, null, 2)}`);
   }
-  if (!exportJsonOutput.includes(exportedJsonPath) || !exportZipOutput.includes(exportedZipPath) || !exportedZipEntries.includes("session.md") || !exportedZipEntries.includes("session.json") || !exportedZipEntries.some((entry) => entry.startsWith("screenshots/"))) {
+  if (!exportJsonOutput.includes(exportedJsonPath) || !exportZipOutput.includes(exportedZipPath) || !exportedZipEntries.includes("session.md") || !exportedZipEntries.includes("session.json") || !exportedZipEntries.includes("export-manifest.json") || !exportedZipEntries.some((entry) => entry.startsWith("screenshots/"))) {
     throw new Error(`Expected export zip to include session files:\n${exportZipOutput}\n${exportedZipEntries.join("\n")}`);
+  }
+  if (
+    exportedZipManifest.kind !== "vernier-session-export" ||
+    exportedZipManifest.sourceSessionId !== exportedJson.sessionId ||
+    exportedZipManifest.localOnly !== true ||
+    exportedZipManifest.networkUploads !== false ||
+    !exportedZipManifest.files.includes("session.json") ||
+    exportedZipManifest.fileCount !== exportedZipManifest.files.length
+  ) {
+    throw new Error(`Expected export zip manifest to describe the local session artifact:\n${JSON.stringify(exportedZipManifest, null, 2)}`);
   }
   if (!importOutput.includes("Imported Vernier session") || importedJson.issues[0]?.note !== "make it blue instead") {
     throw new Error(`Expected import to restore exported session as latest:\n${importOutput}\n${JSON.stringify(importedJson, null, 2)}`);
@@ -1195,6 +1207,34 @@ function readZipEntryNames(buffer) {
   }
 
   return names;
+}
+
+function readZipTextEntry(buffer, expectedName) {
+  let offset = 0;
+
+  while (offset + 4 <= buffer.byteLength) {
+    const signature = buffer.readUInt32LE(offset);
+
+    if (signature !== 0x04034b50) {
+      break;
+    }
+
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const nameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const name = buffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    const dataStart = nameStart + nameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+
+    if (name === expectedName) {
+      return buffer.subarray(dataStart, dataEnd).toString("utf8");
+    }
+
+    offset = dataEnd;
+  }
+
+  throw new Error(`Expected zip entry ${expectedName}`);
 }
 
 function runNodeFailure(args) {

@@ -3,8 +3,16 @@ import path from "node:path";
 import { listLatestIssues } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
+import type { VernierSession } from "../../schema";
 
 const exportValueOptions = ["--format", "--out"];
+const exportManifestName = "export-manifest.json";
+
+interface ZipEntry {
+  relativePath: string;
+  mtime: Date;
+  bytes: Buffer;
+}
 
 export async function exportLatestSession(root: string, args: string[]): Promise<string> {
   const parsed = parseArgs(args, { valueOptions: exportValueOptions });
@@ -30,9 +38,10 @@ export async function exportLatestSession(root: string, args: string[]): Promise
     return `Exported latest Vernier ${format} to ${destination}`;
   }
 
-  const destination = path.resolve(root, parsed.option("--out") ?? path.join(".ui-feedback", "exports", `${issues[0]!.session.sessionId}.zip`));
+  const issue = issues[0]!;
+  const destination = path.resolve(root, parsed.option("--out") ?? path.join(".ui-feedback", "exports", `${issue.session.sessionId}.zip`));
   await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, await createZipFromDirectory(sessionDirectory));
+  await writeFile(destination, await createZipFromDirectory(sessionDirectory, issue.session));
 
   return `Exported latest Vernier zip to ${destination}`;
 }
@@ -47,14 +56,55 @@ function readExportFormat(args: string[]): "md" | "json" | "zip" {
   throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --format value: ${value}`, "Use --format md, --format json, or --format zip.");
 }
 
-async function createZipFromDirectory(directory: string): Promise<Buffer> {
+async function createZipFromDirectory(directory: string, session: VernierSession): Promise<Buffer> {
   const files = await collectFiles(directory);
+  const entries = [
+    ...await Promise.all(
+      files.map(async (file): Promise<ZipEntry> => ({
+        relativePath: file.relativePath,
+        mtime: file.mtime,
+        bytes: await readFile(file.absolutePath)
+      }))
+    ),
+    createExportManifestEntry(session, files.map((file) => file.relativePath))
+  ].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  return createZipArchive(entries);
+}
+
+function createExportManifestEntry(session: VernierSession, files: string[]): ZipEntry {
+  const exportedAt = new Date().toISOString();
+  const archiveFiles = [...files.map((file) => file.replaceAll("\\", "/")), exportManifestName].sort();
+  const manifest = {
+    kind: "vernier-session-export",
+    schemaVersion: 1,
+    exportedAt,
+    sourceSessionId: session.sessionId,
+    sourceRoute: session.route,
+    sourceUrl: session.url,
+    viewport: session.viewport,
+    issueCount: session.issues.length,
+    localOnly: true,
+    networkUploads: false,
+    privacy: "Screenshots and UI feedback are exported as a local archive only.",
+    files: archiveFiles,
+    fileCount: archiveFiles.length
+  };
+
+  return {
+    relativePath: exportManifestName,
+    mtime: new Date(exportedAt),
+    bytes: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8")
+  };
+}
+
+function createZipArchive(files: ZipEntry[]): Buffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
 
   for (const file of files) {
-    const bytes = await readFile(file.absolutePath);
+    const bytes = file.bytes;
     const name = Buffer.from(file.relativePath.replaceAll("\\", "/"));
     const crc = crc32(bytes);
     const { time, date } = dosDateTime(file.mtime);

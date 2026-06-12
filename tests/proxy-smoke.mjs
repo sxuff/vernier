@@ -466,6 +466,7 @@ try {
     standalone.kill();
   }
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
+  const detectJson = JSON.parse(await runNode(["dist/cli.js", "detect", "--ports", String(targetPort), "--json"]));
   const doctorOutput = await runNode(["dist/cli.js", "doctor"]);
   const cleanDryRunOutput = await runNode(["dist/cli.js", "clean", "--keep", "1", "--dry-run"]);
   const configPath = path.join(feedbackRoot, "vernier.config.json");
@@ -481,6 +482,7 @@ try {
   await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
 
   const issuesOutput = await runNode(["dist/cli.js", "issues"]);
+  const issuesJson = JSON.parse(await runNode(["dist/cli.js", "issues", "--json"]));
   const auditOutput = await runNode(["dist/cli.js", "audit", "a11y"]);
   const auditJson = JSON.parse(await runNode(["dist/cli.js", "audit", "a11y", "--json"]));
   const layoutAuditOutput = await runNode(["dist/cli.js", "audit", "layout"]);
@@ -554,6 +556,9 @@ try {
   if (!helpOutput.includes("vernier serve [--port 3333|auto]") || !helpOutput.includes("vernier snippet [--port 3333]")) {
     throw new Error(`Expected help command to document standalone injection commands:\n${helpOutput}`);
   }
+  if (!helpOutput.includes("vernier detect [--ports 5173,3000,6006] [--json]") || !helpOutput.includes("vernier issues [--todo|--fixed|--all] [--json]")) {
+    throw new Error(`Expected help command to document JSON output flags:\n${helpOutput}`);
+  }
   if (!snippetOutput.includes('<script type="module" src="http://127.0.0.1:4344/__vernier/overlay.js"></script>')) {
     throw new Error(`Expected snippet command to print standalone script tag:\n${snippetOutput}`);
   }
@@ -566,6 +571,9 @@ try {
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
   }
+  if (detectJson.appCount !== 1 || detectJson.apps[0]?.url !== `http://127.0.0.1:${targetPort}` || detectJson.apps[0]?.label !== "Vite") {
+    throw new Error(`Expected detect --json to emit machine-readable apps:\n${JSON.stringify(detectJson, null, 2)}`);
+  }
   if (!doctorOutput.includes("OK: .ui-feedback is ignored") || !doctorOutput.includes("no network uploads")) {
     throw new Error(`Expected doctor command to report privacy hygiene:\n${doctorOutput}`);
   }
@@ -574,6 +582,9 @@ try {
   }
   if (!issuesOutput.includes("Latest session:") || !issuesOutput.includes("todo") || !issuesOutput.includes("make it red")) {
     throw new Error(`Expected issues command to list newest nested app-root session:\n${issuesOutput}`);
+  }
+  if (issuesJson.issueCount < 1 || issuesJson.issues[0]?.id !== stableIssueId || issuesJson.issues[0]?.status !== "todo") {
+    throw new Error(`Expected issues --json to emit machine-readable issue data:\n${JSON.stringify(issuesJson, null, 2)}`);
   }
   if (
     !auditOutput.includes("A11y audit:") ||
@@ -692,6 +703,7 @@ async function writeNestedSessionFixture(baseSession) {
     issues: [
       {
         ...baseSession.issues[0],
+        stableId: undefined,
         id: 1,
         note: "make it red",
         selector: "[data-testid=\"bad-button\"]",

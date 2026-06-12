@@ -32,11 +32,22 @@ export async function detectLocalApps(
   config: AttachConfig,
   dependencies: Pick<AttachDependencies, "resolveTargetOption">
 ): Promise<void> {
+  const parsed = parseArgs(args, { valueOptions: ["--ports"] });
   const apps = await scanLocalApps(parseDetectPorts(args, config));
+  const fallbackTarget = dependencies.resolveTargetOption([], config);
+
+  if (parsed.flag("--json")) {
+    console.log(JSON.stringify({
+      appCount: apps.length,
+      apps,
+      suggestedAttach: apps[0] ? `vernier attach --target ${apps[0].url}` : `vernier --target ${fallbackTarget}`
+    }, null, 2));
+    return;
+  }
 
   if (apps.length === 0) {
     console.log("No local web apps found.");
-    console.log(`Try: vernier --target ${dependencies.resolveTargetOption([], config)}`);
+    console.log(`Try: vernier --target ${fallbackTarget}`);
     return;
   }
 

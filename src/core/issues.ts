@@ -723,9 +723,7 @@ function createStableIssueId(session: VernierSession, issue: VernierIssue): stri
         String(issue.id),
         issue.kind,
         issue.selector,
-        issue.source,
-        issue.note,
-        issue.measured
+        issue.source
       ].join("\n")
     )
     .digest("hex")

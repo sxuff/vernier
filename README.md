@@ -52,6 +52,7 @@ Find likely local apps without starting or owning them:
 ```bash
 vernier detect
 vernier detect --ports 5173,3000,6006
+vernier detect --json
 ```
 
 From this repo during development, the default proxy command is:
@@ -153,6 +154,7 @@ After exporting, you can also use:
 vernier issues
 vernier issues --todo
 vernier issues --fixed
+vernier issues --json
 vernier show <issue-id>
 vernier verify <issue-id>
 vernier verify <issue-id> --target http://localhost:3000 --open
@@ -184,6 +186,8 @@ vernier open
 ```
 
 `vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting.
+
+Add `--json` to `vernier issues` or `vernier detect` when you want scriptable output for agents, CI, or shell pipelines.
 
 `vernier note <issue-id> "..."` updates the latest session JSON and regenerates `session.md`, which is useful when you want to refine a captured issue without recapturing the screenshot.
 

@@ -21,7 +21,35 @@ export interface HandoffConfig {
 }
 
 export async function listIssuesCommand(root: string, args: string[]): Promise<void> {
-  console.log(renderIssueList(filterIssuesByStatus(await listLatestIssues(root), readIssueStatusFilter(args))));
+  const issues = filterIssuesByStatus(await listLatestIssues(root), readIssueStatusFilter(args));
+
+  if (parseArgs(args).flag("--json")) {
+    console.log(JSON.stringify({
+      issueCount: issues.length,
+      session: issues[0] ? {
+        id: issues[0].session.sessionId,
+        route: issues[0].session.route,
+        url: issues[0].session.url,
+        createdAt: issues[0].session.createdAt,
+        viewport: issues[0].session.viewport
+      } : null,
+      issues: issues.map((issue) => ({
+        id: issue.stableId,
+        number: issue.issue.id,
+        status: issue.status,
+        kind: issue.issue.kind,
+        note: issue.issue.note,
+        selector: issue.issue.selector,
+        source: issue.issue.source,
+        sourceConfidence: issue.issue.target.sourceConfidence,
+        selectorConfidence: issue.issue.target.selectorConfidence,
+        screenshotPath: issue.screenshotPath
+      }))
+    }, null, 2));
+    return;
+  }
+
+  console.log(renderIssueList(issues));
 }
 
 export async function showIssueCommand(root: string, args: string[]): Promise<void> {

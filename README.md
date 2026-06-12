@@ -175,6 +175,7 @@ vernier mark <issue-id> fixed
 vernier mark <issue-id> todo
 vernier copy <issue-id>
 vernier note <issue-id> "Button should align with card title"
+vernier rename-session "pricing mobile pass"
 vernier plan <issue-id>
 vernier export --format zip
 vernier export --format json --out latest-session.json
@@ -195,6 +196,8 @@ vernier open
 Add `--json` to `vernier issues`, `vernier status`, or `vernier detect` when you want scriptable output for agents, CI, or shell pipelines.
 
 `vernier note <issue-id> "..."` updates the latest session JSON and regenerates `session.md`, which is useful when you want to refine a captured issue without recapturing the screenshot.
+
+`vernier rename-session "..."` labels the latest session in `session.json`, `session.md`, `issues`, and `status` output without renaming artifact directories.
 
 `vernier plan <issue-id>` prints a lightweight patch plan: likely source, likely change type, evidence confidence, suggested approach, and verification commands.
 

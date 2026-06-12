@@ -97,6 +97,7 @@ function validateSession(value: unknown): VernierSession {
   const schemaVersion = session.schemaVersion;
   const toolVersion = expectString(session.toolVersion, "toolVersion");
   const sessionId = expectSafeIdentifier(session.sessionId, "sessionId", "s");
+  const title = expectOptionalString(session.title, "title");
   const route = expectString(session.route, "route");
   const url = expectString(session.url, "url");
   const viewport = expectRecord(session.viewport, "viewport");
@@ -137,6 +138,7 @@ function validateSession(value: unknown): VernierSession {
     schemaVersion: 1,
     toolVersion,
     sessionId,
+    title,
     route,
     url,
     viewport: {

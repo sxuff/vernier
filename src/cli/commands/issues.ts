@@ -1,4 +1,4 @@
-import { markLatestIssue, type IssueStatus, updateLatestIssueNote } from "../../core/issues";
+import { markLatestIssue, renameLatestSession, type IssueStatus, updateLatestIssueNote } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
@@ -25,6 +25,18 @@ export async function updateIssueNote(root: string, args: string[]): Promise<voi
   const issue = await updateLatestIssueNote(root, reference, note);
 
   console.log(`Updated ${issue.stableId} note.`);
+}
+
+export async function renameSession(root: string, args: string[]): Promise<void> {
+  const title = parseArgs(args).positionals().join(" ").trim();
+
+  if (!title) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier rename-session \"short title\"", "Use a short label that helps you recognize the latest feedback session.");
+  }
+
+  const session = await renameLatestSession(root, title);
+
+  console.log(`Renamed latest session ${session.sessionId} to "${session.title}".`);
 }
 
 function isIssueStatus(value: string | undefined): value is IssueStatus {

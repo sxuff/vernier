@@ -68,6 +68,7 @@ export function renderSessionMarkdown(session: VernierSession): string {
     `Schema version: ${session.schemaVersion}`,
     `Tool version: ${session.toolVersion}`,
     `Session ID: ${session.sessionId}`,
+    ...(session.title ? [`Title: ${session.title}`] : []),
     `Created: ${session.createdAt}`,
     `Route: ${session.route}`,
     `URL: ${session.url}`,

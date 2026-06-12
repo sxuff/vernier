@@ -80,6 +80,23 @@ export async function updateLatestIssueNote(root: string, reference: string, not
   return indexIssue(latest.sessionDirectory, session, indexed.issue, statuses);
 }
 
+export async function renameLatestSession(root: string, title: string): Promise<VernierSession> {
+  const latest = await findLatestSessionFile(root);
+  const raw = await readFile(latest.filePath, "utf8");
+  const session = JSON.parse(raw) as VernierSession;
+  const trimmed = title.trim();
+
+  if (!trimmed) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Session title cannot be empty.", "Pass a short label, for example `vernier rename-session pricing mobile pass`.");
+  }
+
+  session.title = trimmed;
+  await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
+  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+
+  return session;
+}
+
 function findIssueByReference(issues: IndexedVernierIssue[], reference: string): IndexedVernierIssue | undefined {
   const exact = issues.find(
     (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
@@ -112,7 +129,7 @@ export function renderIssueList(issues: IndexedVernierIssue[]): string {
 
   const session = issues[0]?.session;
   const lines = [
-    `Latest session: ${session.createdAt}  ${session.route}  ${formatViewport(session)}`,
+    `Latest session: ${session.title ? `${session.title}  ` : ""}${session.createdAt}  ${session.route}  ${formatViewport(session)}`,
     "",
     "ID        Status  No.  Page        Viewport   Type        Summary"
   ];

@@ -498,8 +498,10 @@ try {
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
   const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
+  const renameOutput = await runNode(["dist/cli.js", "rename-session", "pricing mobile pass"]);
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
+  const renamedJson = JSON.parse(await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.json"), "utf8"));
   const planOutput = await runNode(["dist/cli.js", "plan", stableIssueId]);
   const exportMarkdownOutput = await runNode(["dist/cli.js", "export", "--format", "md"]);
   const exportedJsonPath = path.join(feedbackRoot, "latest-session.json");
@@ -576,8 +578,8 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
-    throw new Error(`Expected help command to document GitHub export, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+    throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
@@ -644,6 +646,9 @@ try {
   }
   if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
     throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);
+  }
+  if (!renameOutput.includes('Renamed latest session') || renamedJson.title !== "pricing mobile pass" || !notedMarkdown.includes("Title: pricing mobile pass")) {
+    throw new Error(`Expected rename-session to update latest session title:\n${renameOutput}\n${JSON.stringify(renamedJson, null, 2)}\n${notedMarkdown}`);
   }
   if (!planOutput.includes(`Vernier patch plan for ${stableIssueId}`) || !planOutput.includes("Likely change type:") || !planOutput.includes("Suggested checks:")) {
     throw new Error(`Expected plan command to print a patch plan:\n${planOutput}`);

@@ -9,6 +9,7 @@ export async function summarizeLatestStatus(root: string, args: string[]): Promi
   const payload = {
     session: session ? {
       id: session.sessionId,
+      title: session.title ?? null,
       route: session.route,
       url: session.url,
       createdAt: session.createdAt,
@@ -34,7 +35,7 @@ export async function summarizeLatestStatus(root: string, args: string[]): Promi
   }
 
   return [
-    `Latest session: ${session.createdAt}  ${session.route}`,
+    `Latest session: ${session.title ? `${session.title}  ` : ""}${session.createdAt}  ${session.route}`,
     `Issues: ${payload.total}`,
     `Todo: ${payload.todo}`,
     `Fixed: ${payload.fixed}`,

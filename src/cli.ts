@@ -18,7 +18,7 @@ import {
   sendIssueToAgent,
   showIssueCommand
 } from "./cli/commands/handoff";
-import { markIssue, updateIssueNote } from "./cli/commands/issues";
+import { markIssue, renameSession, updateIssueNote } from "./cli/commands/issues";
 import { startMcpServer } from "./cli/commands/mcp";
 import {
   isUrlLike,
@@ -298,6 +298,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "rename-session") {
+    await renameSession(process.cwd(), args);
+    return;
+  }
+
   if (command === "plan") {
     await planIssueCommand(process.cwd(), args);
     return;
@@ -433,6 +438,7 @@ function printHelp(): void {
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--template generic|codex|claude|cursor|aider|strict] [--print]",
       "  vernier note <issue-id> \"updated note\"",
+      "  vernier rename-session \"short title\"",
       "  vernier plan <issue-id>",
       "  vernier export [--format md|json|zip] [--out <path>]",
       "  vernier import <session-directory-or-zip> [--out-dir .ui-feedback]",

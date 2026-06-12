@@ -213,6 +213,7 @@ export interface VernierSession {
   schemaVersion: 1;
   toolVersion: string;
   sessionId: string;
+  title?: string;
   route: string;
   url: string;
   viewport: {

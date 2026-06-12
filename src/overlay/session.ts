@@ -1,5 +1,5 @@
 import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
-import { getRedactionSelectors } from "./options";
+import { getRedactionSelectors, getSessionEndpoint } from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -160,7 +160,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
 
     const fullPageScreenshot = await captureFullPageScreenshot();
-    const response = await fetch("/__vernier/session", {
+    const response = await fetch(getSessionEndpoint(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

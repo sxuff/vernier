@@ -27,6 +27,7 @@ import {
   startProxyServer
 } from "./cli/commands/proxy";
 import { startReplayViewer } from "./cli/commands/replay";
+import { printSnippet, startStandaloneServer } from "./cli/commands/snippet";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
 import { parseArgs } from "./cli/lib/args";
 import { debugLog, setDebugEnabled } from "./cli/lib/debug";
@@ -161,7 +162,8 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
     result.overlay = normalizeOverlayRuntimeOptions({
       hotkey: overlay.hotkey === undefined ? undefined : expectConfigString(overlay.hotkey, "overlay.hotkey"),
       styleProperties: overlay.styleProperties === undefined ? undefined : expectConfigStringArray(overlay.styleProperties, "overlay.styleProperties"),
-      redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact")
+      redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact"),
+      sessionEndpoint: overlay.sessionEndpoint === undefined ? undefined : expectConfigString(overlay.sessionEndpoint, "overlay.sessionEndpoint")
     });
   }
 
@@ -317,6 +319,16 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "serve") {
+    await startStandaloneServer(args, context.config);
+    return;
+  }
+
+  if (command === "snippet") {
+    console.log(printSnippet(args, context.config));
+    return;
+  }
+
   if (command === "doctor") {
     console.log(await runDoctor(process.cwd()));
     return;
@@ -404,6 +416,8 @@ function printHelp(): void {
       "  vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]",
       "  vernier diff <left-session-or-capture> <right-session-or-capture>",
       "  vernier replay latest [--port 3340|auto] [--no-open]",
+      "  vernier serve [--port 3333|auto]",
+      "  vernier snippet [--port 3333]",
       "  vernier doctor",
       "  vernier clean [--keep 20] [--older-than 14d] [--dry-run]",
       "  vernier audit a11y|layout [--json]",
@@ -413,7 +427,7 @@ function printHelp(): void {
       "  vernier open",
       "",
       "Config:",
-      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, verification.bboxTolerancePx, and agents.default.",
+      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",
       `Latest session path: ${latestSessionMarkdownPath}`

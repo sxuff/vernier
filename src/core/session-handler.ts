@@ -20,6 +20,11 @@ export async function handleVernierSessionRequest(
     return false;
   }
 
+  if (request.method === "OPTIONS") {
+    sendCorsPreflight(response);
+    return true;
+  }
+
   if (request.method !== "POST") {
     sendJson(response, 405, { error: "Method not allowed" });
     return true;
@@ -737,5 +742,14 @@ function badRequest(message: string): SessionRequestError {
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json");
+  response.setHeader("Access-Control-Allow-Origin", "*");
   response.end(JSON.stringify(payload));
+}
+
+function sendCorsPreflight(response: ServerResponse): void {
+  response.statusCode = 204;
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  response.end();
 }

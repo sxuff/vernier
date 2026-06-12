@@ -441,6 +441,30 @@ try {
   const latestOutput = await runNode(["dist/cli.js", "latest"]);
   const promptOutput = await runNode(["dist/cli.js", "prompt"]);
   const helpOutput = await runNode(["dist/cli.js", "--help"]);
+  const snippetOutput = await runNode(["dist/cli.js", "snippet", "--port", "4344"]);
+  const standalone = spawn(
+    process.execPath,
+    ["dist/cli.js", "serve", "--port", "4344"],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  try {
+    await waitForOutput(standalone, "standalone overlay server listening");
+    const standaloneScript = await (await fetch("http://127.0.0.1:4344/__vernier/overlay.js")).text();
+    const standalonePreflight = await fetch("http://127.0.0.1:4344/__vernier/session", {
+      method: "OPTIONS",
+      headers: { Origin: `http://127.0.0.1:${targetPort}` }
+    });
+
+    if (
+      !standaloneScript.includes('"sessionEndpoint":"http://127.0.0.1:4344/__vernier/session"') ||
+      standalonePreflight.status !== 204 ||
+      standalonePreflight.headers.get("access-control-allow-origin") !== "*"
+    ) {
+      throw new Error(`Expected standalone overlay server to serve cross-origin snippet assets.`);
+    }
+  } finally {
+    standalone.kill();
+  }
   const detectOutput = await runNode(["dist/cli.js", "detect", "--ports", String(targetPort)]);
   const doctorOutput = await runNode(["dist/cli.js", "doctor"]);
   const cleanDryRunOutput = await runNode(["dist/cli.js", "clean", "--keep", "1", "--dry-run"]);
@@ -525,6 +549,12 @@ try {
   }
   if (!helpOutput.includes("vernier [--target http://localhost:5173]") || !helpOutput.includes("vernier http://localhost:5173")) {
     throw new Error(`Expected help command to document CLI shorthand:\n${helpOutput}`);
+  }
+  if (!helpOutput.includes("vernier serve [--port 3333|auto]") || !helpOutput.includes("vernier snippet [--port 3333]")) {
+    throw new Error(`Expected help command to document standalone injection commands:\n${helpOutput}`);
+  }
+  if (!snippetOutput.includes('<script type="module" src="http://127.0.0.1:4344/__vernier/overlay.js"></script>')) {
+    throw new Error(`Expected snippet command to print standalone script tag:\n${snippetOutput}`);
   }
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);

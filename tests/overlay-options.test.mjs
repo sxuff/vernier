@@ -5,7 +5,8 @@ const script = createVernierOverlayScript({
   runtimeOptions: {
     hotkey: "Alt+Shift+V",
     styleProperties: ["color", "letter-spacing", "color"],
-    redact: [".private-email", "[data-secret]"]
+    redact: [".private-email", "[data-secret]"],
+    sessionEndpoint: "http://127.0.0.1:3333/__vernier/session"
   }
 });
 
@@ -13,6 +14,7 @@ assert(script.includes('import __vernierHtml2canvas from "html2canvas";'), "expe
 assert(script.includes('"hotkey":"Alt+Shift+V"'), "expected hotkey runtime option");
 assert(script.includes('"styleProperties":["color","letter-spacing"]'), "expected deduplicated style properties");
 assert(script.includes('"redact":[".private-email","[data-secret]"]'), "expected redaction selectors");
+assert(script.includes('"sessionEndpoint":"http://127.0.0.1:3333/__vernier/session"'), "expected session endpoint runtime option");
 
 const defaultScript = createVernierOverlayScript({ html2canvasImportPath: "/vendor/html2canvas.js" });
 assert(defaultScript.includes("window.__VERNIER_OPTIONS__ = {};"), "expected empty default runtime options");

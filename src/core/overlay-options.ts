@@ -2,6 +2,7 @@ export interface OverlayRuntimeOptions {
   hotkey?: string;
   styleProperties?: string[];
   redact?: string[];
+  sessionEndpoint?: string;
 }
 
 export interface SessionOutputOptions {
@@ -23,6 +24,10 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
   const redact = sanitizeStringArray(options.redact);
   if (redact.length > 0) {
     normalized.redact = redact;
+  }
+
+  if (typeof options.sessionEndpoint === "string" && options.sessionEndpoint.trim()) {
+    normalized.sessionEndpoint = options.sessionEndpoint.trim();
   }
 
   return normalized;

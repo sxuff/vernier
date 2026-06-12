@@ -72,6 +72,17 @@ Your target app must already be running. If the target app is down, Vernier keep
 
 Vernier mounts its browser chrome in a Shadow DOM host so app-level CSS resets and component styles do not distort the overlay, and Vernier styles do not leak back into your app.
 
+## Use Without A Proxy
+
+If you can edit the app HTML directly, run a standalone Vernier server and paste the snippet before `</body>`:
+
+```bash
+vernier serve --port 3333
+vernier snippet --port 3333
+```
+
+This serves only Vernier's overlay assets and session export endpoint. Your app can be plain HTML, a backend-rendered page, Storybook preview HTML, or another framework that does not use Vite.
+
 Optional defaults can live in `vernier.config.json`:
 
 ```json
@@ -148,6 +159,8 @@ vernier verify <issue-id> --target http://localhost:3000 --compare --viewports m
 vernier capture --target http://localhost:3000 --routes /,/pricing --viewports mobile,desktop
 vernier diff .ui-feedback/captures/capture-a .ui-feedback/captures/capture-b
 vernier replay latest
+vernier serve --port 3333
+vernier snippet --port 3333
 vernier doctor
 vernier clean --keep 20 --dry-run
 vernier audit a11y

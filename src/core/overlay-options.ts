@@ -4,6 +4,7 @@ export interface OverlayRuntimeOptions {
   redact?: string[];
   sessionEndpoint?: string;
   captureFullPage?: boolean;
+  screenshotMaxWidth?: number;
 }
 
 export interface SessionOutputOptions {
@@ -33,6 +34,10 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
 
   if (typeof options.captureFullPage === "boolean") {
     normalized.captureFullPage = options.captureFullPage;
+  }
+
+  if (typeof options.screenshotMaxWidth === "number" && Number.isFinite(options.screenshotMaxWidth) && options.screenshotMaxWidth > 0) {
+    normalized.screenshotMaxWidth = Math.floor(options.screenshotMaxWidth);
   }
 
   return normalized;

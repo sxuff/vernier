@@ -43,6 +43,10 @@ export function shouldCaptureFullPage(): boolean {
   return getOverlayOptions().captureFullPage ?? true;
 }
 
+export function getScreenshotMaxWidth(): number | null {
+  return getOverlayOptions().screenshotMaxWidth ?? null;
+}
+
 export function matchesOverlayHotkey(event: KeyboardEvent): boolean {
   const configured = getOverlayOptions().hotkey;
 

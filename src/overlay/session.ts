@@ -1,5 +1,5 @@
 import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
-import { getRedactionSelectors, getSessionEndpoint, shouldCaptureFullPage } from "./options";
+import { getRedactionSelectors, getScreenshotMaxWidth, getSessionEndpoint, shouldCaptureFullPage } from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -252,10 +252,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
     }
 
-    const dataUrl = canvas.toDataURL("image/png");
+    const outputCanvas = resizeScreenshotCanvas(canvas);
+    const dataUrl = outputCanvas.toDataURL("image/png");
     return {
       dataUrl,
-      artifact: await createScreenshotArtifact(name, kind, canvas, dataUrl),
+      artifact: await createScreenshotArtifact(name, kind, outputCanvas, dataUrl),
       autoRedactedElements
     };
   }
@@ -322,6 +323,30 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     }
 
     return bytes;
+  }
+
+  function resizeScreenshotCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+    const maxWidth = getScreenshotMaxWidth();
+
+    if (!maxWidth || canvas.width <= maxWidth) {
+      return canvas;
+    }
+
+    const scale = maxWidth / canvas.width;
+    const resized = document.createElement("canvas");
+    resized.width = maxWidth;
+    resized.height = Math.max(1, Math.round(canvas.height * scale));
+
+    const context = resized.getContext("2d");
+    if (!context) {
+      return canvas;
+    }
+
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(canvas, 0, 0, resized.width, resized.height);
+
+    return resized;
   }
 
   async function sha256(bytes: Uint8Array): Promise<string> {

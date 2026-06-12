@@ -7,7 +7,8 @@ const script = createVernierOverlayScript({
     styleProperties: ["color", "letter-spacing", "color"],
     redact: [".private-email", "[data-secret]"],
     sessionEndpoint: "http://127.0.0.1:3333/__vernier/session",
-    captureFullPage: false
+    captureFullPage: false,
+    screenshotMaxWidth: 1024
   }
 });
 
@@ -17,6 +18,7 @@ assert(script.includes('"styleProperties":["color","letter-spacing"]'), "expecte
 assert(script.includes('"redact":[".private-email","[data-secret]"]'), "expected redaction selectors");
 assert(script.includes('"sessionEndpoint":"http://127.0.0.1:3333/__vernier/session"'), "expected session endpoint runtime option");
 assert(script.includes('"captureFullPage":false'), "expected full-page capture runtime option");
+assert(script.includes('"screenshotMaxWidth":1024'), "expected screenshot max width runtime option");
 
 const defaultScript = createVernierOverlayScript({ html2canvasImportPath: "/vendor/html2canvas.js" });
 assert(defaultScript.includes("window.__VERNIER_OPTIONS__ = {};"), "expected empty default runtime options");

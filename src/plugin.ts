@@ -42,7 +42,8 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
           hotkey: options.hotkey,
           styleProperties: options.styleProperties,
           redact: options.redact,
-          captureFullPage: options.captureFullPage
+          captureFullPage: options.captureFullPage,
+          screenshotMaxWidth: options.screenshotMaxWidth
         }
       });
     },

@@ -169,7 +169,8 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
       styleProperties: overlay.styleProperties === undefined ? undefined : expectConfigStringArray(overlay.styleProperties, "overlay.styleProperties"),
       redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact"),
       sessionEndpoint: overlay.sessionEndpoint === undefined ? undefined : expectConfigString(overlay.sessionEndpoint, "overlay.sessionEndpoint"),
-      captureFullPage: overlay.captureFullPage === undefined ? undefined : expectConfigBoolean(overlay.captureFullPage, "overlay.captureFullPage")
+      captureFullPage: overlay.captureFullPage === undefined ? undefined : expectConfigBoolean(overlay.captureFullPage, "overlay.captureFullPage"),
+      screenshotMaxWidth: overlay.screenshotMaxWidth === undefined ? undefined : expectConfigPositiveInteger(overlay.screenshotMaxWidth, "overlay.screenshotMaxWidth")
     });
   }
 
@@ -227,6 +228,14 @@ function expectConfigNonNegativeNumber(value: unknown, field: string): number {
   }
 
   return value;
+}
+
+function expectConfigPositiveInteger(value: unknown, field: string): number {
+  if (!Number.isInteger(value) || (value as number) < 1) {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be a positive integer.`);
+  }
+
+  return value as number;
 }
 
 function expectConfigAgent(value: unknown, field: string): "codex" | "claude" {
@@ -477,7 +486,7 @@ function printHelp(): void {
       "  vernier open",
       "",
       "Config:",
-      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
+      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.screenshotMaxWidth, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
       "  Debug logging: pass --verbose, VERNIER_DEBUG=1, or DEBUG=vernier:*.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",

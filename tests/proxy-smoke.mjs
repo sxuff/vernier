@@ -148,10 +148,21 @@ targetServer.on("upgrade", (request, socket) => {
 await verifyUnavailableTarget();
 
 await listen(targetServer, targetPort);
+await mkdir(feedbackRoot, { recursive: true });
+const configPath = path.join(feedbackRoot, "vernier.config.json");
+
+await writeFile(configPath, `${JSON.stringify({
+  target: `http://127.0.0.1:${targetPort}`,
+  port: "auto",
+  detectPorts: [targetPort],
+  verification: { bboxTolerancePx: 5 },
+  overlay: { captureFullPage: false, screenshotMaxWidth: 640 },
+  agents: { default: "codex" }
+}, null, 2)}\n`);
 
 const proxy = spawn(
   process.execPath,
-  ["dist/cli.js", "proxy", "--target", `http://127.0.0.1:${targetPort}`, "--port", String(proxyPort)],
+  ["dist/cli.js", "proxy", "--target", `http://127.0.0.1:${targetPort}`, "--port", String(proxyPort), "--config", configPath],
   { cwd: root, stdio: ["ignore", "pipe", "pipe"] }
 );
 
@@ -336,6 +347,7 @@ try {
   if (
     sessionJson.fullPageScreenshot?.kind !== "full-page" ||
     sessionJson.fullPageScreenshot.captureStrategy !== "html2canvas" ||
+    sessionJson.fullPageScreenshot.width > 640 ||
     !/^sha256-[a-f0-9]{64}$/.test(sessionJson.fullPageScreenshot.hash)
   ) {
     throw new Error(`Expected full-page screenshot artifact metadata:\n${JSON.stringify(sessionJson.fullPageScreenshot, null, 2)}`);
@@ -542,16 +554,6 @@ try {
   const detectJson = JSON.parse(await runNode(["dist/cli.js", "detect", "--ports", String(targetPort), "--json"]));
   const doctorOutput = await runNode(["dist/cli.js", "doctor"]);
   const cleanDryRunOutput = await runNode(["dist/cli.js", "clean", "--keep", "1", "--dry-run"]);
-  const configPath = path.join(feedbackRoot, "vernier.config.json");
-
-  await writeFile(configPath, `${JSON.stringify({
-    target: `http://127.0.0.1:${targetPort}`,
-    port: "auto",
-    detectPorts: [targetPort],
-    verification: { bboxTolerancePx: 5 },
-    overlay: { captureFullPage: false },
-    agents: { default: "codex" }
-  }, null, 2)}\n`);
 
   await writeNestedSessionFixture(JSON.parse(await readFile(path.join(feedbackRoot, "latest", "session.json"), "utf8")));
 
@@ -656,7 +658,7 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET") || !helpOutput.includes("--verbose") || !helpOutput.includes("DEBUG=vernier:*")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("overlay.captureFullPage")) {
+  if (!helpOutput.includes("overlay.captureFullPage") || !helpOutput.includes("overlay.screenshotMaxWidth")) {
     throw new Error(`Expected help command to document overlay capture config:\n${helpOutput}`);
   }
   if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("[--dry-run]") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {

@@ -31,7 +31,7 @@
     "proxy:5173": "node dist/cli.js --target http://localhost:5173 --port 3333",
     "proxy:3000": "node dist/cli.js --target http://localhost:3000 --port 3333",
     "typecheck": "tsc --noEmit && tsc --noEmit -p examples/react-vite/tsconfig.json",
-    "test:unit": "node tests/session-writer.test.mjs && node tests/session-handler.test.mjs && node tests/overlay-options.test.mjs && node tests/source-resolver.test.mjs && node tests/args.test.mjs && node tests/debug-errors.test.mjs && node tests/core-errors.test.mjs && node tests/handoff-golden.test.mjs",
+    "test:unit": "node tests/session-writer.test.mjs && node tests/session-handler.test.mjs && node tests/overlay-options.test.mjs && node tests/source-resolver.test.mjs && node tests/args.test.mjs && node tests/debug-errors.test.mjs && node tests/core-errors.test.mjs && node tests/handoff-golden.test.mjs && node tests/doctor.test.mjs",
     "test:e2e": "playwright test",
     "test:proxy": "node tests/proxy-smoke.mjs",
     "verify:m0": "npm run typecheck && npm run build && npm run test:unit && npm --prefix examples/react-vite run build"

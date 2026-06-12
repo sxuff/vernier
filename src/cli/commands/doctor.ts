@@ -36,8 +36,26 @@ export async function runDoctor(root: string): Promise<string> {
 }
 
 function gitignoreIgnoresFeedback(gitignore: string): boolean {
-  return gitignore
+  let ignored = false;
+
+  for (const rawLine of gitignore
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => line === ".ui-feedback" || line === ".ui-feedback/" || line === "/.ui-feedback" || line === "/.ui-feedback/");
+    .map((line) => line.trim())) {
+    if (!rawLine || rawLine.startsWith("#")) {
+      continue;
+    }
+
+    const negated = rawLine.startsWith("!");
+    const line = negated ? rawLine.slice(1) : rawLine;
+
+    if (matchesFeedbackIgnore(line)) {
+      ignored = !negated;
+    }
+  }
+
+  return ignored;
+}
+
+function matchesFeedbackIgnore(line: string): boolean {
+  return [".ui-feedback", ".ui-feedback/", ".ui-feedback/**", "/.ui-feedback", "/.ui-feedback/", "/.ui-feedback/**"].includes(line);
 }

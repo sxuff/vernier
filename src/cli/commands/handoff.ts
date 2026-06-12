@@ -7,6 +7,7 @@ import {
   listLatestIssues,
   renderIssueDetail,
   renderIssueList,
+  renderIssuePacket,
   renderIssuePlan,
   renderIssueTask,
   renderIssuesTask
@@ -57,7 +58,10 @@ export async function showIssueCommand(root: string, args: string[]): Promise<vo
 }
 
 export async function copyIssueCommand(root: string, args: string[]): Promise<void> {
-  const task = renderIssueTask(await findLatestIssue(root, readRequiredReference(args, "copy")), readAgentTemplate(args));
+  const issue = await findLatestIssue(root, readRequiredReference(args, "copy"));
+  const task = readCopyFormat(args) === "packet"
+    ? renderIssuePacket(issue)
+    : renderIssueTask(issue, readAgentTemplate(args));
 
   if (parseArgs(args).flag("--print")) {
     console.log(task);
@@ -66,6 +70,16 @@ export async function copyIssueCommand(root: string, args: string[]): Promise<vo
 
   await copyToClipboard(task);
   console.log("Copied Vernier issue task to clipboard.");
+}
+
+function readCopyFormat(args: string[]): "task" | "packet" {
+  const value = parseArgs(args, { valueOptions: ["--format"] }).option("--format") ?? "task";
+
+  if (value === "task" || value === "packet") {
+    return value;
+  }
+
+  throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --format value: ${value}`, "Use --format task or --format packet.");
 }
 
 export async function planIssueCommand(root: string, args: string[]): Promise<void> {
@@ -140,7 +154,7 @@ function readAgentTemplate(args: string[], fallbackAgent?: string): AgentTemplat
 }
 
 function readRequiredReference(args: string[], command: string): string {
-  const reference = parseArgs(args, { valueOptions: ["--template", "--to"] }).positionals()[0];
+  const reference = parseArgs(args, { valueOptions: ["--template", "--to", "--format"] }).positionals()[0];
 
   if (!reference) {
     throw new VernierError("VERNIER_INVALID_OPTION", `Usage: vernier ${command} <issue-id>`, "Use `vernier issues` to find an issue id.");

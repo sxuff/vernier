@@ -497,6 +497,7 @@ try {
 
   const showOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
+  const packetOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--format", "packet", "--print"]);
   const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
   const renameOutput = await runNode(["dist/cli.js", "rename-session", "pricing mobile pass"]);
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
@@ -578,7 +579,7 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
     throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
@@ -643,6 +644,9 @@ try {
   }
   if (!copyOutput.includes("Fix the UI issue captured by Vernier.") || !copyOutput.includes(stableIssueId)) {
     throw new Error(`Expected copy --print to produce issue task:\n${copyOutput}`);
+  }
+  if (!packetOutput.includes("Vernier Reproduction Packet") || !packetOutput.includes(`vernier verify ${stableIssueId} --compare`) || !packetOutput.includes("Screenshot:")) {
+    throw new Error(`Expected copy --format packet --print to produce reproduction packet:\n${packetOutput}`);
   }
   if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
     throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);

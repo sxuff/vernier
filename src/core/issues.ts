@@ -221,6 +221,45 @@ export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTem
   ].join("\n");
 }
 
+export function renderIssuePacket(indexed: IndexedVernierIssue): string {
+  const { issue, session } = indexed;
+
+  return [
+    `# Vernier Reproduction Packet - ${indexed.stableId}`,
+    "",
+    "## Summary",
+    `- Status: ${indexed.status}`,
+    `- Route: ${session.route}`,
+    `- URL: ${session.url}`,
+    `- Viewport: ${formatViewport(session)}`,
+    `- Issue type: ${issue.kind}`,
+    "",
+    "## User Note",
+    issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+    "",
+    "## Target",
+    `- Selector: ${issue.selector}`,
+    ...formatTargetEvidence(issue).map((line) => `- ${line}`),
+    `- Selector confidence: ${issue.target?.selectorConfidence ?? "unknown"}${issue.target?.selectorReason ? ` (${issue.target.selectorReason})` : ""}`,
+    `- Source: ${issue.source}`,
+    `- Source confidence: ${issue.target?.sourceConfidence ?? "unknown"}`,
+    `- Source resolver: ${issue.target?.sourceResolver ?? "unknown"}`,
+    `- Component: ${issue.target?.componentName ?? "unknown"}`,
+    `- Element context: ${formatTarget(indexed)}`,
+    "",
+    "## Evidence",
+    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatRedactionEvidence(issue),
+    `- Screenshot: ${indexed.screenshotPath}`,
+    "",
+    "## Verify",
+    `- Command: vernier verify ${indexed.stableId} --compare`,
+    `- Mark fixed: vernier mark ${indexed.stableId} fixed`,
+    `- Mark todo: vernier mark ${indexed.stableId} todo`,
+    ""
+  ].join("\n");
+}
+
 export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentTemplate = "generic"): string {
   if (issues.length === 0) {
     return "No issues in latest Vernier session.";

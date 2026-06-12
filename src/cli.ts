@@ -436,7 +436,7 @@ function printHelp(): void {
       "  vernier issues [--todo|--fixed|--all] [--json]",
       "  vernier status [--json]",
       "  vernier show <issue-id>",
-      "  vernier copy <issue-id> [--template generic|codex|claude|cursor|aider|strict] [--print]",
+      "  vernier copy <issue-id> [--format task|packet] [--template generic|codex|claude|cursor|aider|strict] [--print]",
       "  vernier note <issue-id> \"updated note\"",
       "  vernier rename-session \"short title\"",
       "  vernier plan <issue-id>",

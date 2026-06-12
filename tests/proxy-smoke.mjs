@@ -653,7 +653,7 @@ try {
   if (!snippetOutput.includes('<script type="module" src="http://127.0.0.1:4344/__vernier/overlay.js"></script>')) {
     throw new Error(`Expected snippet command to print standalone script tag:\n${snippetOutput}`);
   }
-  if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
+  if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET") || !helpOutput.includes("--verbose") || !helpOutput.includes("DEBUG=vernier:*")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
   if (!helpOutput.includes("overlay.captureFullPage")) {

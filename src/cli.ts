@@ -442,7 +442,7 @@ function printHelp(): void {
   console.log(
     [
       "Usage:",
-      "  vernier [--target http://localhost:5173] [--port 3333|auto] [--config vernier.config.json]",
+      "  vernier [--target http://localhost:5173] [--port 3333|auto] [--config vernier.config.json] [--verbose]",
       "  vernier attach [--target <url>] [--ports 5173,3000,6006] [--open|--no-open]",
       "  vernier start [--target <url>] [--port 3333|auto]",
       "  vernier proxy [--target <url>] [--port 3333|auto]",
@@ -478,6 +478,7 @@ function printHelp(): void {
       "",
       "Config:",
       "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
+      "  Debug logging: pass --verbose, VERNIER_DEBUG=1, or DEBUG=vernier:*.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",
       `Latest session path: ${latestSessionMarkdownPath}`

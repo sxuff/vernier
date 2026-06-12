@@ -25,6 +25,10 @@ assert(result.code === 1, "invalid clean command should fail");
 assert(result.stderr.includes("VERNIER_INVALID_OPTION"), "CLI should print structured error code");
 assert(result.stderr.includes("Hint: Use a non-negative integer"), "CLI should print structured hint");
 
+const verboseResult = await runCli(["detect", "--ports", "1", "--verbose"]);
+assert(verboseResult.code === 0, "detect --verbose should still exit successfully");
+assert(verboseResult.stderr.includes("[vernier:config]") || verboseResult.stderr.includes("[vernier:detect]"), "--verbose should enable CLI debug logging");
+
 console.log("debug and structured errors verified");
 
 function assert(condition, message) {

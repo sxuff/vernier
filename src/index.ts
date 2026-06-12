@@ -10,6 +10,8 @@ export { resolveFeedbackDirectory, writeSession } from "./core/session-writer";
 export { createAgentPrompt, readLatestSessionMarkdown } from "./core/handoff";
 export { findLatestIssue, listLatestIssues, markLatestIssue, readLatestSession, updateLatestIssueNote } from "./core/issues";
 export type { AgentTemplate, IndexedVernierIssue, IssueStatus } from "./core/issues";
+export { resolveSource, sourceResolvers } from "./overlay/source";
+export type { SourceLocation, SourceResolution, SourceResolver } from "./overlay/source";
 export type { VernierIssue, VernierSession } from "./schema";
 export { parseArgs } from "./cli/lib/args";
 export type { ParsedArgs } from "./cli/lib/args";

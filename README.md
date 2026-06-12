@@ -133,6 +133,8 @@ Screenshots automatically mask password inputs and elements marked with `data-ve
 
 Element measurements include computed styles, authored CSS hints, layout context, text metrics, stacking context, utility-like class hints, and nearby CSS custom properties that match captured values. This helps agents reuse existing classes and design tokens instead of inventing one-off values.
 
+For non-React apps or compiled frameworks, add `data-vernier-source="src/components/Button.tsx:37"` to give Vernier an exact source hint. You can also add `data-vernier-component="Button"` and `data-vernier-owner-chain="Page > Card > Button"` when a file/line is not available.
+
 ## Development
 
 ```bash

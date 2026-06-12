@@ -175,6 +175,7 @@ vernier note <issue-id> "Button should align with card title"
 vernier plan <issue-id>
 vernier github body <issue-id>
 vernier github create all --label ui-feedback
+vernier fix-loop <issue-id> --to codex --target http://localhost:3000
 vernier send --to codex --template codex
 vernier send <issue-id> --to codex --template strict
 vernier send all --to claude --all
@@ -189,6 +190,8 @@ vernier open
 `vernier plan <issue-id>` prints a lightweight patch plan: likely source, likely change type, evidence confidence, suggested approach, and verification commands.
 
 `vernier github body <issue-id>` prints a GitHub-ready issue body without network access. `vernier github create all --label ui-feedback` uses the GitHub CLI to create issues for todo Vernier issues.
+
+`vernier fix-loop <issue-id> --to codex --target http://localhost:3000` sends a Vernier repair task to the selected agent, waits for it to exit, runs `vernier verify --compare`, and marks the issue fixed only when the measured result is inside tolerance. Add `--print` to inspect the task without launching an agent.
 
 `vernier send --to codex` sends todo issues in the latest session by default. Use `--template generic|codex|claude|cursor|aider|strict` to tune handoff framing. Use `--all` when you want fixed issues included too. If the Codex or Claude CLI is not installed, Vernier copies the task to your clipboard so you can paste it into the desktop app.
 

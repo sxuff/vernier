@@ -498,6 +498,7 @@ try {
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
   const planOutput = await runNode(["dist/cli.js", "plan", stableIssueId]);
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
+  const fixLoopOutput = await runNode(["dist/cli.js", "fix-loop", stableIssueId, "--to", "codex", "--target", `http://127.0.0.1:${targetPort}`, "--print"]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
   const configVerifyOutput = await runNode(["dist/cli.js", "verify", stableIssueId, "--config", configPath]);
   const configSendOutput = await runNode(["dist/cli.js", "send", stableIssueId, "--config", configPath, "--print"]);
@@ -559,8 +560,8 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("--template generic|codex")) {
-    throw new Error(`Expected help command to document GitHub export, plan, and templates:\n${helpOutput}`);
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+    throw new Error(`Expected help command to document GitHub export, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
@@ -626,6 +627,13 @@ try {
     !githubBodyOutput.includes(`vernier verify ${stableIssueId} --compare`)
   ) {
     throw new Error(`Expected github body to print GitHub-ready issue content:\n${githubBodyOutput}`);
+  }
+  if (
+    !fixLoopOutput.includes("Fix-loop contract:") ||
+    !fixLoopOutput.includes(`vernier verify ${stableIssueId} --compare --target http://127.0.0.1:${targetPort} --tolerance 2`) ||
+    !fixLoopOutput.includes("Vernier will remeasure after the agent exits")
+  ) {
+    throw new Error(`Expected fix-loop --print to include agent task and verification contract:\n${fixLoopOutput}`);
   }
   if (
     !verifyOutput.includes(`Verify Vernier issue ${stableIssueId}.`) ||

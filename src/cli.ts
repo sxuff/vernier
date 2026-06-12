@@ -7,6 +7,7 @@ import { auditLatestSession } from "./cli/commands/audit";
 import { attachToLocalApp, detectLocalApps } from "./cli/commands/attach";
 import { cleanSessions } from "./cli/commands/clean";
 import { runDoctor } from "./cli/commands/doctor";
+import { runFixLoop } from "./cli/commands/fix-loop";
 import { handleGitHubCommand } from "./cli/commands/github";
 import {
   copyIssueCommand,
@@ -299,6 +300,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "fix-loop") {
+    await runFixLoop(process.cwd(), args, context.config);
+    return;
+  }
+
   if (command === "verify") {
     await verifyIssue(args, context.config);
     return;
@@ -410,6 +416,7 @@ function printHelp(): void {
       "  vernier note <issue-id> \"updated note\"",
       "  vernier plan <issue-id>",
       "  vernier github body|create [all|<issue-id>] [--label ui-feedback]",
+      "  vernier fix-loop [all|<issue-id>] --to codex|claude [--target <url>] [--print]",
       "  vernier mark <issue-id> todo|fixed",
       "  vernier verify <issue-id> [--target <url>] [--open]",
       "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2] [--viewports mobile,tablet,desktop|390x844,1440x900]",

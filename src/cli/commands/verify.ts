@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, VernierIssue, VernierSession } from "../../schema";
-import { findLatestIssue, type IssueStatus, renderIssueVerification } from "../../core/issues";
+import { findLatestIssue, type IndexedVernierIssue, type IssueStatus, renderIssueVerification } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 import { openUrl, parseUrlOption, resolveTargetOption } from "./proxy";
@@ -16,6 +16,12 @@ interface VerifyConfig {
 
 const verifyValueOptions = ["--target", "--port", "--config", "--tolerance", "--viewports", "--routes"];
 
+export interface CompareIssueResult {
+  output: string;
+  suggestedStatus: IssueStatus;
+  artifactDirectory?: string;
+}
+
 export async function verifyIssue(args: string[], config: VerifyConfig): Promise<void> {
   const parsed = parseArgs(args, { valueOptions: verifyValueOptions });
   const reference = readRequiredReference(args, "verify");
@@ -23,7 +29,7 @@ export async function verifyIssue(args: string[], config: VerifyConfig): Promise
   const targetUrl = createIssueTargetUrl(resolveTargetOption(args, config), issue.session.route);
 
   if (parsed.flag("--compare")) {
-    console.log(await compareIssue(issue, targetUrl, readTolerance(args, config), readCompareViewports(args, issue.session.viewport)));
+    console.log((await compareLatestIssue(issue, targetUrl, readTolerance(args, config), readCompareViewports(args, issue.session.viewport))).output);
     return;
   }
 
@@ -120,19 +126,22 @@ export async function diffArtifacts(args: string[]): Promise<string> {
     : renderCaptureDiff(left as DiffCaptureArtifact, right as DiffCaptureArtifact);
 }
 
-async function compareIssue(
-  indexed: Awaited<ReturnType<typeof findLatestIssue>>,
+export async function compareLatestIssue(
+  indexed: IndexedVernierIssue,
   targetUrl: string,
   tolerancePx: number,
   viewports: CompareViewport[]
-): Promise<string> {
+): Promise<CompareIssueResult> {
   if (!indexed.issue.measurement || indexed.issue.measurement.kind === "annotation") {
-    return [
+    return {
+      suggestedStatus: "todo",
+      output: [
       renderIssueVerification(indexed, targetUrl),
       "",
       "Compare result:",
       "Structured element measurement is required for automatic comparison."
-    ].join("\n");
+      ].join("\n")
+    };
   }
 
   const { chromium } = await import("playwright");
@@ -143,7 +152,11 @@ async function compareIssue(
 
     if (viewports.length === 1 && viewports[0]!.label === "captured") {
       const { report, artifactDirectory } = await compareIssueAtViewport(browser, indexed, targetUrl, tolerancePx, viewports[0]!, path.join(indexed.sessionDirectory, "verification", indexed.stableId));
-      return renderCompareReport(indexed.stableId, targetUrl, artifactDirectory, report);
+      return {
+        output: renderCompareReport(indexed.stableId, targetUrl, artifactDirectory, report),
+        suggestedStatus: report.suggestedStatus,
+        artifactDirectory
+      };
     }
 
     const results = [];
@@ -155,7 +168,11 @@ async function compareIssue(
     const summaryDirectory = path.join(indexed.sessionDirectory, "verification", indexed.stableId, "viewports");
     await writeMultiViewportReport(summaryDirectory, indexed.stableId, targetUrl, results);
 
-    return renderMultiViewportCompareReport(indexed.stableId, targetUrl, summaryDirectory, results);
+    return {
+      output: renderMultiViewportCompareReport(indexed.stableId, targetUrl, summaryDirectory, results),
+      suggestedStatus: results.every((result) => result.report.suggestedStatus === "fixed") ? "fixed" : "todo",
+      artifactDirectory: summaryDirectory
+    };
   } finally {
     await browser?.close();
   }
@@ -198,7 +215,7 @@ interface CompareReport {
   suggestedStatus: IssueStatus;
 }
 
-interface CompareViewport {
+export interface CompareViewport {
   label: string;
   width: number;
   height: number;
@@ -821,7 +838,7 @@ function readRequiredReference(args: string[], command: string): string {
   return reference;
 }
 
-function createIssueTargetUrl(target: string, route: string): string {
+export function createIssueTargetUrl(target: string, route: string): string {
   return new URL(route || "/", target).toString();
 }
 

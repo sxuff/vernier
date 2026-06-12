@@ -523,7 +523,10 @@ export function accessibleName(element: Element): string | undefined {
     }
   }
 
-  return (element as HTMLElement).getAttribute?.("aria-label") ?? textSummary(element);
+  return (element as HTMLElement).getAttribute?.("aria-label") ??
+    (element as HTMLElement).getAttribute?.("alt") ??
+    (element as HTMLElement).getAttribute?.("title") ??
+    textSummary(element);
 }
 
 export function formatNumber(value: number): string {

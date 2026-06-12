@@ -689,7 +689,9 @@ try {
     !auditOutput.includes("tap-target") ||
     !auditOutput.includes("accessible-name") ||
     !auditOutput.includes("focus-ring") ||
-    auditJson.findingCount < 3
+    !auditOutput.includes("image-alt") ||
+    !auditOutput.includes("role-name") ||
+    auditJson.findingCount < 5
   ) {
     throw new Error(`Expected audit a11y to flag fixture accessibility findings:\n${auditOutput}\n${JSON.stringify(auditJson, null, 2)}`);
   }
@@ -830,7 +832,7 @@ async function writeNestedSessionFixture(baseSession) {
         target: {
           ...baseSession.issues[0].target,
           selector: "[data-testid=\"bad-button\"]",
-          tag: "button",
+          tag: "img",
           text: undefined,
           accessibleName: undefined,
           role: "button",

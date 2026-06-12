@@ -8,7 +8,7 @@ export function createElementTarget(element: Element): ElementTarget {
   const source = resolveSource(element);
   const testId = element.getAttribute("data-testid") ?? undefined;
   const role = element.getAttribute("role") ?? implicitRole(element) ?? undefined;
-  const accessibleName = element.getAttribute("aria-label") ?? textSummary(element) ?? undefined;
+  const accessibleName = accessibleNameForTarget(element);
 
   return {
     selector,
@@ -84,6 +84,28 @@ export function textSummary(element: Element): string | undefined {
   }
 
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+}
+
+export function accessibleNameForTarget(element: Element): string | undefined {
+  const labelledBy = element.getAttribute("aria-labelledby");
+
+  if (labelledBy) {
+    const text = labelledBy
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent?.trim())
+      .filter(Boolean)
+      .join(" ");
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return element.getAttribute("aria-label") ??
+    element.getAttribute("alt") ??
+    element.getAttribute("title") ??
+    textSummary(element) ??
+    undefined;
 }
 
 export function nearestAttribute(element: Element, attribute: string): string | undefined {

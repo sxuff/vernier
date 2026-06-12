@@ -61,7 +61,7 @@ interface LayoutAuditReport {
 
 interface A11yFinding {
   issueId: string;
-  rule: "contrast" | "tap-target" | "accessible-name" | "focus-ring";
+  rule: "contrast" | "tap-target" | "accessible-name" | "focus-ring" | "image-alt" | "role-name";
   severity: "low" | "medium" | "high";
   message: string;
   selector: string;
@@ -85,6 +85,7 @@ function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFin
   const computedStyle = measurementComputedStyle(measurement);
   const target = issue.target;
   const selector = issue.selector;
+  const hasAccessibleName = Boolean(target.accessibleName || target.text || (measurement?.kind === "single" && (measurement.accessibleName || measurement.text)));
 
   if (box && isLikelyInteractive(issue)) {
     const minSide = Math.min(box.width, box.height);
@@ -102,7 +103,7 @@ function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFin
     }
   }
 
-  if (isLikelyInteractive(issue) && !target.accessibleName && !target.text) {
+  if (isLikelyInteractive(issue) && !hasAccessibleName) {
     findings.push({
       issueId: stableId,
       rule: "accessible-name",
@@ -114,9 +115,33 @@ function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFin
     });
   }
 
+  if (target.tag === "img" && !hasAccessibleName) {
+    findings.push({
+      issueId: stableId,
+      rule: "image-alt",
+      severity: "high",
+      message: "Image target has no captured alt text or accessible name.",
+      selector,
+      expected: "meaningful alt text or decorative role/presentation",
+      actual: "missing"
+    });
+  }
+
+  if (target.role && roleRequiresAccessibleName(target.role) && !hasAccessibleName) {
+    findings.push({
+      issueId: stableId,
+      rule: "role-name",
+      severity: "high",
+      message: "Captured ARIA role normally requires an accessible name.",
+      selector,
+      expected: `${target.role} role with accessible name`,
+      actual: "missing"
+    });
+  }
+
   const color = computedStyle?.color;
   const backgroundColor = computedStyle?.["background-color"];
-  const hasText = Boolean(target.text || target.accessibleName || (measurement?.kind === "single" && measurement.text));
+  const hasText = hasAccessibleName;
 
   if (isLikelyInteractive(issue) && computedStyle && hasSuppressedFocusRing(computedStyle)) {
     findings.push({
@@ -377,6 +402,24 @@ function isLikelyInteractive(issue: VernierIssue): boolean {
 
   return ["button", "a", "input", "select", "textarea", "summary"].includes(tag) ||
     ["button", "link", "checkbox", "radio", "switch", "menuitem", "tab"].includes(role ?? "");
+}
+
+function roleRequiresAccessibleName(role: string): boolean {
+  return new Set([
+    "button",
+    "checkbox",
+    "combobox",
+    "link",
+    "menuitem",
+    "radio",
+    "searchbox",
+    "slider",
+    "spinbutton",
+    "switch",
+    "tab",
+    "textbox",
+    "treeitem"
+  ]).has(role.toLowerCase());
 }
 
 function hasSuppressedFocusRing(computedStyle: Record<string, string>): boolean {

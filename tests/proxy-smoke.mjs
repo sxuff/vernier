@@ -691,7 +691,8 @@ try {
     !auditOutput.includes("focus-ring") ||
     !auditOutput.includes("image-alt") ||
     !auditOutput.includes("role-name") ||
-    auditJson.findingCount < 5
+    !auditOutput.includes("duplicate-id") ||
+    auditJson.findingCount < 6
   ) {
     throw new Error(`Expected audit a11y to flag fixture accessibility findings:\n${auditOutput}\n${JSON.stringify(auditJson, null, 2)}`);
   }
@@ -838,7 +839,12 @@ async function writeNestedSessionFixture(baseSession) {
           role: "button",
           testId: "bad-button",
           nearestTestId: "bad-button",
-          source: "src/components/BadButton.tsx:7"
+          source: "src/components/BadButton.tsx:7",
+          id: "duplicated-control",
+          ancestry: [
+            { tag: "main", id: "duplicated-control", classes: [] },
+            { tag: "img", id: "duplicated-control", classes: [], role: "button", testId: "bad-button" }
+          ]
         },
         measurement: {
           kind: "single",

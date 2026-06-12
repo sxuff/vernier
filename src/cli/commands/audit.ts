@@ -27,7 +27,10 @@ export async function auditLatestSession(root: string, args: string[]): Promise<
     return parsed.flag("--json") ? JSON.stringify(report, null, 2) : renderLayoutAudit(report);
   }
 
-  const findings = issues.flatMap((issue) => auditIssueAccessibility(issue.issue, issue.stableId));
+  const findings = [
+    ...issues.flatMap((issue) => auditIssueAccessibility(issue.issue, issue.stableId)),
+    ...auditDuplicateIds(issues.map((issue) => ({ issue: issue.issue, stableId: issue.stableId })))
+  ];
   const report: A11yAuditReport = {
     kind: "a11y",
     sessionId: issues[0]?.session.sessionId ?? "unknown",
@@ -61,7 +64,7 @@ interface LayoutAuditReport {
 
 interface A11yFinding {
   issueId: string;
-  rule: "contrast" | "tap-target" | "accessible-name" | "focus-ring" | "image-alt" | "role-name";
+  rule: "contrast" | "tap-target" | "accessible-name" | "focus-ring" | "image-alt" | "role-name" | "duplicate-id";
   severity: "low" | "medium" | "high";
   message: string;
   selector: string;
@@ -172,6 +175,53 @@ function auditIssueAccessibility(issue: VernierIssue, stableId: string): A11yFin
   }
 
   return findings;
+}
+
+function auditDuplicateIds(issues: Array<{ issue: VernierIssue; stableId: string }>): A11yFinding[] {
+  const occurrences = new Map<string, Array<{ issueId: string; selector: string; location: string }>>();
+
+  for (const { issue, stableId } of issues) {
+    const ancestryOccurrences = issue.target.ancestry
+      .map((ancestor, index) => ({
+        id: ancestor.id,
+        location: `${ancestor.tag}${ancestor.testId ? `[data-testid=${ancestor.testId}]` : ""} ancestry[${index}]`
+      }))
+      .filter((item): item is { id: string; location: string } => Boolean(item.id));
+    const targetAlreadyInAncestry = issue.target.id
+      ? ancestryOccurrences.some((occurrence) => occurrence.id === issue.target.id)
+      : false;
+    const targetOccurrences = issue.target.id && !targetAlreadyInAncestry
+      ? [{ id: issue.target.id, location: `${issue.target.tag} target` }]
+      : [];
+
+    for (const occurrence of [...ancestryOccurrences, ...targetOccurrences]) {
+      const list = occurrences.get(occurrence.id) ?? [];
+      list.push({
+        issueId: stableId,
+        selector: issue.selector,
+        location: occurrence.location
+      });
+      occurrences.set(occurrence.id, list);
+    }
+  }
+
+  return [...occurrences.entries()].flatMap(([id, matches]) => {
+    if (matches.length < 2) {
+      return [];
+    }
+
+    const [first] = matches;
+
+    return [{
+      issueId: first!.issueId,
+      rule: "duplicate-id" as const,
+      severity: "high" as const,
+      message: "Captured DOM evidence contains a duplicate id, which can break labels, selectors, and assistive technology navigation.",
+      selector: first!.selector,
+      expected: `id "${id}" appears once`,
+      actual: matches.map((match) => `${match.issueId} ${match.location}`).join("; ")
+    }];
+  });
 }
 
 function renderA11yAudit(report: A11yAuditReport): string {

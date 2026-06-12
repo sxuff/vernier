@@ -8,7 +8,19 @@ export type { OverlayRuntimeOptions, SessionOutputOptions } from "./core/overlay
 export { handleVernierSessionRequest } from "./core/session-handler";
 export { resolveFeedbackDirectory, writeSession } from "./core/session-writer";
 export { createAgentPrompt, readLatestSessionMarkdown } from "./core/handoff";
-export { findLatestIssue, listLatestIssues, markLatestIssue, readLatestSession, updateLatestIssueNote } from "./core/issues";
+export {
+  findLatestIssue,
+  listLatestIssues,
+  markLatestIssue,
+  readLatestSession,
+  renderGitHubIssueBody,
+  renderGitHubIssueTitle,
+  renderIssuePacket,
+  renderIssueTask,
+  renderIssueVerification,
+  renderIssuesTask,
+  updateLatestIssueNote
+} from "./core/issues";
 export type { AgentTemplate, IndexedVernierIssue, IssueStatus } from "./core/issues";
 export { resolveSource, sourceResolvers } from "./overlay/source";
 export type { SourceLocation, SourceResolution, SourceResolver } from "./overlay/source";

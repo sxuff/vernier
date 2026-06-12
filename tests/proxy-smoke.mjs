@@ -411,7 +411,13 @@ try {
   }
   const compareReport = JSON.parse(await readFile(path.join(artifactDirectory, "report.json"), "utf8"));
   const compareMarkdown = await readFile(path.join(artifactDirectory, "report.md"), "utf8");
-  if (compareReport.selectorFound !== true || !compareMarkdown.includes(`Issue ${sessionJson.issues[1].stableId}`)) {
+  await readFile(path.join(artifactDirectory, "diff.png"));
+  if (
+    compareReport.selectorFound !== true ||
+    compareReport.artifacts?.diff !== "diff.png" ||
+    !compareMarkdown.includes(`Issue ${sessionJson.issues[1].stableId}`) ||
+    !compareMarkdown.includes("Diff: diff.png")
+  ) {
     throw new Error(`Expected verify --compare artifacts to include report data:\n${compareMarkdown}`);
   }
   const multiCompareOutput = await runNode([

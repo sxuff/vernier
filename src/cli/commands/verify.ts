@@ -1,5 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Browser, Page } from "playwright";
 import type { BoundingBox, VernierIssue, VernierSession } from "../../schema";
 import { findLatestIssue, type IndexedVernierIssue, type IssueStatus, renderIssueVerification } from "../../core/issues";
@@ -397,11 +398,87 @@ async function writeVerificationArtifacts(
   viewport?: CompareViewport
 ): Promise<void> {
   await mkdir(artifactDirectory, { recursive: true });
-  await copyFile(indexed.screenshotPath, path.join(artifactDirectory, "before.png"));
-  await page.screenshot({ path: path.join(artifactDirectory, "after.png"), fullPage: true });
-  const reportWithViewport = viewport ? { viewport, ...report } : report;
+  const beforePath = path.join(artifactDirectory, "before.png");
+  const afterPath = path.join(artifactDirectory, "after.png");
+  const diffPath = path.join(artifactDirectory, "diff.png");
+  const artifacts = {
+    before: "before.png",
+    after: "after.png",
+    diff: "diff.png"
+  };
+
+  await copyFile(indexed.screenshotPath, beforePath);
+  await page.screenshot({ path: afterPath, fullPage: true });
+  await writeDiffOverviewImage(page, beforePath, afterPath, diffPath, indexed, report, viewport);
+
+  const reportWithViewport = viewport ? { viewport, artifacts, ...report } : { artifacts, ...report };
   await writeFile(path.join(artifactDirectory, "report.json"), `${JSON.stringify(reportWithViewport, null, 2)}\n`);
-  await writeFile(path.join(artifactDirectory, "report.md"), `${renderCompareReport(indexed.stableId, "", artifactDirectory, report, viewport)}\n`);
+  await writeFile(path.join(artifactDirectory, "report.md"), `${renderCompareReport(indexed.stableId, "", artifactDirectory, report, viewport, artifacts)}\n`);
+}
+
+async function writeDiffOverviewImage(
+  page: Page,
+  beforePath: string,
+  afterPath: string,
+  diffPath: string,
+  indexed: IndexedVernierIssue,
+  report: CompareReport,
+  viewport?: CompareViewport
+): Promise<void> {
+  await page.setViewportSize({ width: 1100, height: 760 });
+  const rows = report.differences.length === 0
+    ? "<tr><td colspan=\"4\">No measured differences.</td></tr>"
+    : report.differences.map((difference) => [
+      "<tr>",
+      `<td>${escapeHtml(difference.field)}</td>`,
+      `<td>${escapeHtml(String(difference.original))}</td>`,
+      `<td>${escapeHtml(String(difference.current))}</td>`,
+      `<td>${escapeHtml(difference.withinTolerance ? "ok" : "changed")}</td>`,
+      "</tr>"
+    ].join("")).join("");
+  await page.setContent([
+    "<!doctype html>",
+    "<html>",
+    "<head>",
+    "<meta charset=\"utf-8\" />",
+    "<style>",
+    "body { margin: 0; padding: 28px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f6f8fa; color: #101828; }",
+    "header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; margin-bottom: 20px; }",
+    "h1 { font-size: 24px; margin: 0; }",
+    ".meta { font-size: 13px; color: #475467; }",
+    ".grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }",
+    ".panel { background: white; border: 1px solid #d0d7de; border-radius: 8px; padding: 12px; min-height: 260px; }",
+    ".label { font-size: 13px; font-weight: 700; margin-bottom: 10px; }",
+    "img { display: block; max-width: 100%; max-height: 360px; object-fit: contain; background: #fff; border: 1px solid #eaecf0; }",
+    "table { width: 100%; border-collapse: collapse; margin-top: 18px; background: #fff; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; font-size: 13px; }",
+    "th, td { padding: 8px 10px; border-bottom: 1px solid #eaecf0; text-align: left; vertical-align: top; }",
+    "th { background: #f2f4f7; font-weight: 700; }",
+    "tr:last-child td { border-bottom: 0; }",
+    "</style>",
+    "</head>",
+    "<body>",
+    "<header>",
+    `<h1>Vernier verification diff - ${escapeHtml(indexed.stableId)}</h1>`,
+    `<div class=\"meta\">${escapeHtml(viewport ? formatCompareViewport(viewport) : "captured viewport")} · suggested ${escapeHtml(report.suggestedStatus)}</div>`,
+    "</header>",
+    "<section class=\"grid\">",
+    "<div class=\"panel\">",
+    "<div class=\"label\">Before</div>",
+    `<img src=\"${pathToFileURL(beforePath).href}\" alt=\"Before screenshot\" />`,
+    "</div>",
+    "<div class=\"panel\">",
+    "<div class=\"label\">After</div>",
+    `<img src=\"${pathToFileURL(afterPath).href}\" alt=\"After screenshot\" />`,
+    "</div>",
+    "</section>",
+    "<table>",
+    "<thead><tr><th>Field</th><th>Original</th><th>Current</th><th>Status</th></tr></thead>",
+    `<tbody>${rows}</tbody>`,
+    "</table>",
+    "</body>",
+    "</html>"
+  ].join(""));
+  await page.screenshot({ path: diffPath, fullPage: true });
 }
 
 function renderCompareReport(
@@ -409,7 +486,8 @@ function renderCompareReport(
   targetUrl: string,
   artifactDirectory: string,
   report: CompareReport,
-  viewport?: CompareViewport
+  viewport?: CompareViewport,
+  artifacts?: { before: string; after: string; diff: string }
 ): string {
   return [
     `Issue ${issueId}`,
@@ -420,6 +498,9 @@ function renderCompareReport(
     `Tolerance: ${report.tolerancePx}px`,
     `Suggested status: ${report.suggestedStatus}`,
     `Artifacts: ${artifactDirectory}`,
+    artifacts ? `Before: ${artifacts.before}` : null,
+    artifacts ? `After: ${artifacts.after}` : null,
+    artifacts ? `Diff: ${artifacts.diff}` : null,
     "",
     "Differences:",
     ...report.differences.map((difference) =>
@@ -827,6 +908,13 @@ function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
 
 function readRequiredReference(args: string[], command: string): string {
   const reference = parseArgs(args, { valueOptions: verifyValueOptions }).positionals()[0];

@@ -61,6 +61,9 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
   const topDelta = roundNumber(secondRect.top - firstRect.top);
   const widthDelta = roundNumber(secondRect.width - firstRect.width);
   const heightDelta = roundNumber(secondRect.height - firstRect.height);
+  const centerDelta = roundNumber((secondRect.left + secondRect.width / 2) - (firstRect.left + firstRect.width / 2));
+  const horizontalGap = roundNumber(secondRect.left - firstRect.right);
+  const verticalGap = roundNumber(secondRect.top - firstRect.bottom);
   const firstColor = toHexColor(firstStyles.color);
   const secondColor = toHexColor(secondStyles.color);
   const firstBackground = toHexColor(firstStyles.backgroundColor);
@@ -76,6 +79,9 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
       `Top edge delta: ${formatSigned(topDelta)}px`,
       `Width delta: ${formatSigned(widthDelta)}px`,
       `Height delta: ${formatSigned(heightDelta)}px`,
+      `Center delta: ${formatSigned(centerDelta)}px`,
+      `Horizontal gap: ${formatSigned(horizontalGap)}px`,
+      `Vertical gap: ${formatSigned(verticalGap)}px`,
       `Color delta: ${firstColor} -> ${secondColor}`,
       `Background delta: ${firstBackground} -> ${secondBackground}`,
       `Font-size delta: ${firstFontSize} -> ${secondFontSize}`
@@ -94,6 +100,14 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         color: [firstColor, secondColor],
         backgroundColor: [firstBackground, secondBackground],
         fontSize: [firstFontSize, secondFontSize]
+      },
+      alignment: {
+        leftAligned: Math.abs(leftDelta) <= 1,
+        topAligned: Math.abs(topDelta) <= 1,
+        centerAligned: Math.abs(centerDelta) <= 1,
+        centerDelta,
+        horizontalGap,
+        verticalGap
       },
       layoutContext: layoutContext(secondElement),
       classHints: classHints(secondElement),

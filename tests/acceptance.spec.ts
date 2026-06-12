@@ -104,6 +104,14 @@ test("exports measured UI feedback session", async ({ page }) => {
           width: number;
           height: number;
         };
+        alignment?: {
+          leftAligned: boolean;
+          topAligned: boolean;
+          centerAligned: boolean;
+          centerDelta: number;
+          horizontalGap: number;
+          verticalGap: number;
+        };
         reference?: {
           selector: string;
         };
@@ -147,6 +155,10 @@ test("exports measured UI feedback session", async ({ page }) => {
   expect(sessionJson.issues[0]?.target.ancestry.length).toBeGreaterThan(0);
   expect(sessionJson.issues[0]?.measurement?.kind).toBe("delta");
   expect(sessionJson.issues[0]?.measurement?.delta?.left).toBe(12);
+  expect(sessionJson.issues[0]?.measurement?.alignment?.leftAligned).toBe(false);
+  expect(sessionJson.issues[0]?.measurement?.alignment?.centerAligned).toBe(false);
+  expect(sessionJson.issues[0]?.measurement?.alignment?.centerDelta).toBe(12);
+  expect(sessionJson.issues[0]?.measurement?.alignment?.verticalGap).toBe(20);
   expect(sessionJson.issues[0]?.measurement?.reference?.selector).toContain("usage-card");
   expect(sessionJson.issues[0]?.measurement?.target?.selector).toContain("revenue-card");
 });

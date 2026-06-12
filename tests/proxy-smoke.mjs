@@ -312,6 +312,13 @@ try {
   if (sessionJson.issues[1]?.measurement?.kind !== "delta" || sessionJson.issues[1].measurement.delta.left !== 12) {
     throw new Error(`Expected delta issue to include structured delta measurement:\n${JSON.stringify(sessionJson, null, 2)}`);
   }
+  if (
+    sessionJson.issues[1].measurement.alignment?.centerDelta !== 12 ||
+    sessionJson.issues[1].measurement.alignment?.verticalGap !== 20 ||
+    sessionJson.issues[1].measurement.alignment?.centerAligned !== false
+  ) {
+    throw new Error(`Expected delta issue to include structured alignment evidence:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
+  }
   if (!sessionJson.issues[1]?.measurement?.layoutContext?.parentDisplay) {
     throw new Error(`Expected delta issue to include layout context:\n${JSON.stringify(sessionJson.issues[1], null, 2)}`);
   }

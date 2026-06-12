@@ -135,6 +135,14 @@ export interface DeltaMeasurement {
     backgroundColor?: [string, string];
     fontSize?: [string, string];
   };
+  alignment?: {
+    leftAligned: boolean;
+    topAligned: boolean;
+    centerAligned: boolean;
+    centerDelta: number;
+    horizontalGap: number;
+    verticalGap: number;
+  };
   layoutContext?: LayoutContext;
   classHints: string[];
   designTokenHints: DesignTokenHint[];

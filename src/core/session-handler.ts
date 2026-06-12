@@ -213,6 +213,7 @@ function validateMeasurement(
 
   if (kind === "delta") {
     const delta = expectRecord(measurement.delta, `${field}.delta`);
+    const alignment = measurement.alignment === undefined ? undefined : expectRecord(measurement.alignment, `${field}.alignment`);
 
     return {
       kind,
@@ -228,6 +229,14 @@ function validateMeasurement(
         color: validateStringPair(delta.color, `${field}.delta.color`),
         backgroundColor: validateStringPair(delta.backgroundColor, `${field}.delta.backgroundColor`),
         fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`)
+      },
+      alignment: alignment === undefined ? undefined : {
+        leftAligned: expectBoolean(alignment.leftAligned, `${field}.alignment.leftAligned`),
+        topAligned: expectBoolean(alignment.topAligned, `${field}.alignment.topAligned`),
+        centerAligned: expectBoolean(alignment.centerAligned, `${field}.alignment.centerAligned`),
+        centerDelta: expectFiniteNumber(alignment.centerDelta, `${field}.alignment.centerDelta`),
+        horizontalGap: expectFiniteNumber(alignment.horizontalGap, `${field}.alignment.horizontalGap`),
+        verticalGap: expectFiniteNumber(alignment.verticalGap, `${field}.alignment.verticalGap`)
       },
       classHints: expectStringArray(measurement.classHints, `${field}.classHints`),
       designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>

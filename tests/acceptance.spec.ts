@@ -9,6 +9,36 @@ test.beforeEach(async () => {
   await rm(feedbackRoot, { recursive: true, force: true });
 });
 
+test("themes overlay chrome in dark color scheme", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await page.locator("[data-vernier-root]").waitFor({ state: "attached" });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "F",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    );
+  });
+
+  await expect(page.locator("[data-vernier-toolbar]")).toBeVisible();
+  const toolbarColors = await page.locator("[data-vernier-toolbar]").evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      color: styles.color
+    };
+  });
+
+  expect(toolbarColors.backgroundColor).not.toBe("rgb(255, 255, 255)");
+  expect(toolbarColors.color).toBe("rgb(248, 250, 252)");
+});
+
 test("exports measured UI feedback session", async ({ page }) => {
   await page.goto("/");
   await page.waitForLoadState("networkidle");

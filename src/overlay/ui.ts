@@ -26,6 +26,8 @@ export function createOverlayRoot(): OverlayRoot {
   root.style.inset = "0";
   root.style.zIndex = "2147483647";
   root.style.pointerEvents = "none";
+  const themeStyle = document.createElement("style");
+  themeStyle.textContent = overlayThemeCss();
 
   const toolbar = document.createElement("div");
   toolbar.dataset.vernierToolbar = "true";
@@ -37,11 +39,11 @@ export function createOverlayRoot(): OverlayRoot {
   toolbar.style.alignItems = "center";
   toolbar.style.gap = "8px";
   toolbar.style.padding = "8px 10px";
-  toolbar.style.border = "1px solid rgba(23, 32, 51, 0.16)";
+  toolbar.style.border = "1px solid var(--vernier-border)";
   toolbar.style.borderRadius = "8px";
-  toolbar.style.background = "#ffffff";
-  toolbar.style.color = "#172033";
-  toolbar.style.boxShadow = "0 12px 32px rgba(23, 32, 51, 0.18)";
+  toolbar.style.background = "var(--vernier-surface)";
+  toolbar.style.color = "var(--vernier-text)";
+  toolbar.style.boxShadow = "var(--vernier-shadow)";
   toolbar.style.font = "600 13px/1.2 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   toolbar.style.pointerEvents = "auto";
 
@@ -60,7 +62,9 @@ export function createOverlayRoot(): OverlayRoot {
   modeSelect.style.pointerEvents = "auto";
   modeSelect.style.padding = "4px 6px";
   modeSelect.style.borderRadius = "6px";
-  modeSelect.style.border = "1px solid rgba(23, 32, 51, 0.18)";
+  modeSelect.style.border = "1px solid var(--vernier-border)";
+  modeSelect.style.background = "var(--vernier-input)";
+  modeSelect.style.color = "var(--vernier-text)";
 
   for (const [value, text] of [
     ["measure", "Measure"],
@@ -85,11 +89,11 @@ export function createOverlayRoot(): OverlayRoot {
   panel.style.maxHeight = "calc(100vh - 76px)";
   panel.style.overflow = "auto";
   panel.style.padding = "12px";
-  panel.style.border = "1px solid rgba(23, 32, 51, 0.16)";
+  panel.style.border = "1px solid var(--vernier-border)";
   panel.style.borderRadius = "8px";
-  panel.style.background = "#ffffff";
-  panel.style.color = "#172033";
-  panel.style.boxShadow = "0 12px 32px rgba(23, 32, 51, 0.18)";
+  panel.style.background = "var(--vernier-surface)";
+  panel.style.color = "var(--vernier-text)";
+  panel.style.boxShadow = "var(--vernier-shadow)";
   panel.style.font = "12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace";
   panel.style.pointerEvents = "auto";
 
@@ -105,16 +109,20 @@ export function createOverlayRoot(): OverlayRoot {
   noteInput.style.width = "100%";
   noteInput.style.margin = "0 0 8px";
   noteInput.style.resize = "vertical";
+  noteInput.style.border = "1px solid var(--vernier-border)";
+  noteInput.style.borderRadius = "6px";
+  noteInput.style.background = "var(--vernier-input)";
+  noteInput.style.color = "var(--vernier-text)";
 
   const annotationLabelSelect = document.createElement("select");
   annotationLabelSelect.dataset.vernierAnnotationLabel = "true";
   annotationLabelSelect.style.width = "100%";
   annotationLabelSelect.style.margin = "0 0 8px";
   annotationLabelSelect.style.padding = "6px";
-  annotationLabelSelect.style.border = "1px solid rgba(23, 32, 51, 0.18)";
+  annotationLabelSelect.style.border = "1px solid var(--vernier-border)";
   annotationLabelSelect.style.borderRadius = "6px";
-  annotationLabelSelect.style.background = "#ffffff";
-  annotationLabelSelect.style.color = "#172033";
+  annotationLabelSelect.style.background = "var(--vernier-input)";
+  annotationLabelSelect.style.color = "var(--vernier-text)";
 
   for (const [value, text] of [
     ["", "Quick label"],
@@ -137,10 +145,10 @@ export function createOverlayRoot(): OverlayRoot {
   addIssueButton.style.width = "100%";
   addIssueButton.style.padding = "8px 10px";
   addIssueButton.style.margin = "0 0 8px";
-  addIssueButton.style.border = "1px solid rgba(23, 32, 51, 0.2)";
+  addIssueButton.style.border = "1px solid var(--vernier-border-strong)";
   addIssueButton.style.borderRadius = "6px";
-  addIssueButton.style.background = "#f6f7f9";
-  addIssueButton.style.color = "#172033";
+  addIssueButton.style.background = "var(--vernier-button)";
+  addIssueButton.style.color = "var(--vernier-text)";
   addIssueButton.style.font = "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
   const saveIssueButton = createPanelButton("Save selected", "vernierSaveIssue");
@@ -171,18 +179,22 @@ export function createOverlayRoot(): OverlayRoot {
   copyFallback.style.margin = "8px 0 0";
   copyFallback.style.resize = "vertical";
   copyFallback.style.font = "12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace";
+  copyFallback.style.border = "1px solid var(--vernier-border)";
+  copyFallback.style.borderRadius = "6px";
+  copyFallback.style.background = "var(--vernier-input)";
+  copyFallback.style.color = "var(--vernier-text)";
 
   const issueList = document.createElement("ol");
   issueList.dataset.vernierIssueList = "true";
   issueList.style.margin = "0 0 12px 18px";
   issueList.style.padding = "0";
-  issueList.style.color = "#5a667a";
+  issueList.style.color = "var(--vernier-muted)";
   issueList.style.font = "12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
   const status = document.createElement("div");
   status.dataset.vernierStatus = "true";
   status.style.marginTop = "8px";
-  status.style.color = "#5a667a";
+  status.style.color = "var(--vernier-muted)";
 
   const issueActions = document.createElement("div");
   issueActions.style.display = "grid";
@@ -212,7 +224,7 @@ export function createOverlayRoot(): OverlayRoot {
     copyFallback
   );
   toolbar.append(indicator, label, modeSelect);
-  root.append(toolbar, panel);
+  root.append(themeStyle, toolbar, panel);
 
   return {
     root,
@@ -242,10 +254,10 @@ export function createOverlayRoot(): OverlayRoot {
     button.style.width = "100%";
     button.style.padding = "7px 8px";
     button.style.margin = "0 0 8px";
-    button.style.border = "1px solid rgba(23, 32, 51, 0.2)";
+    button.style.border = "1px solid var(--vernier-border-strong)";
     button.style.borderRadius = "6px";
-    button.style.background = "#ffffff";
-    button.style.color = "#172033";
+    button.style.background = "var(--vernier-input)";
+    button.style.color = "var(--vernier-text)";
     button.style.font = "600 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
     return button;
@@ -284,14 +296,44 @@ export function renderIssueList(
     button.style.width = "100%";
     button.style.margin = "0 0 6px";
     button.style.padding = "6px";
-    button.style.border = issue.id === selectedIssueId ? "1px solid #1f6feb" : "1px solid rgba(23, 32, 51, 0.14)";
+    button.style.border = issue.id === selectedIssueId ? "1px solid #1f6feb" : "1px solid var(--vernier-border)";
     button.style.borderRadius = "6px";
-    button.style.background = issue.id === selectedIssueId ? "#eef4ff" : "#ffffff";
-    button.style.color = "#172033";
+    button.style.background = issue.id === selectedIssueId ? "var(--vernier-selected)" : "var(--vernier-input)";
+    button.style.color = "var(--vernier-text)";
     button.style.textAlign = "left";
     button.style.font = "12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     item.style.listStyle = "none";
     item.append(button);
     list.append(item);
   }
+}
+
+function overlayThemeCss(): string {
+  return `
+    [data-vernier-root] {
+      --vernier-surface: #ffffff;
+      --vernier-input: #ffffff;
+      --vernier-button: #f6f7f9;
+      --vernier-selected: #eef4ff;
+      --vernier-text: #172033;
+      --vernier-muted: #5a667a;
+      --vernier-border: rgba(23, 32, 51, 0.16);
+      --vernier-border-strong: rgba(23, 32, 51, 0.2);
+      --vernier-shadow: 0 12px 32px rgba(23, 32, 51, 0.18);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      [data-vernier-root] {
+        --vernier-surface: #111827;
+        --vernier-input: #1f2937;
+        --vernier-button: #243244;
+        --vernier-selected: #102a4f;
+        --vernier-text: #f8fafc;
+        --vernier-muted: #cbd5e1;
+        --vernier-border: rgba(248, 250, 252, 0.18);
+        --vernier-border-strong: rgba(248, 250, 252, 0.28);
+        --vernier-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+      }
+    }
+  `;
 }

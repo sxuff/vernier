@@ -155,6 +155,7 @@ vernier issues
 vernier issues --todo
 vernier issues --fixed
 vernier issues --json
+vernier status
 vernier show <issue-id>
 vernier verify <issue-id>
 vernier verify <issue-id> --target http://localhost:3000 --open
@@ -185,9 +186,9 @@ vernier latest
 vernier open
 ```
 
-`vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting.
+`vernier issues` prints short stable IDs like `i-8f3a12` plus a `todo` or `fixed` status, so you do not have to rely on fragile list positions when multiple issues are waiting. `vernier status` gives a compact latest-session count and next todo item.
 
-Add `--json` to `vernier issues` or `vernier detect` when you want scriptable output for agents, CI, or shell pipelines.
+Add `--json` to `vernier issues`, `vernier status`, or `vernier detect` when you want scriptable output for agents, CI, or shell pipelines.
 
 `vernier note <issue-id> "..."` updates the latest session JSON and regenerates `session.md`, which is useful when you want to refine a captured issue without recapturing the screenshot.
 

@@ -483,6 +483,8 @@ try {
 
   const issuesOutput = await runNode(["dist/cli.js", "issues"]);
   const issuesJson = JSON.parse(await runNode(["dist/cli.js", "issues", "--json"]));
+  const statusOutput = await runNode(["dist/cli.js", "status"]);
+  const statusJson = JSON.parse(await runNode(["dist/cli.js", "status", "--json"]));
   const auditOutput = await runNode(["dist/cli.js", "audit", "a11y"]);
   const auditJson = JSON.parse(await runNode(["dist/cli.js", "audit", "a11y", "--json"]));
   const layoutAuditOutput = await runNode(["dist/cli.js", "audit", "layout"]);
@@ -556,7 +558,7 @@ try {
   if (!helpOutput.includes("vernier serve [--port 3333|auto]") || !helpOutput.includes("vernier snippet [--port 3333]")) {
     throw new Error(`Expected help command to document standalone injection commands:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier detect [--ports 5173,3000,6006] [--json]") || !helpOutput.includes("vernier issues [--todo|--fixed|--all] [--json]")) {
+  if (!helpOutput.includes("vernier detect [--ports 5173,3000,6006] [--json]") || !helpOutput.includes("vernier issues [--todo|--fixed|--all] [--json]") || !helpOutput.includes("vernier status [--json]")) {
     throw new Error(`Expected help command to document JSON output flags:\n${helpOutput}`);
   }
   if (!snippetOutput.includes('<script type="module" src="http://127.0.0.1:4344/__vernier/overlay.js"></script>')) {
@@ -585,6 +587,12 @@ try {
   }
   if (issuesJson.issueCount < 1 || issuesJson.issues[0]?.id !== stableIssueId || issuesJson.issues[0]?.status !== "todo") {
     throw new Error(`Expected issues --json to emit machine-readable issue data:\n${JSON.stringify(issuesJson, null, 2)}`);
+  }
+  if (!statusOutput.includes("Issues: 1") || !statusOutput.includes("Todo: 1") || !statusOutput.includes(`Next todo: ${stableIssueId}`)) {
+    throw new Error(`Expected status command to summarize latest issue state:\n${statusOutput}`);
+  }
+  if (statusJson.total !== 1 || statusJson.todo !== 1 || statusJson.fixed !== 0 || statusJson.nextTodo?.id !== stableIssueId) {
+    throw new Error(`Expected status --json to emit machine-readable status:\n${JSON.stringify(statusJson, null, 2)}`);
   }
   if (
     !auditOutput.includes("A11y audit:") ||

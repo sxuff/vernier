@@ -29,6 +29,7 @@ import {
 } from "./cli/commands/proxy";
 import { startReplayViewer } from "./cli/commands/replay";
 import { printSnippet, startStandaloneServer } from "./cli/commands/snippet";
+import { summarizeLatestStatus } from "./cli/commands/status";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
 import { parseArgs } from "./cli/lib/args";
 import { debugLog, setDebugEnabled } from "./cli/lib/debug";
@@ -265,6 +266,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "status") {
+    console.log(await summarizeLatestStatus(process.cwd(), args));
+    return;
+  }
+
   if (command === "show") {
     await showIssueCommand(process.cwd(), args);
     return;
@@ -411,6 +417,7 @@ function printHelp(): void {
       "  vernier http://localhost:5173",
       "  vernier detect [--ports 5173,3000,6006] [--json]",
       "  vernier issues [--todo|--fixed|--all] [--json]",
+      "  vernier status [--json]",
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--template generic|codex|claude|cursor|aider|strict] [--print]",
       "  vernier note <issue-id> \"updated note\"",

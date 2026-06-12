@@ -164,6 +164,7 @@ vernier verify <issue-id> --target http://localhost:3000 --compare --viewports m
 vernier capture --target http://localhost:3000 --routes /,/pricing --viewports mobile,desktop
 vernier diff .ui-feedback/captures/capture-a .ui-feedback/captures/capture-b
 vernier replay latest
+vernier storybook --url http://localhost:6006 --stories button--primary --viewports mobile,desktop
 vernier serve --port 3333
 vernier snippet --port 3333
 vernier doctor
@@ -221,6 +222,8 @@ Add `--json` to `vernier issues`, `vernier status`, or `vernier detect` when you
 `vernier capture --routes /,/pricing --viewports mobile,desktop` performs batch screenshot capture against an already-running target app and writes artifacts under `.ui-feedback/captures/<timestamp>/`.
 
 `vernier diff <left> <right>` compares two Vernier feedback sessions or two batch capture directories and reports added, removed, or changed issues/screenshots.
+
+`vernier storybook --url http://localhost:6006` reads Storybook's `index.json`, captures each selected story through `iframe.html`, and writes story IDs, import paths, tags, viewport metadata, and screenshots under `.ui-feedback/storybook/<timestamp>/`.
 
 `vernier replay latest` opens a local read-only viewer for the latest session, including screenshots, structured evidence, statuses, and verification reports.
 

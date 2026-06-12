@@ -32,6 +32,7 @@ import {
 import { startReplayViewer } from "./cli/commands/replay";
 import { printSnippet, startStandaloneServer } from "./cli/commands/snippet";
 import { summarizeLatestStatus } from "./cli/commands/status";
+import { captureStorybook } from "./cli/commands/storybook";
 import { captureRoutes, diffArtifacts, verifyIssue } from "./cli/commands/verify";
 import { parseArgs } from "./cli/lib/args";
 import { debugLog, setDebugEnabled } from "./cli/lib/debug";
@@ -343,6 +344,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "storybook") {
+    console.log(await captureStorybook(args));
+    return;
+  }
+
   if (command === "replay") {
     await startReplayViewer(args, { root: process.cwd(), listenWithPortFallback, openUrl });
     return;
@@ -449,6 +455,7 @@ function printHelp(): void {
       "  vernier verify <issue-id> --compare [--target <url>] [--tolerance 2] [--viewports mobile,tablet,desktop|390x844,1440x900]",
       "  vernier capture --target <url> --routes /,/pricing [--viewports mobile,desktop]",
       "  vernier diff <left-session-or-capture> <right-session-or-capture>",
+      "  vernier storybook [--url http://localhost:6006] [--stories id-a,id-b] [--viewports mobile,desktop]",
       "  vernier replay latest [--port 3340|auto] [--no-open]",
       "  vernier serve [--port 3333|auto]",
       "  vernier snippet [--port 3333]",

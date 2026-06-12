@@ -61,6 +61,48 @@ const targetServer = createServer((request, response) => {
     return;
   }
 
+  if (request.url === "/index.json") {
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({
+      entries: {
+        "button--primary": {
+          id: "button--primary",
+          title: "Button",
+          name: "Primary",
+          type: "story",
+          importPath: "./Button.stories.tsx",
+          tags: ["dev", "test"]
+        },
+        "button--docs": {
+          id: "button--docs",
+          title: "Button",
+          name: "Docs",
+          type: "docs"
+        }
+      }
+    }));
+    return;
+  }
+
+  if (request.url?.startsWith("/iframe.html")) {
+    const url = new URL(request.url, `http://127.0.0.1:${targetPort}`);
+    response.setHeader("Content-Type", "text/html");
+    response.end(`<!doctype html>
+      <html>
+        <head>
+          <title>Story ${url.searchParams.get("id")}</title>
+          <style>
+            body { margin: 0; padding: 32px; font-family: system-ui, sans-serif; }
+            button { min-width: 120px; min-height: 44px; border: 0; border-radius: 8px; background: #1f6feb; color: #fff; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <button data-testid="storybook-button">Primary</button>
+        </body>
+      </html>`);
+    return;
+  }
+
   response.setHeader("Content-Type", "text/html");
   response.end(`<!doctype html>
     <html>
@@ -409,6 +451,24 @@ try {
   if (!captureDiffOutput.includes("Vernier capture diff") || !captureDiffOutput.includes("No differences.")) {
     throw new Error(`Expected diff command to compare capture artifacts:\n${captureDiffOutput}`);
   }
+  const storybookOutput = await runNode([
+    "dist/cli.js",
+    "storybook",
+    "--url",
+    `http://127.0.0.1:${targetPort}`,
+    "--stories",
+    "button--primary",
+    "--viewports",
+    "390x844"
+  ]);
+  const storybookDirectory = storybookOutput.match(/Artifacts: (.+)/)?.[1]?.trim();
+  if (!storybookOutput.includes("Captured 1 Storybook screenshot.") || !storybookDirectory) {
+    throw new Error(`Expected storybook command to report capture artifacts:\n${storybookOutput}`);
+  }
+  const storybookReport = JSON.parse(await readFile(path.join(storybookDirectory, "storybook.json"), "utf8"));
+  if (storybookReport.screenshotCount !== 1 || storybookReport.records?.[0]?.id !== "button--primary" || storybookReport.records[0].importPath !== "./Button.stories.tsx" || !storybookReport.records[0].screenshotName) {
+    throw new Error(`Expected Storybook report to include selected story metadata:\n${JSON.stringify(storybookReport, null, 2)}`);
+  }
 
   const replay = spawn(
     process.execPath,
@@ -579,7 +639,7 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
     throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {

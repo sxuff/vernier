@@ -501,6 +501,13 @@ try {
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
   const planOutput = await runNode(["dist/cli.js", "plan", stableIssueId]);
+  const exportMarkdownOutput = await runNode(["dist/cli.js", "export", "--format", "md"]);
+  const exportedJsonPath = path.join(feedbackRoot, "latest-session.json");
+  const exportJsonOutput = await runNode(["dist/cli.js", "export", "--format", "json", "--out", exportedJsonPath]);
+  const exportedZipPath = path.join(feedbackRoot, "latest-session.zip");
+  const exportZipOutput = await runNode(["dist/cli.js", "export", "--format", "zip", "--out", exportedZipPath]);
+  const exportedJson = JSON.parse(await readFile(exportedJsonPath, "utf8"));
+  const exportedZipEntries = readZipEntryNames(await readFile(exportedZipPath));
   const githubBodyOutput = await runNode(["dist/cli.js", "github", "body", stableIssueId]);
   const fixLoopOutput = await runNode(["dist/cli.js", "fix-loop", stableIssueId, "--to", "codex", "--target", `http://127.0.0.1:${targetPort}`, "--print"]);
   const configDetectOutput = await runNode(["dist/cli.js", "detect", "--config", configPath]);
@@ -567,8 +574,8 @@ try {
   if (!helpOutput.includes("vernier.config.json") || !helpOutput.includes("VERNIER_TARGET")) {
     throw new Error(`Expected help command to document config and environment defaults:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
-    throw new Error(`Expected help command to document GitHub export, plan, fix-loop, and templates:\n${helpOutput}`);
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+    throw new Error(`Expected help command to document GitHub export, export, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
     throw new Error(`Expected detect command to find target app:\n${detectOutput}`);
@@ -638,6 +645,12 @@ try {
   }
   if (!planOutput.includes(`Vernier patch plan for ${stableIssueId}`) || !planOutput.includes("Likely change type:") || !planOutput.includes("Suggested checks:")) {
     throw new Error(`Expected plan command to print a patch plan:\n${planOutput}`);
+  }
+  if (!exportMarkdownOutput.includes("make it blue instead") || exportedJson.issues[0]?.note !== "make it blue instead") {
+    throw new Error(`Expected export md/json to include latest edited session:\n${exportMarkdownOutput}\n${JSON.stringify(exportedJson, null, 2)}`);
+  }
+  if (!exportJsonOutput.includes(exportedJsonPath) || !exportZipOutput.includes(exportedZipPath) || !exportedZipEntries.includes("session.md") || !exportedZipEntries.includes("session.json") || !exportedZipEntries.some((entry) => entry.startsWith("screenshots/"))) {
+    throw new Error(`Expected export zip to include session files:\n${exportZipOutput}\n${exportedZipEntries.join("\n")}`);
   }
   if (
     !githubBodyOutput.includes(`Title: [Vernier] make it blue instead`) ||
@@ -798,6 +811,7 @@ async function writeNestedSessionFixture(baseSession) {
   await mkdir(path.join(sessionDirectory, "screenshots"), { recursive: true });
   await writeFile(path.join(sessionDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(sessionDirectory, "session.md"), "# nested fixture\nmake it red\n");
+  await writeFile(path.join(sessionDirectory, "screenshots", "issue-1.png"), Buffer.from(baseSession.issues[0].screenshotDataUrl.split(",")[1], "base64"));
 }
 
 async function verifyInvalidSessionRequests(port) {
@@ -1049,6 +1063,28 @@ function runNode(args) {
       reject(new Error(stderr || `Command failed with ${code}`));
     });
   });
+}
+
+function readZipEntryNames(buffer) {
+  const names = [];
+  let offset = 0;
+
+  while (offset + 4 <= buffer.byteLength) {
+    const signature = buffer.readUInt32LE(offset);
+
+    if (signature !== 0x04034b50) {
+      break;
+    }
+
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const nameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    names.push(buffer.subarray(nameStart, nameStart + nameLength).toString("utf8"));
+    offset = nameStart + nameLength + extraLength + compressedSize;
+  }
+
+  return names;
 }
 
 function runNodeFailure(args) {

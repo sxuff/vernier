@@ -490,8 +490,9 @@ try {
     const replaySession = await (await fetch("http://127.0.0.1:4342/session.json")).json();
     const replayScreenshot = await fetch(`http://127.0.0.1:4342/screenshots/${sessionJson.issues[0].screenshotName}`);
     const replayReport = await (await fetch(`http://127.0.0.1:4342/verification/${sessionJson.issues[1].stableId}/report.json`)).json();
+    const replayDiff = await fetch(`http://127.0.0.1:4342/verification/${sessionJson.issues[1].stableId}/diff.png`);
 
-    if (!replayHtml.includes("Vernier Replay") || !replayHtml.includes(sessionJson.issues[1].stableId)) {
+    if (!replayHtml.includes("Vernier Replay") || !replayHtml.includes(sessionJson.issues[1].stableId) || !replayHtml.includes("diff.png")) {
       throw new Error(`Expected replay viewer HTML to include latest session issues:\n${replayHtml}`);
     }
     if (replaySession.sessionId !== sessionJson.sessionId) {
@@ -502,6 +503,9 @@ try {
     }
     if (replayReport.selectorFound !== true) {
       throw new Error(`Expected replay viewer to serve verification report.`);
+    }
+    if (!replayDiff.ok || replayDiff.headers.get("content-type") !== "image/png") {
+      throw new Error(`Expected replay viewer to serve verification diff PNG.`);
     }
   } finally {
     replay.kill();

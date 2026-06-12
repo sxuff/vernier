@@ -227,13 +227,32 @@ function renderVerificationPanel(issueId: string, report: unknown): string {
     return `<p class="muted">No verification report yet. Run <code>vernier verify ${escapeHtml(issueId)} --compare</code>.</p>`;
   }
 
-  const record = report as { selectorFound?: boolean; suggestedStatus?: string; differences?: unknown[] };
+  const record = report as {
+    selectorFound?: boolean;
+    suggestedStatus?: string;
+    differences?: unknown[];
+    artifacts?: {
+      before?: string;
+      after?: string;
+      diff?: string;
+    };
+  };
+  const artifactLinks = [
+    ["report.md", "report.md"],
+    record.artifacts?.before ? ["before.png", record.artifacts.before] : null,
+    record.artifacts?.after ? ["after.png", record.artifacts.after] : null,
+    record.artifacts?.diff ? ["diff.png", record.artifacts.diff] : null
+  ].filter((item): item is [string, string] => item !== null);
+  const diffPreview = record.artifacts?.diff
+    ? `<img src="/verification/${encodeURIComponent(issueId)}/${encodeURIComponent(record.artifacts.diff)}" alt="Verification diff for ${escapeHtml(issueId)}" />`
+    : "";
 
   return `<div class="tag-row">
       <span class="tag">selector ${record.selectorFound ? "found" : "missing"}</span>
       <span class="tag">suggested ${escapeHtml(record.suggestedStatus ?? "unknown")}</span>
     </div>
-    <p><a href="/verification/${encodeURIComponent(issueId)}/report.md">report.md</a> · <a href="/verification/${encodeURIComponent(issueId)}/after.png">after.png</a></p>
+    <p>${artifactLinks.map(([label, target]) => `<a href="/verification/${encodeURIComponent(issueId)}/${encodeURIComponent(target)}">${escapeHtml(label)}</a>`).join(" · ")}</p>
+    ${diffPreview}
     <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>`;
 }
 

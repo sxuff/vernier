@@ -175,6 +175,7 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     source: expectString(issue.source, `issues[${index}].source`),
     target: validateTarget(issue.target, `issues[${index}].target`),
     measurement: issue.measurement === undefined ? undefined : validateMeasurement(issue.measurement, kind, `issues[${index}].measurement`),
+    suggestions: issue.suggestions === undefined ? undefined : validateSuggestions(issue.suggestions, `issues[${index}].suggestions`),
     redaction: issue.redaction === undefined ? undefined : validateRedaction(issue.redaction, `issues[${index}].redaction`),
     note: expectString(issue.note, `issues[${index}].note`),
     createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
@@ -182,6 +183,28 @@ function validateIssue(value: unknown, index: number): VernierSession["issues"][
     screenshotDataUrl,
     screenshot: validateScreenshotArtifact(issue.screenshot, `issues[${index}].screenshot`, screenshotName, "element", screenshotDataUrl)
   };
+}
+
+function validateSuggestions(value: unknown, field: string): VernierSession["issues"][number]["suggestions"] {
+  if (!Array.isArray(value)) {
+    throw badRequest(`${field} must be an array`);
+  }
+
+  if (value.length > 20) {
+    throw badRequest(`${field} must contain at most 20 suggestions`);
+  }
+
+  return value.map((item, index) => {
+    const suggestion = expectRecord(item, `${field}[${index}]`);
+
+    return {
+      type: expectSuggestionType(suggestion.type, `${field}[${index}].type`),
+      severity: expectSeverity(suggestion.severity, `${field}[${index}].severity`),
+      message: expectString(suggestion.message, `${field}[${index}].message`),
+      expected: expectString(suggestion.expected, `${field}[${index}].expected`),
+      actual: expectString(suggestion.actual, `${field}[${index}].actual`)
+    };
+  });
 }
 
 function validateMeasurement(
@@ -631,6 +654,31 @@ function expectAnnotationMode(value: unknown, field: string): "pen" | "box" | "r
   return value;
 }
 
+function expectSuggestionType(value: unknown, field: string): NonNullable<VernierSession["issues"][number]["suggestions"]>[number]["type"] {
+  if (
+    value !== "low-contrast" &&
+    value !== "tap-target" &&
+    value !== "missing-accessible-name" &&
+    value !== "focus-ring" &&
+    value !== "text-overflow" &&
+    value !== "clipping" &&
+    value !== "stacking-context" &&
+    value !== "token-hint"
+  ) {
+    throw badRequest(`${field} must be a known suggestion type`);
+  }
+
+  return value;
+}
+
+function expectSeverity(value: unknown, field: string): "low" | "medium" | "high" {
+  if (value !== "low" && value !== "medium" && value !== "high") {
+    throw badRequest(`${field} must be low, medium, or high`);
+  }
+
+  return value;
+}
+
 function expectScreenshotKind(value: unknown, field: string): ScreenshotArtifact["kind"] {
   if (value !== "element" && value !== "full-page") {
     throw badRequest(`${field} must be element or full-page`);
@@ -640,8 +688,8 @@ function expectScreenshotKind(value: unknown, field: string): ScreenshotArtifact
 }
 
 function expectCaptureStrategy(value: unknown, field: string): ScreenshotArtifact["captureStrategy"] {
-  if (value !== "html2canvas") {
-    throw badRequest(`${field} must be html2canvas`);
+  if (value !== "html2canvas" && value !== "modern-screenshot" && value !== "playwright" && value !== "browser-native") {
+    throw badRequest(`${field} must be html2canvas, modern-screenshot, playwright, or browser-native`);
   }
 
   return value;

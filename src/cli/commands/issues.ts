@@ -1,4 +1,4 @@
-import { markLatestIssue, renameLatestSession, type IssueStatus, updateLatestIssueNote } from "../../core/issues";
+import { assertLatestIssue, markLatestIssue, renameLatestSession, type IssueStatus, updateLatestIssueNote } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
@@ -37,6 +37,35 @@ export async function renameSession(root: string, args: string[]): Promise<void>
   const session = await renameLatestSession(root, title);
 
   console.log(`Renamed latest session ${session.sessionId} to "${session.title}".`);
+}
+
+export async function assertIssue(root: string, args: string[]): Promise<void> {
+  const parsed = parseArgs(args, { valueOptions: ["--tolerance"] });
+  const [reference, assignment] = parsed.positionals();
+  const separator = assignment?.indexOf("=") ?? -1;
+
+  if (!reference || !assignment || separator <= 0) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier assert <issue-id> <property>=<expected> [--tolerance n]", "Example: vernier assert i-abc123 width=180 --tolerance 2");
+  }
+
+  const toleranceValue = parsed.option("--tolerance");
+  const tolerance = toleranceValue === undefined ? undefined : Number(toleranceValue);
+
+  if (tolerance !== undefined && (!Number.isFinite(tolerance) || tolerance < 0)) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "--tolerance must be a non-negative number.");
+  }
+
+  const property = assignment.slice(0, separator).trim();
+  const expected = assignment.slice(separator + 1).trim();
+
+  if (!property || !expected) {
+    throw new VernierError("VERNIER_INVALID_OPTION", "Assertion property and expected value cannot be empty.");
+  }
+
+  const { indexed, assertion } = await assertLatestIssue(root, reference, property, expected, tolerance);
+  const status = assertion.passed ? "passed" : "failed";
+
+  console.log(`Assertion ${status} for ${indexed.stableId}: ${assertion.property} actual ${assertion.actual}, expected ${assertion.expected}.`);
 }
 
 function isIssueStatus(value: string | undefined): value is IssueStatus {

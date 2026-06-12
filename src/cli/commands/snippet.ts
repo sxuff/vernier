@@ -8,6 +8,7 @@ import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/ove
 import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
+  vernierModernScreenshotPath,
   vernierOverlayPath
 } from "../../core/overlay-script";
 import { handleVernierSessionRequest, vernierSessionPath } from "../../core/session-handler";
@@ -96,6 +97,7 @@ async function handleStandaloneRequest(
       response,
       createVernierOverlayScript({
         html2canvasImportPath: `${origin}${vernierHtml2CanvasPath}`,
+        modernScreenshotImportPath: `${origin}${vernierModernScreenshotPath}`,
         runtimeOptions: {
           ...options.overlay,
           sessionEndpoint: `${origin}${vernierSessionPath}`
@@ -107,6 +109,11 @@ async function handleStandaloneRequest(
 
   if (requestPath === vernierHtml2CanvasPath) {
     await sendFile(response, resolveHtml2CanvasPath(), "text/javascript");
+    return;
+  }
+
+  if (requestPath === vernierModernScreenshotPath) {
+    await sendFile(response, resolveModernScreenshotPath(), "text/javascript");
     return;
   }
 
@@ -136,4 +143,8 @@ async function sendFile(response: ServerResponse, filePath: string, contentType:
 
 function resolveHtml2CanvasPath(): string {
   return require.resolve("html2canvas/dist/html2canvas.esm.js");
+}
+
+function resolveModernScreenshotPath(): string {
+  return require.resolve("modern-screenshot/dist/index.mjs");
 }

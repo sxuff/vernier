@@ -22,6 +22,7 @@ try {
   await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ screenshotName: "../escape.png" }), 400, "safe filename");
   await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ issueCount: 2 }), 400, "issueCount must match");
   await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ hash: "sha256-nope" }), 400, "sha256");
+  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ captureStrategy: "unknown" }), 400, "captureStrategy must be html2canvas, modern-screenshot, playwright, or browser-native");
 
   const ok = await requestJson("POST", "/__vernier/session", createSessionPayload());
   assert(ok.status === 200, `expected valid session to write, got ${ok.status}: ${ok.text}`);
@@ -29,6 +30,9 @@ try {
 
   const session = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "session.json"), "utf8"));
   assert(session.sessionId === "s-testsession1", "expected latest session to be written");
+  assert(!("fullPageScreenshotDataUrl" in session), "expected written session.json to omit full-page data URL");
+  assert(!("screenshotDataUrl" in session.issues[0]), "expected written session.json to omit issue data URL");
+  assert(session.issues[0].suggestions?.[0]?.type === "tap-target", "expected validated suggestions to be preserved");
 
   console.log("session handler verified");
 } finally {
@@ -96,7 +100,7 @@ function createSessionPayload(overrides = {}) {
     width: 1,
     height: 1,
     devicePixelRatio: 1,
-    captureStrategy: "html2canvas",
+    captureStrategy: overrides.captureStrategy ?? "html2canvas",
     mimeType: "image/png",
     byteLength: Buffer.byteLength(png.split(",")[1] ?? "", "base64"),
     hash
@@ -135,6 +139,15 @@ function createSessionPayload(overrides = {}) {
           ownerChain: [],
           ancestry: []
         },
+        suggestions: overrides.suggestions ?? [
+          {
+            type: "tap-target",
+            severity: "medium",
+            message: "Interactive target is smaller than common touch guidance.",
+            expected: "at least 44x44px",
+            actual: "24x24px"
+          }
+        ],
         note: "handler fixture",
         createdAt: "2026-06-11T12:34:56.789Z",
         screenshotName,

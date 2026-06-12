@@ -14,6 +14,7 @@ import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/ove
 import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
+  vernierModernScreenshotPath,
   vernierOverlayPath
 } from "../../core/overlay-script";
 import { handleVernierSessionRequest } from "../../core/session-handler";
@@ -155,6 +156,7 @@ async function handleProxyRequest(
       response,
       createVernierOverlayScript({
         html2canvasImportPath: vernierHtml2CanvasPath,
+        modernScreenshotImportPath: vernierModernScreenshotPath,
         runtimeOptions: options.overlay
       })
     );
@@ -163,6 +165,11 @@ async function handleProxyRequest(
 
   if (requestPath === vernierHtml2CanvasPath) {
     await sendFile(response, resolveHtml2CanvasPath(), "text/javascript");
+    return;
+  }
+
+  if (requestPath === vernierModernScreenshotPath) {
+    await sendFile(response, resolveModernScreenshotPath(), "text/javascript");
     return;
   }
 
@@ -487,6 +494,10 @@ async function sendFile(response: ServerResponse, filePath: string, contentType:
 
 function resolveHtml2CanvasPath(): string {
   return require.resolve("html2canvas/dist/html2canvas.esm.js");
+}
+
+function resolveModernScreenshotPath(): string {
+  return require.resolve("modern-screenshot/dist/index.mjs");
 }
 
 export function isUrlLike(value: string): boolean {

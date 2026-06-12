@@ -21,6 +21,8 @@ assert(sessions.length === 2, `expected two session directories, got ${sessions.
 
 const latestSession = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "session.json"), "utf8"));
 assert(latestSession.sessionId === second.sessionId, "latest should point at the newest session");
+assert(!("fullPageScreenshotDataUrl" in latestSession), "session.json should not embed the full-page screenshot data URL");
+assert(!("screenshotDataUrl" in latestSession.issues[0]), "session.json should not embed issue screenshot data URLs");
 
 const latestMetadata = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest.json"), "utf8"));
 assert(latestMetadata.kind === "junction" || latestMetadata.kind === "copy", "latest metadata should record link strategy");

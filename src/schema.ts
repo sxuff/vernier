@@ -177,13 +177,32 @@ export interface AnnotationMeasurement {
 
 export type VernierMeasurement = SingleMeasurement | DeltaMeasurement | AnnotationMeasurement;
 
+export type CaptureStrategy = "html2canvas" | "modern-screenshot" | "playwright" | "browser-native";
+
+export interface VernierAssertion {
+  property: string;
+  expected: string;
+  actual: string;
+  tolerance?: number;
+  passed: boolean;
+  createdAt: string;
+}
+
+export interface VernierSuggestion {
+  type: "low-contrast" | "tap-target" | "missing-accessible-name" | "focus-ring" | "text-overflow" | "clipping" | "stacking-context" | "token-hint";
+  severity: "low" | "medium" | "high";
+  message: string;
+  expected: string;
+  actual: string;
+}
+
 export interface ScreenshotArtifact {
   name: string;
   kind: "element" | "full-page";
   width: number;
   height: number;
   devicePixelRatio: number;
-  captureStrategy: "html2canvas";
+  captureStrategy: CaptureStrategy;
   mimeType: "image/png";
   byteLength: number;
   hash: string;
@@ -198,6 +217,8 @@ export interface VernierIssue {
   source: string;
   target: ElementTarget;
   measurement?: VernierMeasurement;
+  assertions?: VernierAssertion[];
+  suggestions?: VernierSuggestion[];
   redaction?: {
     autoRedactedElements: number;
     manualRedaction: boolean;
@@ -205,7 +226,7 @@ export interface VernierIssue {
   note: string;
   createdAt: string;
   screenshotName: string;
-  screenshotDataUrl: string;
+  screenshotDataUrl?: string;
   screenshot: ScreenshotArtifact;
 }
 
@@ -225,6 +246,6 @@ export interface VernierSession {
   issueCount: number;
   issues: VernierIssue[];
   fullPageScreenshotName: string;
-  fullPageScreenshotDataUrl: string;
+  fullPageScreenshotDataUrl?: string;
   fullPageScreenshot: ScreenshotArtifact;
 }

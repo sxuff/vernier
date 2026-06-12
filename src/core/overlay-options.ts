@@ -1,3 +1,5 @@
+import type { CaptureStrategy } from "../schema";
+
 export interface OverlayRuntimeOptions {
   hotkey?: string;
   styleProperties?: string[];
@@ -5,6 +7,7 @@ export interface OverlayRuntimeOptions {
   sessionEndpoint?: string;
   captureFullPage?: boolean;
   screenshotMaxWidth?: number;
+  captureStrategy?: Extract<CaptureStrategy, "html2canvas" | "modern-screenshot">;
 }
 
 export interface SessionOutputOptions {
@@ -38,6 +41,10 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
 
   if (typeof options.screenshotMaxWidth === "number" && Number.isFinite(options.screenshotMaxWidth) && options.screenshotMaxWidth > 0) {
     normalized.screenshotMaxWidth = Math.floor(options.screenshotMaxWidth);
+  }
+
+  if (options.captureStrategy === "html2canvas" || options.captureStrategy === "modern-screenshot") {
+    normalized.captureStrategy = options.captureStrategy;
   }
 
   return normalized;

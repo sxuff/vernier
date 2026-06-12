@@ -14,7 +14,7 @@ export async function writeSession(root: string, session: VernierSession, option
   const screenshotsDirectory = path.join(baseDirectory, "screenshots");
 
   await mkdir(screenshotsDirectory, { recursive: true });
-  await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
+  await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(createLeanSession(session), null, 2)}\n`);
   await writeFile(path.join(baseDirectory, "session.md"), renderSessionMarkdown(session));
   await writeFile(path.join(baseDirectory, "screenshots.json"), `${JSON.stringify(renderScreenshotInventory(session), null, 2)}\n`);
   await writeFile(
@@ -34,16 +34,32 @@ export async function writeSession(root: string, session: VernierSession, option
   );
 
   for (const issue of session.issues) {
-    await writeDataUrl(path.join(screenshotsDirectory, issue.screenshotName), issue.screenshotDataUrl);
+    await writeDataUrl(path.join(screenshotsDirectory, issue.screenshotName), requireDataUrl(issue.screenshotDataUrl, issue.screenshotName));
   }
 
   await writeDataUrl(
     path.join(screenshotsDirectory, session.fullPageScreenshotName),
-    session.fullPageScreenshotDataUrl
+    requireDataUrl(session.fullPageScreenshotDataUrl, session.fullPageScreenshotName)
   );
   await updateLatestLink(feedbackDirectory, baseDirectory);
 
   return baseDirectory;
+}
+
+function createLeanSession(session: VernierSession): VernierSession {
+  const {
+    fullPageScreenshotDataUrl: _fullPageScreenshotDataUrl,
+    issues,
+    ...rest
+  } = session;
+
+  return {
+    ...rest,
+    issues: issues.map((issue) => {
+      const { screenshotDataUrl: _screenshotDataUrl, ...leanIssue } = issue;
+      return leanIssue;
+    })
+  };
 }
 
 export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackDirectory): string {
@@ -85,8 +101,10 @@ export function renderSessionMarkdown(session: VernierSession): string {
       issue.note || "Fix the measured UI issue. Prefer minimal changes.",
       "",
       "Measured:",
-      ...formatMeasured(issue.measured),
+      ...formatMeasured(issue.measured, Boolean(issue.suggestions?.length)),
       ...formatStructuredMeasurement(issue),
+      ...formatAssertions(issue),
+      ...formatSuggestions(issue),
       ...formatRedaction(issue),
       "",
       "Target:",
@@ -153,8 +171,12 @@ function formatTargetEvidence(issue: VernierSession["issues"][number]): string[]
   ].filter((line): line is string => line !== null);
 }
 
-function formatMeasured(measured: string): string[] {
-  return measured.split("\n").map((line) => `- ${line}`);
+function formatMeasured(measured: string, omitEmbeddedSuggestions = false): string[] {
+  const lines = measured.split("\n");
+  const suggestionStart = omitEmbeddedSuggestions ? lines.findIndex((line) => line === "Suggestions:") : -1;
+  const measuredLines = suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
+
+  return measuredLines.map((line) => `- ${line}`);
 }
 
 function formatStructuredMeasurement(issue: VernierSession["issues"][number]): string[] {
@@ -168,6 +190,40 @@ function formatStructuredMeasurement(issue: VernierSession["issues"][number]): s
     "```json",
     JSON.stringify(issue.measurement, null, 2),
     "```"
+  ];
+}
+
+function formatAssertions(issue: VernierSession["issues"][number]): string[] {
+  const assertions = issue.assertions ?? [];
+
+  if (assertions.length === 0) {
+    return [];
+  }
+
+  return [
+    "",
+    "Assertions:",
+    ...assertions.map((assertion) => {
+      const tolerance = assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
+      const status = assertion.passed ? "pass" : "fail";
+      return `- ${assertion.property}: actual ${assertion.actual}, expected ${assertion.expected}${tolerance} (${status})`;
+    })
+  ];
+}
+
+function formatSuggestions(issue: VernierSession["issues"][number]): string[] {
+  const suggestions = issue.suggestions ?? [];
+
+  if (suggestions.length === 0) {
+    return [];
+  }
+
+  return [
+    "",
+    "Suggestions:",
+    ...suggestions.map((suggestion) =>
+      `- [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`
+    )
   ];
 }
 
@@ -223,6 +279,14 @@ async function writeDataUrl(filePath: string, dataUrl: string): Promise<void> {
   }
 
   await writeFile(filePath, Buffer.from(base64, "base64"));
+}
+
+function requireDataUrl(dataUrl: string | undefined, fileName: string): string {
+  if (!dataUrl) {
+    throw new VernierError("VERNIER_INVALID_SESSION", `Missing screenshot data for ${fileName}`, "Live session writes must include screenshot data URLs so Vernier can create image files.");
+  }
+
+  return dataUrl;
 }
 
 function slugify(value: string): string {

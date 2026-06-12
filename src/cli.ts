@@ -18,7 +18,7 @@ import {
   sendIssueToAgent,
   showIssueCommand
 } from "./cli/commands/handoff";
-import { markIssue, renameSession, updateIssueNote } from "./cli/commands/issues";
+import { assertIssue, markIssue, renameSession, updateIssueNote } from "./cli/commands/issues";
 import { startMcpServer } from "./cli/commands/mcp";
 import {
   isUrlLike,
@@ -170,7 +170,8 @@ function validateConfig(value: unknown, configPath: string): VernierConfig {
       redact: overlay.redact === undefined ? undefined : expectConfigStringArray(overlay.redact, "overlay.redact"),
       sessionEndpoint: overlay.sessionEndpoint === undefined ? undefined : expectConfigString(overlay.sessionEndpoint, "overlay.sessionEndpoint"),
       captureFullPage: overlay.captureFullPage === undefined ? undefined : expectConfigBoolean(overlay.captureFullPage, "overlay.captureFullPage"),
-      screenshotMaxWidth: overlay.screenshotMaxWidth === undefined ? undefined : expectConfigPositiveInteger(overlay.screenshotMaxWidth, "overlay.screenshotMaxWidth")
+      screenshotMaxWidth: overlay.screenshotMaxWidth === undefined ? undefined : expectConfigPositiveInteger(overlay.screenshotMaxWidth, "overlay.screenshotMaxWidth"),
+      captureStrategy: overlay.captureStrategy === undefined ? undefined : expectOverlayCaptureStrategy(overlay.captureStrategy, "overlay.captureStrategy")
     });
   }
 
@@ -246,6 +247,14 @@ function expectConfigAgent(value: unknown, field: string): "codex" | "claude" {
   return value;
 }
 
+function expectOverlayCaptureStrategy(value: unknown, field: string): "html2canvas" | "modern-screenshot" {
+  if (value !== "html2canvas" && value !== "modern-screenshot") {
+    throw new VernierError("VERNIER_INVALID_CONFIG", `Config ${field} must be html2canvas or modern-screenshot.`);
+  }
+
+  return value;
+}
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
@@ -306,6 +315,11 @@ async function main(): Promise<void> {
 
   if (command === "note") {
     await updateIssueNote(process.cwd(), args);
+    return;
+  }
+
+  if (command === "assert") {
+    await assertIssue(process.cwd(), args);
     return;
   }
 
@@ -462,6 +476,7 @@ function printHelp(): void {
       "  vernier show <issue-id>",
       "  vernier copy <issue-id> [--format task|packet] [--template generic|codex|claude|cursor|aider|strict] [--print]",
       "  vernier note <issue-id> \"updated note\"",
+      "  vernier assert <issue-id> <property>=<expected> [--tolerance n]",
       "  vernier rename-session \"short title\"",
       "  vernier plan <issue-id>",
       "  vernier export [--format md|json|zip] [--out <path>]",
@@ -486,7 +501,7 @@ function printHelp(): void {
       "  vernier open",
       "",
       "Config:",
-      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.screenshotMaxWidth, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
+      "  vernier.config.json|js|mjs|cjs can set target, port, outDir, detectPorts, overlay.hotkey, overlay.styleProperties, overlay.redact, overlay.captureFullPage, overlay.screenshotMaxWidth, overlay.captureStrategy, overlay.sessionEndpoint, verification.bboxTolerancePx, and agents.default.",
       "  Debug logging: pass --verbose, VERNIER_DEBUG=1, or DEBUG=vernier:*.",
       "  Environment defaults: VERNIER_TARGET, VERNIER_PORT, VERNIER_PORTS, VERNIER_AGENT, VERNIER_DEBUG=1.",
       "",

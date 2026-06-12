@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { VernierIssue, VernierSession } from "../schema";
+import type { VernierAssertion, VernierIssue, VernierSession } from "../schema";
 import { VernierError } from "./errors";
 import { renderSessionMarkdown } from "./session-writer";
 
@@ -78,6 +78,41 @@ export async function updateLatestIssueNote(root: string, reference: string, not
   await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
 
   return indexIssue(latest.sessionDirectory, session, indexed.issue, statuses);
+}
+
+export async function assertLatestIssue(
+  root: string,
+  reference: string,
+  property: string,
+  expected: string,
+  tolerance?: number
+): Promise<{ indexed: IndexedVernierIssue; assertion: VernierAssertion }> {
+  const latest = await findLatestSessionFile(root);
+  const raw = await readFile(latest.filePath, "utf8");
+  const session = JSON.parse(raw) as VernierSession;
+  const statuses = await readIssueStatuses(latest.sessionDirectory);
+  const issues = session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
+  const indexed = findIssueByReference(issues, reference);
+
+  if (!indexed) {
+    throw unknownIssueError(reference);
+  }
+
+  const actual = readMeasuredProperty(indexed.issue, property);
+
+  if (actual === undefined) {
+    throw new VernierError("VERNIER_UNKNOWN_ASSERTION_PROPERTY", `Cannot assert unknown property: ${property}`, "Use a measured property such as width, height, padding, background-color, or delta.left.");
+  }
+
+  const assertion = createAssertion(property, expected, actual, tolerance);
+  indexed.issue.assertions = [...(indexed.issue.assertions ?? []).filter((candidate) => candidate.property !== property), assertion];
+  await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
+  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+
+  return {
+    indexed: indexIssue(latest.sessionDirectory, session, indexed.issue, statuses),
+    assertion
+  };
 }
 
 export async function renameLatestSession(root: string, title: string): Promise<VernierSession> {
@@ -166,8 +201,10 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     issue.note || "Fix the measured UI issue. Prefer minimal changes.",
     "",
     "Measured:",
-    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatMeasuredEvidence(issue),
     ...formatStructuredMeasurement(issue),
+    ...formatAssertions(issue, false),
+    ...formatSuggestions(issue, false),
     ...formatRedactionEvidence(issue),
     "",
     "Target:",
@@ -202,8 +239,10 @@ export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTem
     issue.note || "Fix the measured UI issue. Prefer minimal changes.",
     "",
     "Evidence:",
-    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatMeasuredEvidence(issue),
     ...formatStructuredEvidence(issue),
+    ...formatAssertions(issue, true),
+    ...formatSuggestions(issue, true),
     ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
     ...formatTargetEvidence(issue).map((line) => `- ${line}`),
@@ -248,7 +287,9 @@ export function renderIssuePacket(indexed: IndexedVernierIssue): string {
     `- Element context: ${formatTarget(indexed)}`,
     "",
     "## Evidence",
-    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatMeasuredEvidence(issue),
+    ...formatAssertions(issue, true),
+    ...formatSuggestions(issue, true),
     ...formatRedactionEvidence(issue),
     `- Screenshot: ${indexed.screenshotPath}`,
     "",
@@ -284,8 +325,10 @@ export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentT
       indexed.issue.note || "Fix the measured UI issue. Prefer minimal changes.",
       "",
       "Evidence:",
-      ...indexed.issue.measured.split("\n").map((line) => `- ${line}`),
+      ...formatMeasuredEvidence(indexed.issue),
       ...formatStructuredEvidence(indexed.issue),
+      ...formatAssertions(indexed.issue, true),
+      ...formatSuggestions(indexed.issue, true),
       ...formatRedactionEvidence(indexed.issue),
       `- Selector: ${indexed.issue.selector}`,
       ...formatTargetEvidence(indexed.issue).map((line) => `- ${line}`),
@@ -447,7 +490,9 @@ export function renderGitHubIssueBody(indexed: IndexedVernierIssue): string {
     "",
     "## Evidence",
     "",
-    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatMeasuredEvidence(issue),
+    ...formatAssertions(issue, true),
+    ...formatSuggestions(issue, true),
     ...formatRedactionEvidence(issue),
     `- Screenshot: \`${path.relative(process.cwd(), indexed.screenshotPath)}\``,
     "",
@@ -488,8 +533,10 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     issue.note || "Fix the measured UI issue. Prefer minimal changes.",
     "",
     "Evidence:",
-    ...issue.measured.split("\n").map((line) => `- ${line}`),
+    ...formatMeasuredEvidence(issue),
     ...formatStructuredEvidence(issue),
+    ...formatAssertions(issue, true),
+    ...formatSuggestions(issue, true),
     ...formatRedactionEvidence(issue),
     `- Selector: ${issue.selector}`,
     ...formatTargetEvidence(issue).map((line) => `- ${line}`),
@@ -539,6 +586,14 @@ function formatTargetEvidence(issue: VernierIssue): string[] {
   ].filter((line): line is string => line !== null);
 }
 
+function formatMeasuredEvidence(issue: VernierIssue): string[] {
+  const lines = issue.measured.split("\n");
+  const suggestionStart = issue.suggestions?.length ? lines.findIndex((line) => line === "Suggestions:") : -1;
+  const measuredLines = suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
+
+  return measuredLines.map((line) => `- ${line}`);
+}
+
 function formatStructuredMeasurement(issue: VernierIssue): string[] {
   if (!issue.measurement) {
     return [];
@@ -553,6 +608,110 @@ function formatStructuredEvidence(issue: VernierIssue): string[] {
   }
 
   return [`- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`];
+}
+
+function formatAssertions(issue: VernierIssue, bullet: boolean): string[] {
+  const assertions = issue.assertions ?? [];
+
+  if (assertions.length === 0) {
+    return [];
+  }
+
+  const prefix = bullet ? "- " : "";
+  return [
+    "",
+    `${bullet ? "- " : ""}Assertions:`,
+    ...assertions.map((assertion) => {
+      const tolerance = assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
+      const status = assertion.passed ? "pass" : "fail";
+      return `${prefix}${assertion.property}: actual ${assertion.actual}, expected ${assertion.expected}${tolerance} (${status})`;
+    })
+  ];
+}
+
+function formatSuggestions(issue: VernierIssue, bullet: boolean): string[] {
+  const suggestions = issue.suggestions ?? [];
+
+  if (suggestions.length === 0) {
+    return [];
+  }
+
+  const prefix = bullet ? "- " : "";
+  return [
+    "",
+    `${bullet ? "- " : ""}Suggestions:`,
+    ...suggestions.map((suggestion) =>
+      `${prefix}[${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`
+    )
+  ];
+}
+
+function createAssertion(property: string, expected: string, actual: string, tolerance: number | undefined): VernierAssertion {
+  const actualNumber = parseNumeric(actual);
+  const expectedNumber = parseNumeric(expected);
+  const passed = actualNumber !== null && expectedNumber !== null
+    ? Math.abs(actualNumber - expectedNumber) <= (tolerance ?? 0)
+    : actual.trim() === expected.trim();
+
+  return {
+    property,
+    expected,
+    actual,
+    tolerance,
+    passed,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function readMeasuredProperty(issue: VernierIssue, property: string): string | undefined {
+  const measurement = issue.measurement;
+
+  if (!measurement) {
+    return undefined;
+  }
+
+  if (measurement.kind === "single") {
+    if (property in measurement.bbox) {
+      return String(measurement.bbox[property as keyof typeof measurement.bbox]);
+    }
+
+    if (property.startsWith("bbox.")) {
+      const key = property.slice("bbox.".length);
+      return key in measurement.bbox ? String(measurement.bbox[key as keyof typeof measurement.bbox]) : undefined;
+    }
+
+    if (property.startsWith("computedStyle.")) {
+      return measurement.computedStyle[property.slice("computedStyle.".length)];
+    }
+
+    if (measurement.computedStyle[property] !== undefined) {
+      return measurement.computedStyle[property];
+    }
+
+    if (measurement.textMetrics && property.startsWith("textMetrics.")) {
+      const key = property.slice("textMetrics.".length) as keyof typeof measurement.textMetrics;
+      const value = measurement.textMetrics[key];
+      return value === undefined ? undefined : String(value);
+    }
+  }
+
+  if (measurement.kind === "delta") {
+    const deltaProperty = property.startsWith("delta.") ? property.slice("delta.".length) : property;
+    const value = measurement.delta[deltaProperty as keyof typeof measurement.delta];
+    return typeof value === "number" || typeof value === "string" ? String(value) : undefined;
+  }
+
+  if (measurement.kind === "annotation" && property.startsWith("bounds.")) {
+    const key = property.slice("bounds.".length);
+    return key in measurement.bounds ? String(measurement.bounds[key as keyof typeof measurement.bounds]) : undefined;
+  }
+
+  return undefined;
+}
+
+function parseNumeric(value: string): number | null {
+  const match = value.trim().match(/^(-?\d+(?:\.\d+)?)(?:px)?$/);
+  return match ? Number(match[1]) : null;
 }
 
 function likelyChangeType(issue: VernierIssue): string {

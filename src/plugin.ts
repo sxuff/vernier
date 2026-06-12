@@ -2,6 +2,7 @@ import type { Plugin, ResolvedConfig } from "vite";
 import { injectVernierOverlay } from "./core/html";
 import type { OverlayRuntimeOptions, SessionOutputOptions } from "./core/overlay-options";
 import { createVernierOverlayScript, vernierOverlayPath } from "./core/overlay-script";
+import { annotateJsxSource } from "./core/source-annotation";
 import { registerSessionMiddleware } from "./middleware";
 
 const virtualOverlayId = "virtual:vernier-overlay";
@@ -38,14 +39,26 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
 
       return createVernierOverlayScript({
         html2canvasImportPath: "html2canvas",
+        modernScreenshotImportPath: "modern-screenshot",
         runtimeOptions: {
           hotkey: options.hotkey,
           styleProperties: options.styleProperties,
           redact: options.redact,
           captureFullPage: options.captureFullPage,
-          screenshotMaxWidth: options.screenshotMaxWidth
+          screenshotMaxWidth: options.screenshotMaxWidth,
+          captureStrategy: options.captureStrategy
         }
       });
+    },
+    transform(code, id) {
+      const isDevServer = config.command === "serve";
+      const enabled = options.enabled ?? true;
+
+      if (!isDevServer || !enabled) {
+        return null;
+      }
+
+      return annotateJsxSource(code, id, { root: config.root });
     },
     transformIndexHtml(html) {
       const isDevServer = config.command === "serve";

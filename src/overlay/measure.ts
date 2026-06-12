@@ -1,12 +1,14 @@
-import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement, StackingContext, TextMetrics } from "../schema";
+import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement, StackingContext, TextMetrics, VernierSuggestion } from "../schema";
 import { getStylePropertyNames } from "./options";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
+import { createElementSuggestions } from "./suggestions";
 import { createElementTarget } from "./target";
 
 export interface MeasurementDraft {
   text: string;
   measurement: SingleMeasurement | DeltaMeasurement;
+  suggestions?: VernierSuggestion[];
 }
 
 export function stylePropertyNames(): string[] {
@@ -30,23 +32,34 @@ export function measureElement(element: Element): MeasurementDraft {
     lines.push(`  ${property}: ${styles.getPropertyValue(property)}`);
   }
 
+  const measurement: SingleMeasurement = {
+    kind: "single",
+    bbox: boundingBox(rect),
+    computedStyle,
+    text: textSummary(element),
+    role: (element as HTMLElement).getAttribute?.("role") ?? undefined,
+    accessibleName: accessibleName(element),
+    inlineStyle: inlineStyle(element),
+    authoredHints: authoredStyleHints(element, Object.keys(computedStyle)),
+    classHints: classHints(element),
+    designTokenHints: designTokenHints(computedStyle),
+    layoutContext: layoutContext(element),
+    textMetrics: textMetrics(element),
+    stackingContext: stackingContext(element)
+  };
+  const suggestions = createElementSuggestions(element, measurement);
+
+  if (suggestions.length > 0) {
+    lines.push(
+      "Suggestions:",
+      ...suggestions.map((suggestion) => `  [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`)
+    );
+  }
+
   return {
     text: lines.join("\n"),
-    measurement: {
-      kind: "single",
-      bbox: boundingBox(rect),
-      computedStyle,
-      text: textSummary(element),
-      role: (element as HTMLElement).getAttribute?.("role") ?? undefined,
-      accessibleName: accessibleName(element),
-      inlineStyle: inlineStyle(element),
-      authoredHints: authoredStyleHints(element, Object.keys(computedStyle)),
-      classHints: classHints(element),
-      designTokenHints: designTokenHints(computedStyle),
-      layoutContext: layoutContext(element),
-      textMetrics: textMetrics(element),
-      stackingContext: stackingContext(element)
-    }
+    measurement,
+    suggestions
   };
 }
 
@@ -544,13 +557,13 @@ export function roundNumber(value: number): number {
 }
 
 export function toHexColor(value: string): string {
-  const match = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)/);
+  const match = value.trim().match(/^rgba?\(\s*(\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:(?:\s*\/\s*|,\s*)([.\d]+%?))?\s*\)$/);
 
   if (!match) {
     return value;
   }
 
-  const alpha = match[4] === undefined ? 1 : Number(match[4]);
+  const alpha = parseAlpha(match[4]);
 
   if (alpha === 0) {
     return "transparent";
@@ -563,6 +576,18 @@ export function toHexColor(value: string): string {
   }
 
   return `${rgb}${toHex(Math.round(alpha * 255))}`;
+}
+
+function parseAlpha(value: string | undefined): number {
+  if (value === undefined) {
+    return 1;
+  }
+
+  if (value.endsWith("%")) {
+    return Number(value.slice(0, -1)) / 100;
+  }
+
+  return Number(value);
 }
 
 export function toHex(value: number): string {

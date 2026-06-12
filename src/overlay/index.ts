@@ -41,7 +41,7 @@ export function startVernierOverlay(): void {
     onSelect(element) {
       const measurement = measureElement(element);
       renderMeasurementPanel(overlay.panel, measurement.text);
-      session.setMeasurementDraft("single", element, measurement.text, measurement.measurement);
+      session.setMeasurementDraft("single", element, measurement.text, measurement.measurement, measurement.suggestions);
     },
     onCompare(firstElement, secondElement) {
       const measurement = measureDelta(firstElement, secondElement);

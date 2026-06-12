@@ -575,6 +575,7 @@ try {
   const copyOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--print"]);
   const packetOutput = await runNode(["dist/cli.js", "copy", stableIssueId, "--format", "packet", "--print"]);
   const noteOutput = await runNode(["dist/cli.js", "note", stableIssueId, "make it blue instead"]);
+  const assertOutput = await runNode(["dist/cli.js", "assert", stableIssueId, "width=32", "--tolerance", "1"]);
   const renameOutput = await runNode(["dist/cli.js", "rename-session", "pricing mobile pass"]);
   const notedShowOutput = await runNode(["dist/cli.js", "show", stableIssueId]);
   const notedMarkdown = await readFile(path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root", "session.md"), "utf8");
@@ -661,7 +662,7 @@ try {
   if (!helpOutput.includes("overlay.captureFullPage") || !helpOutput.includes("overlay.screenshotMaxWidth")) {
     throw new Error(`Expected help command to document overlay capture config:\n${helpOutput}`);
   }
-  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("[--dry-run]") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
+  if (!helpOutput.includes("vernier github body|create") || !helpOutput.includes("[--dry-run]") || !helpOutput.includes("vernier copy <issue-id> [--format task|packet]") || !helpOutput.includes("vernier assert <issue-id> <property>=<expected>") || !helpOutput.includes("vernier rename-session \"short title\"") || !helpOutput.includes("vernier storybook [--url http://localhost:6006]") || !helpOutput.includes("vernier plan <issue-id>") || !helpOutput.includes("vernier export [--format md|json|zip]") || !helpOutput.includes("vernier import <session-directory-or-zip>") || !helpOutput.includes("vernier fix-loop [all|<issue-id>]") || !helpOutput.includes("--template generic|codex")) {
     throw new Error(`Expected help command to document GitHub export, rename-session, export, import, plan, fix-loop, and templates:\n${helpOutput}`);
   }
   if (!detectOutput.includes(`http://127.0.0.1:${targetPort}`) || !detectOutput.includes("Vite")) {
@@ -738,6 +739,9 @@ try {
   }
   if (!noteOutput.includes(`Updated ${stableIssueId} note.`) || !notedShowOutput.includes("make it blue instead") || !notedMarkdown.includes("make it blue instead")) {
     throw new Error(`Expected note command to update JSON and markdown:\n${noteOutput}\n${notedShowOutput}\n${notedMarkdown}`);
+  }
+  if (!assertOutput.includes(`Assertion failed for ${stableIssueId}`) || !notedShowOutput.includes("Assertions:") || !notedShowOutput.includes("width: actual 24, expected 32 +/-1 (fail)") || renamedJson.issues[0]?.assertions?.[0]?.passed !== false) {
+    throw new Error(`Expected assert command to store and render failed assertion:\n${assertOutput}\n${notedShowOutput}\n${JSON.stringify(renamedJson, null, 2)}`);
   }
   if (!renameOutput.includes('Renamed latest session') || renamedJson.title !== "pricing mobile pass" || !notedMarkdown.includes("Title: pricing mobile pass")) {
     throw new Error(`Expected rename-session to update latest session title:\n${renameOutput}\n${JSON.stringify(renamedJson, null, 2)}\n${notedMarkdown}`);
@@ -832,6 +836,7 @@ try {
 
 async function writeNestedSessionFixture(baseSession) {
   const sessionDirectory = path.join(nestedFeedbackRoot, "sessions", "2026-06-07-root");
+  const baseIssueScreenshot = await readFile(path.join(feedbackRoot, "latest", "screenshots", baseSession.issues[0].screenshotName));
   const session = {
     ...baseSession,
     createdAt: new Date().toISOString(),
@@ -925,7 +930,7 @@ async function writeNestedSessionFixture(baseSession) {
           devicePixelRatio: 1,
           captureStrategy: "html2canvas",
           mimeType: "image/png",
-          byteLength: Buffer.byteLength(baseSession.issues[0].screenshotDataUrl.split(",")[1], "base64"),
+          byteLength: baseIssueScreenshot.byteLength,
           hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000"
         }
       }
@@ -935,7 +940,7 @@ async function writeNestedSessionFixture(baseSession) {
   await mkdir(path.join(sessionDirectory, "screenshots"), { recursive: true });
   await writeFile(path.join(sessionDirectory, "session.json"), `${JSON.stringify(session, null, 2)}\n`);
   await writeFile(path.join(sessionDirectory, "session.md"), "# nested fixture\nmake it red\n");
-  await writeFile(path.join(sessionDirectory, "screenshots", "issue-1.png"), Buffer.from(baseSession.issues[0].screenshotDataUrl.split(",")[1], "base64"));
+  await writeFile(path.join(sessionDirectory, "screenshots", "issue-1.png"), baseIssueScreenshot);
 }
 
 async function verifyInvalidSessionRequests(port) {

@@ -1,5 +1,5 @@
-import type { ElementTarget, ScreenshotArtifact, VernierMeasurement } from "../schema";
-import { getRedactionSelectors, getScreenshotMaxWidth, getSessionEndpoint, shouldCaptureFullPage } from "./options";
+import type { ElementTarget, ScreenshotArtifact, VernierMeasurement, VernierSuggestion } from "../schema";
+import { getCaptureStrategy, getRedactionSelectors, getScreenshotMaxWidth, getSessionEndpoint, shouldCaptureFullPage } from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -16,6 +16,19 @@ declare const html2canvas: (
   }
 ) => Promise<HTMLCanvasElement>;
 
+declare const modernScreenshot: {
+  domToCanvas(
+    element: HTMLElement,
+    options?: {
+      backgroundColor?: string | null;
+      width?: number;
+      height?: number;
+      scale?: number;
+      onCloneNode?: (cloned: Node) => void | Promise<void>;
+    }
+  ): Promise<HTMLCanvasElement>;
+};
+
 type IssueKind = "single" | "delta" | "annotation";
 
 interface SessionIssue {
@@ -27,6 +40,7 @@ interface SessionIssue {
   source: string;
   target: ElementTarget;
   measurement: VernierMeasurement;
+  suggestions?: VernierSuggestion[];
   note: string;
   createdAt: string;
   screenshotName: string;
@@ -45,11 +59,12 @@ interface DraftIssue {
   source: string;
   target: ElementTarget;
   measurement: VernierMeasurement;
+  suggestions?: VernierSuggestion[];
   screenshotTarget: Element;
 }
 
 interface SessionController {
-  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement): void;
+  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement, suggestions?: VernierSuggestion[]): void;
   setAnnotationDraft(measured: string, measurement: VernierMeasurement): void;
   addDraftIssue(): Promise<SessionIssue | null>;
   updateIssueNote(id: number, note: string, label?: string): SessionIssue | null;
@@ -65,7 +80,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   const issues: SessionIssue[] = [];
   let draft: DraftIssue | null = null;
 
-  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement): void {
+  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement, suggestions?: VernierSuggestion[]): void {
     const target = createElementTarget(element);
 
     draft = {
@@ -75,6 +90,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       source: target.source,
       target,
       measurement,
+      suggestions,
       screenshotTarget: element
     };
   }
@@ -109,6 +125,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       source: draft.source,
       target: draft.target,
       measurement: draft.measurement,
+      suggestions: draft.suggestions,
       note: noteInput.value.trim(),
       createdAt: new Date().toISOString(),
       screenshotName,
@@ -237,17 +254,12 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     name: string,
     kind: ScreenshotArtifact["kind"]
   ): Promise<{ dataUrl: string; artifact: ScreenshotArtifact; autoRedactedElements: number }> {
+    const strategy = getCaptureStrategy();
     let canvas: HTMLCanvasElement;
     const autoRedactedElements = countAutoRedactionTargets(element);
 
     try {
-      canvas = await html2canvas(element as HTMLElement, {
-        backgroundColor: null,
-        ...viewportCropOptions(kind),
-        onclone(clonedDocument) {
-          applyAutoRedaction(clonedDocument);
-        }
-      });
+      canvas = await captureWithStrategy(strategy, element, kind);
     } catch (error) {
       throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
     }
@@ -256,8 +268,58 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     const dataUrl = outputCanvas.toDataURL("image/png");
     return {
       dataUrl,
-      artifact: await createScreenshotArtifact(name, kind, outputCanvas, dataUrl),
+      artifact: await createScreenshotArtifact(name, kind, strategy, outputCanvas, dataUrl),
       autoRedactedElements
+    };
+  }
+
+  async function captureWithStrategy(
+    strategy: ScreenshotArtifact["captureStrategy"],
+    element: Element,
+    kind: ScreenshotArtifact["kind"]
+  ): Promise<HTMLCanvasElement> {
+    if (strategy === "modern-screenshot") {
+      return modernScreenshot.domToCanvas(element as HTMLElement, {
+        backgroundColor: null,
+        ...modernScreenshotSizeOptions(kind, element),
+        scale: window.devicePixelRatio,
+        onCloneNode(cloned) {
+          if (cloned instanceof Element && isAutoRedactionTarget(cloned)) {
+            redactElement(cloned);
+          }
+        }
+      });
+    }
+
+    if (strategy !== "html2canvas") {
+      throw new Error(`Unsupported overlay capture strategy: ${strategy}`);
+    }
+
+    return html2canvas(element as HTMLElement, {
+      backgroundColor: null,
+      ...viewportCropOptions(kind),
+      onclone(clonedDocument) {
+        applyAutoRedaction(clonedDocument);
+      }
+    });
+  }
+
+  function modernScreenshotSizeOptions(kind: ScreenshotArtifact["kind"], element: Element): { width?: number; height?: number } {
+    if (kind === "full-page" && !shouldCaptureFullPage()) {
+      return {
+        width: window.innerWidth,
+        height: window.innerHeight
+      };
+    }
+
+    if (element === document.documentElement) {
+      return {};
+    }
+
+    const rect = element.getBoundingClientRect();
+    return {
+      width: Math.max(1, Math.round(rect.width)),
+      height: Math.max(1, Math.round(rect.height))
     };
   }
 
@@ -295,6 +357,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   async function createScreenshotArtifact(
     name: string,
     kind: ScreenshotArtifact["kind"],
+    captureStrategy: ScreenshotArtifact["captureStrategy"],
     canvas: HTMLCanvasElement,
     dataUrl: string
   ): Promise<ScreenshotArtifact> {
@@ -306,7 +369,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       width: canvas.width,
       height: canvas.height,
       devicePixelRatio: window.devicePixelRatio,
-      captureStrategy: "html2canvas",
+      captureStrategy,
       mimeType: "image/png",
       byteLength: bytes.byteLength,
       hash: await sha256(bytes)
@@ -389,21 +452,35 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
 
   function applyAutoRedaction(clonedDocument: Document): void {
     for (const element of autoRedactionTargets(clonedDocument)) {
-      const htmlElement = element as HTMLElement;
-
-      if (htmlElement instanceof HTMLInputElement || htmlElement instanceof HTMLTextAreaElement) {
-        htmlElement.value = "";
-        htmlElement.setAttribute("value", "");
-      }
-
-      htmlElement.textContent = "";
-      htmlElement.style.setProperty("background", "#111827", "important");
-      htmlElement.style.setProperty("background-color", "#111827", "important");
-      htmlElement.style.setProperty("color", "transparent", "important");
-      htmlElement.style.setProperty("border-color", "#111827", "important");
-      htmlElement.style.setProperty("box-shadow", "none", "important");
-      htmlElement.style.setProperty("text-shadow", "none", "important");
+      redactElement(element);
     }
+  }
+
+  function isAutoRedactionTarget(element: Element): boolean {
+    return getRedactionSelectors().some((selector) => {
+      try {
+        return element.matches(selector);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  function redactElement(element: Element): void {
+    const htmlElement = element as HTMLElement;
+
+    if (htmlElement instanceof HTMLInputElement || htmlElement instanceof HTMLTextAreaElement) {
+      htmlElement.value = "";
+      htmlElement.setAttribute("value", "");
+    }
+
+    htmlElement.textContent = "";
+    htmlElement.style.setProperty("background", "#111827", "important");
+    htmlElement.style.setProperty("background-color", "#111827", "important");
+    htmlElement.style.setProperty("color", "transparent", "important");
+    htmlElement.style.setProperty("border-color", "#111827", "important");
+    htmlElement.style.setProperty("box-shadow", "none", "important");
+    htmlElement.style.setProperty("text-shadow", "none", "important");
   }
 
   function renumberIssues(): void {

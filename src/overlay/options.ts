@@ -1,5 +1,6 @@
 import type { OverlayRuntimeOptions } from "../core/overlay-options";
 import { normalizeOverlayRuntimeOptions } from "../core/overlay-options";
+import type { CaptureStrategy } from "../schema";
 
 declare global {
   interface Window {
@@ -45,6 +46,10 @@ export function shouldCaptureFullPage(): boolean {
 
 export function getScreenshotMaxWidth(): number | null {
   return getOverlayOptions().screenshotMaxWidth ?? null;
+}
+
+export function getCaptureStrategy(): Extract<CaptureStrategy, "html2canvas" | "modern-screenshot"> {
+  return getOverlayOptions().captureStrategy ?? "html2canvas";
 }
 
 export function matchesOverlayHotkey(event: KeyboardEvent): boolean {

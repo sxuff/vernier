@@ -136,8 +136,8 @@ test("exports measured UI feedback session", async ({ page }) => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
-        writeText: function () {
-          const value = String(arguments[0]);
+        writeText(value: string) {
+          value = String(value);
           clipboard.value = value;
           window.localStorage.setItem("vernierClipboard", value);
           return Promise.resolve();

@@ -18,7 +18,10 @@ export function parseArgs(
   const positionals: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
+    const arg = args[index];
+    if (arg === undefined) {
+      continue;
+    }
 
     if (arg.startsWith("--")) {
       const equalsIndex = arg.indexOf("=");

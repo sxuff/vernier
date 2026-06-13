@@ -152,9 +152,10 @@ function renderFixLoopTask(
   maxAttempts: number,
   tolerance: number,
 ): string {
+  const [firstIssue] = issues;
   const issueTask =
-    issues.length === 1
-      ? renderIssueTask(issues[0]!, template)
+    issues.length === 1 && firstIssue
+      ? renderIssueTask(firstIssue, template)
       : renderIssuesTask(issues, template);
   const verifyCommands = issues.map(
     (issue) =>

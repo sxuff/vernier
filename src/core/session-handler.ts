@@ -1140,7 +1140,8 @@ function expectPngDataUrl(value: unknown, field: string): string {
     throw badRequest(`${field} must be a PNG data URL`);
   }
 
-  const byteLength = Buffer.byteLength(match[1]!, "base64");
+  const base64 = match[1];
+  const byteLength = Buffer.byteLength(base64, "base64");
 
   if (byteLength > maxScreenshotBytes) {
     throw badRequest(`${field} exceeds ${maxScreenshotBytes} bytes`);

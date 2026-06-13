@@ -55,7 +55,7 @@ export async function exportLatestSession(
     return `Exported latest Vernier ${format} to ${destination}`;
   }
 
-  const issue = issues[0]!;
+  const [issue] = issues;
   const destination = path.resolve(
     root,
     parsed.option("--out") ??
@@ -268,7 +268,7 @@ function crc32(bytes: Buffer): number {
   let crc = 0xffffffff;
 
   for (const byte of bytes) {
-    crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
   }
 
   return (crc ^ 0xffffffff) >>> 0;

@@ -379,7 +379,8 @@ export function renderIssuesTask(
     return "No issues in latest Vernier session.";
   }
 
-  const session = issues[0]!.session;
+  const [firstIssue] = issues;
+  const session = firstIssue.session;
 
   return [
     ...templatePreamble(template, true),
@@ -961,9 +962,11 @@ async function findLatestSessionFile(
 
   candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
+  const latest = candidates[0];
+
   return {
-    filePath: candidates[0]!.filePath,
-    sessionDirectory: path.dirname(candidates[0]!.filePath),
+    filePath: latest.filePath,
+    sessionDirectory: path.dirname(latest.filePath),
   };
 }
 

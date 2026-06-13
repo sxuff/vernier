@@ -146,9 +146,17 @@ async function sendSessionFile(
 async function renderReplayHtml(
   issues: Awaited<ReturnType<typeof listLatestIssues>>,
 ): Promise<string> {
-  const session = issues[0]!.session;
+  const [firstIssue] = issues;
+  if (!firstIssue) {
+    throw new VernierError(
+      "VERNIER_NO_ISSUES",
+      "No Vernier issues available for replay.",
+    );
+  }
+
+  const session = firstIssue.session;
   const verificationReports = await readVerificationReports(
-    issues[0]!.sessionDirectory,
+    firstIssue.sessionDirectory,
   );
 
   return `<!doctype html>

@@ -390,10 +390,12 @@ export function parseColor(
   const hex = normalized.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/);
 
   if (hex) {
+    const hexValue = hex[1];
+
     return {
-      red: Number.parseInt(hex[1]!.slice(0, 2), 16),
-      green: Number.parseInt(hex[1]!.slice(2, 4), 16),
-      blue: Number.parseInt(hex[1]!.slice(4, 6), 16),
+      red: Number.parseInt(hexValue.slice(0, 2), 16),
+      green: Number.parseInt(hexValue.slice(2, 4), 16),
+      blue: Number.parseInt(hexValue.slice(4, 6), 16),
     };
   }
 

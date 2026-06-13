@@ -225,10 +225,12 @@ function parseCssColor(value: string): ParsedColor | null {
   const hex = normalized.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/);
 
   if (hex) {
+    const hexValue = hex[1];
+
     return {
-      red: Number.parseInt(hex[1]!.slice(0, 2), 16),
-      green: Number.parseInt(hex[1]!.slice(2, 4), 16),
-      blue: Number.parseInt(hex[1]!.slice(4, 6), 16),
+      red: Number.parseInt(hexValue.slice(0, 2), 16),
+      green: Number.parseInt(hexValue.slice(2, 4), 16),
+      blue: Number.parseInt(hexValue.slice(4, 6), 16),
       alpha: hex[2] ? Number.parseInt(hex[2], 16) / 255 : 1,
     };
   }
@@ -250,12 +252,14 @@ function parseCssColor(value: string): ParsedColor | null {
 }
 
 function relativeLuminance(color: ParsedColor): number {
-  const channels = [color.red, color.green, color.blue].map((channel) => {
-    const normalized = channel / 255;
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : ((normalized + 0.055) / 1.055) ** 2.4;
-  });
+  const [red, green, blue] = [color.red, color.green, color.blue].map(
+    (channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.03928
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    },
+  );
 
-  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
 }

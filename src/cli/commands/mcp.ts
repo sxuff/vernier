@@ -163,7 +163,8 @@ async function readMcpResource(
   const issueMatch = uri.match(/^vernier:\/\/issue\/(.+)$/);
 
   if (issueMatch) {
-    const issue = await findLatestIssue(root, issueMatch[1]!);
+    const issueReference = issueMatch[1];
+    const issue = await findLatestIssue(root, issueReference);
 
     return {
       contents: [

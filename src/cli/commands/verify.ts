@@ -203,13 +203,14 @@ export async function compareLatestIssue(
   try {
     browser = await chromium.launch({ headless: true });
 
-    if (viewports.length === 1 && viewports[0]!.label === "captured") {
+    const [firstViewport] = viewports;
+    if (viewports.length === 1 && firstViewport?.label === "captured") {
       const { report, artifactDirectory } = await compareIssueAtViewport(
         browser,
         indexed,
         targetUrl,
         tolerancePx,
-        viewports[0]!,
+        firstViewport,
         path.join(indexed.sessionDirectory, "verification", indexed.stableId),
       );
       return {
@@ -862,7 +863,14 @@ function readCaptureViewports(args: string[]): CompareViewport[] {
   );
 
   if (!value) {
-    return [parseCompareViewport("desktop")!];
+    const desktop = parseCompareViewport("desktop");
+    if (!desktop) {
+      throw new VernierError(
+        "VERNIER_INVALID_OPTION",
+        "Default desktop viewport is invalid.",
+      );
+    }
+    return [desktop];
   }
 
   const viewports = value
@@ -1101,7 +1109,9 @@ function renderSessionDiff(
 
     if (!before) {
       differenceCount += 1;
-      lines.push(`+ ${id}: added ${summarizeDiffIssue(after!)}`);
+      if (after) {
+        lines.push(`+ ${id}: added ${summarizeDiffIssue(after)}`);
+      }
       continue;
     }
 
@@ -1160,7 +1170,9 @@ function renderCaptureDiff(
 
     if (!before) {
       differenceCount += 1;
-      lines.push(`+ ${key}: added screenshot ${after!.screenshotName}`);
+      if (after) {
+        lines.push(`+ ${key}: added screenshot ${after.screenshotName}`);
+      }
       continue;
     }
 

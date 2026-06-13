@@ -309,7 +309,13 @@ function tryClipboardCommand(
   value: string,
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(command[0]!, command.slice(1), {
+    const [executable, ...args] = command;
+    if (!executable) {
+      resolve(false);
+      return;
+    }
+
+    const child = spawn(executable, args, {
       stdio: ["pipe", "ignore", "ignore"],
       shell: process.platform === "win32",
     });

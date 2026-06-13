@@ -96,14 +96,14 @@ function parseDuration(value: string): number {
   }
 
   const amount = Number(match[1]);
-  const unit = match[2];
+  const unit = match[2] as "d" | "h" | "m";
   const multipliers: Record<string, number> = {
     m: 60 * 1000,
     h: 60 * 60 * 1000,
     d: 24 * 60 * 60 * 1000,
   };
 
-  return amount * multipliers[unit]!;
+  return amount * multipliers[unit];
 }
 
 async function readSessionDirectories(

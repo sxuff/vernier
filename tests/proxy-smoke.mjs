@@ -147,7 +147,7 @@ targetServer.on("upgrade", (request, socket) => {
       "HTTP/1.1 101 Switching Protocols",
       "Upgrade: websocket",
       "Connection: Upgrade",
-      "X-Forwarded-Host: " + (request.headers.host ?? ""),
+      `X-Forwarded-Host: ${request.headers.host ?? ""}`,
       "",
       "",
     ].join("\r\n"),
@@ -2087,7 +2087,7 @@ function runMcpExchange(messages) {
       reject(error);
     });
     child.stdin.end(
-      messages.map((message) => JSON.stringify(message)).join("\n") + "\n",
+      `${messages.map((message) => JSON.stringify(message)).join("\n")}\n`,
     );
   });
 }

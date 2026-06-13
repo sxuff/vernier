@@ -295,7 +295,11 @@ function createUpgradeRequest(
   lines.push(`Host: ${targetUrl.host}`);
 
   for (let index = 0; index < rawHeaders.length; index += 2) {
-    const name = rawHeaders[index]!;
+    const name = rawHeaders[index];
+    if (!name) {
+      continue;
+    }
+
     const value = rawHeaders[index + 1] ?? "";
     const normalizedName = name.toLowerCase();
 

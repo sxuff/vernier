@@ -37,7 +37,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "npm run typecheck && npm run build && npm run test:unit",
-    "test:unit": "node --test \"tests/*.test.mjs\"",
+    "test:unit": "node tests/run-unit.mjs",
     "test:e2e": "playwright test",
     "test:proxy": "node tests/proxy-smoke.mjs",
     "verify:m0": "npm run typecheck && npm run lint && npm run build && npm run test:unit && npm --prefix examples/react-vite run build"

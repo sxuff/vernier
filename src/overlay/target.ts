@@ -7,12 +7,14 @@ export function createElementTarget(element: Element): ElementTarget {
   const fallbackSelector = getFallbackSelector(element);
   const source = resolveSource(element);
   const testId = element.getAttribute("data-testid") ?? undefined;
-  const role = element.getAttribute("role") ?? implicitRole(element) ?? undefined;
+  const role =
+    element.getAttribute("role") ?? implicitRole(element) ?? undefined;
   const accessibleName = accessibleNameForTarget(element);
 
   return {
     selector,
-    fallbackSelector: fallbackSelector === selector ? undefined : fallbackSelector,
+    fallbackSelector:
+      fallbackSelector === selector ? undefined : fallbackSelector,
     selectorConfidence: selectorConfidence(selector),
     selectorReason: selectorReason(selector),
     tag: element.tagName.toLowerCase(),
@@ -29,7 +31,7 @@ export function createElementTarget(element: Element): ElementTarget {
     sourceResolver: source.resolver,
     componentName: source.componentName,
     ownerChain: source.ownerChain,
-    ancestry: ancestry(element)
+    ancestry: ancestry(element),
   };
 }
 
@@ -44,11 +46,13 @@ export function createViewportTarget(): ElementTarget {
     sourceConfidence: "low",
     sourceResolver: "viewport",
     ownerChain: [],
-    ancestry: []
+    ancestry: [],
   };
 }
 
-export function selectorConfidence(selector: string): ElementTarget["selectorConfidence"] {
+export function selectorConfidence(
+  selector: string,
+): ElementTarget["selectorConfidence"] {
   if (selector.startsWith("[data-testid=") || selector.startsWith("#")) {
     return "high";
   }
@@ -101,14 +105,19 @@ export function accessibleNameForTarget(element: Element): string | undefined {
     }
   }
 
-  return element.getAttribute("aria-label") ??
+  return (
+    element.getAttribute("aria-label") ??
     element.getAttribute("alt") ??
     element.getAttribute("title") ??
     textSummary(element) ??
-    undefined;
+    undefined
+  );
 }
 
-export function nearestAttribute(element: Element, attribute: string): string | undefined {
+export function nearestAttribute(
+  element: Element,
+  attribute: string,
+): string | undefined {
   let current: Element | null = element;
 
   while (current) {
@@ -151,7 +160,7 @@ export function ancestry(element: Element): ElementTarget["ancestry"] {
       classes: Array.from(current.classList).slice(0, 5),
       role: current.getAttribute("role") ?? implicitRole(current) ?? undefined,
       testId: current.getAttribute("data-testid") ?? undefined,
-      text: textSummary(current)
+      text: textSummary(current),
     });
     current = current.parentElement;
   }
@@ -185,9 +194,25 @@ function landmarkSummary(element: Element): string | null {
   const tag = element.tagName.toLowerCase();
   const role = element.getAttribute("role");
   const label = element.getAttribute("aria-label");
-  const landmarkRoles = new Set(["banner", "complementary", "contentinfo", "form", "main", "navigation", "region", "search"]);
+  const landmarkRoles = new Set([
+    "banner",
+    "complementary",
+    "contentinfo",
+    "form",
+    "main",
+    "navigation",
+    "region",
+    "search",
+  ]);
 
-  if (tag === "main" || tag === "nav" || tag === "header" || tag === "footer" || tag === "aside" || tag === "form") {
+  if (
+    tag === "main" ||
+    tag === "nav" ||
+    tag === "header" ||
+    tag === "footer" ||
+    tag === "aside" ||
+    tag === "form"
+  ) {
     return label ? `${tag}[aria-label="${label}"]` : tag;
   }
 
@@ -196,7 +221,9 @@ function landmarkSummary(element: Element): string | null {
   }
 
   if (role && landmarkRoles.has(role)) {
-    return label ? `[role="${role}"][aria-label="${label}"]` : `[role="${role}"]`;
+    return label
+      ? `[role="${role}"][aria-label="${label}"]`
+      : `[role="${role}"]`;
   }
 
   return null;

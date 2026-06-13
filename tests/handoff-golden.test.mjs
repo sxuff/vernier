@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { renderGitHubIssueBody, renderIssuePacket, renderIssueTask } from "../dist/index.js";
+import {
+  renderGitHubIssueBody,
+  renderIssuePacket,
+  renderIssueTask,
+} from "../dist/index.js";
 
 const indexed = createIndexedIssue();
 
@@ -11,18 +15,23 @@ await assertGolden("github-body.md", renderGitHubIssueBody(indexed));
 console.log("handoff golden outputs verified");
 
 async function assertGolden(name, actual) {
-  const expected = await readFile(path.join("tests", "fixtures", "handoff", name), "utf8");
+  const expected = await readFile(
+    path.join("tests", "fixtures", "handoff", name),
+    "utf8",
+  );
   const normalizedActual = `${normalizeOutput(actual).trimEnd()}\n`;
 
   if (normalizedActual !== expected) {
-    throw new Error([
-      `golden fixture mismatch: ${name}`,
-      "",
-      "Actual:",
-      normalizedActual,
-      "Expected:",
-      expected
-    ].join("\n"));
+    throw new Error(
+      [
+        `golden fixture mismatch: ${name}`,
+        "",
+        "Actual:",
+        normalizedActual,
+        "Expected:",
+        expected,
+      ].join("\n"),
+    );
   }
 }
 
@@ -32,7 +41,13 @@ function normalizeOutput(value) {
 }
 
 function createIndexedIssue() {
-  const screenshotPath = path.join(process.cwd(), ".ui-feedback", "latest", "screenshots", "issue-i-golden1.png");
+  const screenshotPath = path.join(
+    process.cwd(),
+    ".ui-feedback",
+    "latest",
+    "screenshots",
+    "issue-i-golden1.png",
+  );
   const screenshot = {
     name: "issue-i-golden1.png",
     kind: "element",
@@ -42,7 +57,7 @@ function createIndexedIssue() {
     captureStrategy: "html2canvas",
     mimeType: "image/png",
     byteLength: 8,
-    hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000"
+    hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000",
   };
   const issue = {
     id: 1,
@@ -54,7 +69,7 @@ function createIndexedIssue() {
       "Bbox: x=120, y=240, w=180, h=44",
       "Styles:",
       "  padding: 12px 16px",
-      "  background-color: #1f6feb"
+      "  background-color: #1f6feb",
     ].join("\n"),
     selector: '[data-testid="checkout-button"]',
     source: "src/components/CheckoutButton.tsx:42",
@@ -86,18 +101,27 @@ function createIndexedIssue() {
           classes: ["btn", "btn-primary", "px-4"],
           role: "button",
           testId: "checkout-button",
-          text: "Upgrade now"
-        }
-      ]
+          text: "Upgrade now",
+        },
+      ],
     },
     measurement: {
       kind: "single",
-      bbox: { x: 120, y: 240, width: 180, height: 44, top: 240, right: 300, bottom: 284, left: 120 },
+      bbox: {
+        x: 120,
+        y: 240,
+        width: 180,
+        height: 44,
+        top: 240,
+        right: 300,
+        bottom: 284,
+        left: 120,
+      },
       computedStyle: {
         padding: "12px 16px",
         "background-color": "#1f6feb",
         color: "#ffffff",
-        "font-size": "16px"
+        "font-size": "16px",
       },
       text: "Upgrade now",
       role: "button",
@@ -108,8 +132,8 @@ function createIndexedIssue() {
           selector: ".btn-primary",
           property: "background-color",
           value: "var(--color-primary)",
-          source: "src/styles/buttons.css"
-        }
+          source: "src/styles/buttons.css",
+        },
       ],
       classHints: ["btn-primary", "px-4"],
       designTokenHints: [
@@ -118,16 +142,16 @@ function createIndexedIssue() {
           computed: "#1f6feb",
           token: "--color-primary",
           value: "#1f6feb",
-          distance: 0
-        }
-      ]
+          distance: 0,
+        },
+      ],
     },
     redaction: { autoRedactedElements: 1, manualRedaction: false },
     note: "Button should align with the pricing card CTA.",
     createdAt: "2026-06-12T10:01:00.000Z",
     screenshotName: "issue-i-golden1.png",
     screenshotDataUrl: "data:image/png;base64,iVBORw0KGgo=",
-    screenshot
+    screenshot,
   };
   const session = {
     schemaVersion: 1,
@@ -142,7 +166,13 @@ function createIndexedIssue() {
     issues: [issue],
     fullPageScreenshotName: "full-page.png",
     fullPageScreenshotDataUrl: "data:image/png;base64,iVBORw0KGgo=",
-    fullPageScreenshot: { ...screenshot, name: "full-page.png", kind: "full-page", width: 1440, height: 2200 }
+    fullPageScreenshot: {
+      ...screenshot,
+      name: "full-page.png",
+      kind: "full-page",
+      width: 1440,
+      height: 2200,
+    },
   };
 
   return {
@@ -151,6 +181,6 @@ function createIndexedIssue() {
     session,
     issue,
     sessionDirectory: path.join(process.cwd(), ".ui-feedback", "latest"),
-    screenshotPath
+    screenshotPath,
   };
 }

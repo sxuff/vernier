@@ -1,3 +1,4 @@
+import { readLatestSessionMarkdown } from "../../core/handoff";
 import {
   filterIssuesByStatus,
   findLatestIssue,
@@ -5,9 +6,8 @@ import {
   listLatestIssues,
   markLatestIssue,
   renderIssueTask,
-  renderIssueVerification
+  renderIssueVerification,
 } from "../../core/issues";
-import { readLatestSessionMarkdown } from "../../core/handoff";
 
 const defaultTarget = "http://localhost:5173";
 
@@ -56,16 +56,22 @@ async function handleMcpMessage(root: string, line: string): Promise<void> {
   }
 
   try {
-    writeMcpResponse(request.id ?? null, await dispatchMcpRequest(root, request));
+    writeMcpResponse(
+      request.id ?? null,
+      await dispatchMcpRequest(root, request),
+    );
   } catch (error) {
     writeMcpResponse(request.id ?? null, undefined, {
       code: -32000,
-      message: error instanceof Error ? error.message : "MCP request failed"
+      message: error instanceof Error ? error.message : "MCP request failed",
     });
   }
 }
 
-async function dispatchMcpRequest(root: string, request: JsonRpcRequest): Promise<unknown> {
+async function dispatchMcpRequest(
+  root: string,
+  request: JsonRpcRequest,
+): Promise<unknown> {
   switch (request.method) {
     case "initialize":
       return {
@@ -73,8 +79,8 @@ async function dispatchMcpRequest(root: string, request: JsonRpcRequest): Promis
         serverInfo: { name: "vernier", version: "0.0.0" },
         capabilities: {
           resources: {},
-          tools: {}
-        }
+          tools: {},
+        },
       };
     case "resources/list":
       return { resources: await listMcpResources(root) };
@@ -91,10 +97,20 @@ async function dispatchMcpRequest(root: string, request: JsonRpcRequest): Promis
   }
 }
 
-async function listMcpResources(root: string): Promise<Array<{ uri: string; name: string; mimeType: string }>> {
+async function listMcpResources(
+  root: string,
+): Promise<Array<{ uri: string; name: string; mimeType: string }>> {
   const resources = [
-    { uri: "vernier://latest/session", name: "Latest Vernier session markdown", mimeType: "text/markdown" },
-    { uri: "vernier://latest/issues", name: "Latest Vernier issues", mimeType: "application/json" }
+    {
+      uri: "vernier://latest/session",
+      name: "Latest Vernier session markdown",
+      mimeType: "text/markdown",
+    },
+    {
+      uri: "vernier://latest/issues",
+      name: "Latest Vernier issues",
+      mimeType: "application/json",
+    },
   ];
 
   try {
@@ -103,8 +119,8 @@ async function listMcpResources(root: string): Promise<Array<{ uri: string; name
       ...issues.map((issue) => ({
         uri: `vernier://issue/${issue.stableId}`,
         name: `Vernier issue ${issue.stableId}`,
-        mimeType: "text/markdown"
-      }))
+        mimeType: "text/markdown",
+      })),
     );
   } catch {
     // No sessions yet; static resources still describe the server shape.
@@ -113,21 +129,34 @@ async function listMcpResources(root: string): Promise<Array<{ uri: string; name
   return resources;
 }
 
-async function readMcpResource(root: string, uri: string): Promise<{ contents: Array<{ uri: string; mimeType: string; text: string }> }> {
+async function readMcpResource(
+  root: string,
+  uri: string,
+): Promise<{
+  contents: Array<{ uri: string; mimeType: string; text: string }>;
+}> {
   if (uri === "vernier://latest/session") {
     return {
-      contents: [{ uri, mimeType: "text/markdown", text: await readLatestSessionMarkdown(root) }]
+      contents: [
+        {
+          uri,
+          mimeType: "text/markdown",
+          text: await readLatestSessionMarkdown(root),
+        },
+      ],
     };
   }
 
   if (uri === "vernier://latest/issues") {
     const issues = await listLatestIssues(root);
     return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: JSON.stringify(issues.map(mcpIssueSummary), null, 2)
-      }]
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify(issues.map(mcpIssueSummary), null, 2),
+        },
+      ],
     };
   }
 
@@ -137,14 +166,20 @@ async function readMcpResource(root: string, uri: string): Promise<{ contents: A
     const issue = await findLatestIssue(root, issueMatch[1]!);
 
     return {
-      contents: [{ uri, mimeType: "text/markdown", text: renderIssueTask(issue) }]
+      contents: [
+        { uri, mimeType: "text/markdown", text: renderIssueTask(issue) },
+      ],
     };
   }
 
   throw new Error(`Unknown Vernier resource: ${uri}`);
 }
 
-function listMcpTools(): Array<{ name: string; description: string; inputSchema: unknown }> {
+function listMcpTools(): Array<{
+  name: string;
+  description: string;
+  inputSchema: unknown;
+}> {
   return [
     {
       name: "list_vernier_issues",
@@ -152,9 +187,9 @@ function listMcpTools(): Array<{ name: string; description: string; inputSchema:
       inputSchema: {
         type: "object",
         properties: {
-          status: { type: "string", enum: ["all", "todo", "fixed"] }
-        }
-      }
+          status: { type: "string", enum: ["all", "todo", "fixed"] },
+        },
+      },
     },
     {
       name: "get_vernier_issue",
@@ -162,8 +197,8 @@ function listMcpTools(): Array<{ name: string; description: string; inputSchema:
       inputSchema: {
         type: "object",
         properties: { id: { type: "string" } },
-        required: ["id"]
-      }
+        required: ["id"],
+      },
     },
     {
       name: "mark_vernier_issue_fixed",
@@ -171,8 +206,8 @@ function listMcpTools(): Array<{ name: string; description: string; inputSchema:
       inputSchema: {
         type: "object",
         properties: { id: { type: "string" } },
-        required: ["id"]
-      }
+        required: ["id"],
+      },
     },
     {
       name: "mark_vernier_issue_todo",
@@ -180,8 +215,8 @@ function listMcpTools(): Array<{ name: string; description: string; inputSchema:
       inputSchema: {
         type: "object",
         properties: { id: { type: "string" } },
-        required: ["id"]
-      }
+        required: ["id"],
+      },
     },
     {
       name: "verify_vernier_issue",
@@ -190,18 +225,24 @@ function listMcpTools(): Array<{ name: string; description: string; inputSchema:
         type: "object",
         properties: {
           id: { type: "string" },
-          target: { type: "string" }
+          target: { type: "string" },
         },
-        required: ["id"]
-      }
-    }
+        required: ["id"],
+      },
+    },
   ];
 }
 
-async function callMcpTool(root: string, params: unknown): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+async function callMcpTool(
+  root: string,
+  params: unknown,
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const call = expectRecordParam(params, "params");
   const name = expectStringValue(call.name, "params.name");
-  const args = call.arguments === undefined ? {} : expectRecordParam(call.arguments, "params.arguments");
+  const args =
+    call.arguments === undefined
+      ? {}
+      : expectRecordParam(call.arguments, "params.arguments");
 
   if (name === "list_vernier_issues") {
     const status = expectOptionalStatus(args.status);
@@ -211,29 +252,49 @@ async function callMcpTool(root: string, params: unknown): Promise<{ content: Ar
   }
 
   if (name === "get_vernier_issue") {
-    return mcpText(renderIssueTask(await findLatestIssue(root, expectStringValue(args.id, "id"))));
+    return mcpText(
+      renderIssueTask(
+        await findLatestIssue(root, expectStringValue(args.id, "id")),
+      ),
+    );
   }
 
   if (name === "mark_vernier_issue_fixed") {
-    const issue = await markLatestIssue(root, expectStringValue(args.id, "id"), "fixed");
+    const issue = await markLatestIssue(
+      root,
+      expectStringValue(args.id, "id"),
+      "fixed",
+    );
     return mcpText(`Marked ${issue.stableId} fixed.`);
   }
 
   if (name === "mark_vernier_issue_todo") {
-    const issue = await markLatestIssue(root, expectStringValue(args.id, "id"), "todo");
+    const issue = await markLatestIssue(
+      root,
+      expectStringValue(args.id, "id"),
+      "todo",
+    );
     return mcpText(`Marked ${issue.stableId} todo.`);
   }
 
   if (name === "verify_vernier_issue") {
     const issue = await findLatestIssue(root, expectStringValue(args.id, "id"));
-    const target = typeof args.target === "string" ? args.target : defaultTarget;
-    return mcpText(renderIssueVerification(issue, createIssueTargetUrl(target, issue.session.route)));
+    const target =
+      typeof args.target === "string" ? args.target : defaultTarget;
+    return mcpText(
+      renderIssueVerification(
+        issue,
+        createIssueTargetUrl(target, issue.session.route),
+      ),
+    );
   }
 
   throw new Error(`Unknown Vernier MCP tool: ${name}`);
 }
 
-function mcpIssueSummary(issue: Awaited<ReturnType<typeof listLatestIssues>>[number]): Record<string, unknown> {
+function mcpIssueSummary(
+  issue: Awaited<ReturnType<typeof listLatestIssues>>[number],
+): Record<string, unknown> {
   return {
     id: issue.stableId,
     number: issue.issue.id,
@@ -244,24 +305,28 @@ function mcpIssueSummary(issue: Awaited<ReturnType<typeof listLatestIssues>>[num
     note: issue.issue.note,
     selector: issue.issue.selector,
     source: issue.issue.source,
-    screenshotPath: issue.screenshotPath
+    screenshotPath: issue.screenshotPath,
   };
 }
 
-function mcpText(text: string): { content: Array<{ type: "text"; text: string }> } {
+function mcpText(text: string): {
+  content: Array<{ type: "text"; text: string }>;
+} {
   return { content: [{ type: "text", text }] };
 }
 
 function writeMcpResponse(
   id: JsonRpcRequest["id"],
   result?: unknown,
-  error?: { code: number; message: string }
+  error?: { code: number; message: string },
 ): void {
-  process.stdout.write(`${JSON.stringify({
-    jsonrpc: "2.0",
-    id,
-    ...(error ? { error } : { result })
-  })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      ...(error ? { error } : { result }),
+    })}\n`,
+  );
 }
 
 function expectMcpStringParam(params: unknown, key: string): string {
@@ -269,7 +334,10 @@ function expectMcpStringParam(params: unknown, key: string): string {
   return expectStringValue(record[key], `params.${key}`);
 }
 
-function expectRecordParam(value: unknown, field: string): Record<string, unknown> {
+function expectRecordParam(
+  value: unknown,
+  field: string,
+): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${field} must be an object`);
   }

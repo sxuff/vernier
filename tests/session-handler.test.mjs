@@ -16,48 +16,163 @@ const server = createServer((request, response) => {
 const port = await listen(server);
 
 try {
-  await expectJsonResponse("GET", "/__vernier/session", undefined, 405, "Method not allowed");
-  await expectJsonResponse("POST", "/__vernier/session", "{", 400, "Session payload must be valid JSON");
-  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ schemaVersion: 2 }), 400, "schemaVersion must be 1");
-  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ screenshotName: "../escape.png" }), 400, "safe filename");
-  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ issueCount: 2 }), 400, "issueCount must match");
-  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ hash: "sha256-nope" }), 400, "sha256");
-  await expectJsonResponse("POST", "/__vernier/session", createSessionPayload({ captureStrategy: "unknown" }), 400, "captureStrategy must be html2canvas, modern-screenshot, playwright, or browser-native");
+  await expectJsonResponse(
+    "GET",
+    "/__vernier/session",
+    undefined,
+    405,
+    "Method not allowed",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    "{",
+    400,
+    "Session payload must be valid JSON",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload({ schemaVersion: 2 }),
+    400,
+    "schemaVersion must be 1",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload({ screenshotName: "../escape.png" }),
+    400,
+    "safe filename",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload({ issueCount: 2 }),
+    400,
+    "issueCount must match",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload({ hash: "sha256-nope" }),
+    400,
+    "sha256",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload({ captureStrategy: "unknown" }),
+    400,
+    "captureStrategy must be html2canvas, modern-screenshot, playwright, or browser-native",
+  );
+  await expectJsonResponse(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload(),
+    403,
+    "Origin is not allowed",
+    { Origin: "https://example.com" },
+  );
 
-  const ok = await requestJson("POST", "/__vernier/session", createSessionPayload());
-  assert(ok.status === 200, `expected valid session to write, got ${ok.status}: ${ok.text}`);
+  const preflight = await fetch(`http://127.0.0.1:${port}/__vernier/session`, {
+    method: "OPTIONS",
+    headers: { Origin: "http://127.0.0.1:5173" },
+  });
+  assert(
+    preflight.status === 204,
+    `expected local preflight to pass, got ${preflight.status}`,
+  );
+  assert(
+    preflight.headers.get("access-control-allow-origin") ===
+      "http://127.0.0.1:5173",
+    "expected local preflight origin echo",
+  );
+
+  const ok = await requestJson(
+    "POST",
+    "/__vernier/session",
+    createSessionPayload(),
+    { Origin: "http://127.0.0.1:5173" },
+  );
+  assert(
+    ok.status === 200,
+    `expected valid session to write, got ${ok.status}: ${ok.text}`,
+  );
   assert(ok.json.ok === true, "expected success payload");
+  assert(
+    ok.headers.get("access-control-allow-origin") === "http://127.0.0.1:5173",
+    "expected local POST origin echo",
+  );
 
-  const session = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "session.json"), "utf8"));
-  assert(session.sessionId === "s-testsession1", "expected latest session to be written");
-  assert(!("fullPageScreenshotDataUrl" in session), "expected written session.json to omit full-page data URL");
-  assert(!("screenshotDataUrl" in session.issues[0]), "expected written session.json to omit issue data URL");
-  assert(session.issues[0].suggestions?.[0]?.type === "tap-target", "expected validated suggestions to be preserved");
+  const session = JSON.parse(
+    await readFile(
+      path.join(root, ".ui-feedback", "latest", "session.json"),
+      "utf8",
+    ),
+  );
+  assert(
+    session.sessionId === "s-testsession1",
+    "expected latest session to be written",
+  );
+  assert(
+    !("fullPageScreenshotDataUrl" in session),
+    "expected written session.json to omit full-page data URL",
+  );
+  assert(
+    !("screenshotDataUrl" in session.issues[0]),
+    "expected written session.json to omit issue data URL",
+  );
+  assert(
+    session.issues[0].suggestions?.[0]?.type === "tap-target",
+    "expected validated suggestions to be preserved",
+  );
 
   console.log("session handler verified");
 } finally {
   await close(server);
 }
 
-async function expectJsonResponse(method, requestPath, body, status, messagePart) {
-  const result = await requestJson(method, requestPath, body);
+async function expectJsonResponse(
+  method,
+  requestPath,
+  body,
+  status,
+  messagePart,
+  headers = {},
+) {
+  const result = await requestJson(method, requestPath, body, headers);
 
-  assert(result.status === status, `expected ${status}, got ${result.status}: ${result.text}`);
-  assert(result.json.error?.includes(messagePart), `expected error to include ${messagePart}, got ${result.text}`);
+  assert(
+    result.status === status,
+    `expected ${status}, got ${result.status}: ${result.text}`,
+  );
+  assert(
+    result.json.error?.includes(messagePart),
+    `expected error to include ${messagePart}, got ${result.text}`,
+  );
 }
 
-async function requestJson(method, requestPath, body) {
+async function requestJson(method, requestPath, body, extraHeaders = {}) {
   const response = await fetch(`http://127.0.0.1:${port}${requestPath}`, {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body)
+    headers:
+      body === undefined
+        ? extraHeaders
+        : { "Content-Type": "application/json", ...extraHeaders },
+    body:
+      body === undefined
+        ? undefined
+        : typeof body === "string"
+          ? body
+          : JSON.stringify(body),
   });
   const text = await response.text();
 
   return {
     status: response.status,
+    headers: response.headers,
     text,
-    json: JSON.parse(text)
+    json: JSON.parse(text),
   };
 }
 
@@ -65,7 +180,10 @@ function listen(server) {
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      assert(address && typeof address === "object", "expected TCP server address");
+      assert(
+        address && typeof address === "object",
+        "expected TCP server address",
+      );
       resolve(address.port);
     });
   });
@@ -91,9 +209,12 @@ function assert(condition, message) {
 }
 
 function createSessionPayload(overrides = {}) {
-  const png = overrides.screenshotDataUrl ?? "data:image/png;base64,iVBORw0KGgo=";
+  const png =
+    overrides.screenshotDataUrl ?? "data:image/png;base64,iVBORw0KGgo=";
   const screenshotName = overrides.screenshotName ?? "issue-1.png";
-  const hash = overrides.hash ?? "sha256-0000000000000000000000000000000000000000000000000000000000000000";
+  const hash =
+    overrides.hash ??
+    "sha256-0000000000000000000000000000000000000000000000000000000000000000";
   const screenshot = {
     name: screenshotName,
     kind: "element",
@@ -103,7 +224,7 @@ function createSessionPayload(overrides = {}) {
     captureStrategy: overrides.captureStrategy ?? "html2canvas",
     mimeType: "image/png",
     byteLength: Buffer.byteLength(png.split(",")[1] ?? "", "base64"),
-    hash
+    hash,
   };
 
   return {
@@ -115,7 +236,7 @@ function createSessionPayload(overrides = {}) {
     viewport: {
       width: 1280,
       height: 720,
-      devicePixelRatio: 1
+      devicePixelRatio: 1,
     },
     createdAt: "2026-06-11T12:34:56.789Z",
     issueCount: overrides.issueCount ?? 1,
@@ -137,30 +258,31 @@ function createSessionPayload(overrides = {}) {
           sourceConfidence: "low",
           sourceResolver: "fallback-dom",
           ownerChain: [],
-          ancestry: []
+          ancestry: [],
         },
         suggestions: overrides.suggestions ?? [
           {
             type: "tap-target",
             severity: "medium",
-            message: "Interactive target is smaller than common touch guidance.",
+            message:
+              "Interactive target is smaller than common touch guidance.",
             expected: "at least 44x44px",
-            actual: "24x24px"
-          }
+            actual: "24x24px",
+          },
         ],
         note: "handler fixture",
         createdAt: "2026-06-11T12:34:56.789Z",
         screenshotName,
         screenshotDataUrl: png,
-        screenshot
-      }
+        screenshot,
+      },
     ],
     fullPageScreenshotName: "full-page.png",
     fullPageScreenshotDataUrl: png,
     fullPageScreenshot: {
       ...screenshot,
       name: "full-page.png",
-      kind: "full-page"
-    }
+      kind: "full-page",
+    },
   };
 }

@@ -3,6 +3,5 @@ import { defineConfig } from "vite";
 import { vernier } from "../../src/index";
 
 export default defineConfig({
-  plugins: [react(), vernier()]
+  plugins: [react(), vernier()],
 });
-

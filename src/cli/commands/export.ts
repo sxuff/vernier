@@ -1,9 +1,16 @@
-import { cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { listLatestIssues } from "../../core/issues";
+import type { VernierSession } from "../../schema";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
-import type { VernierSession } from "../../schema";
 
 const exportValueOptions = ["--format", "--out"];
 const exportManifestName = "export-manifest.json";
@@ -14,18 +21,28 @@ interface ZipEntry {
   bytes: Buffer;
 }
 
-export async function exportLatestSession(root: string, args: string[]): Promise<string> {
+export async function exportLatestSession(
+  root: string,
+  args: string[],
+): Promise<string> {
   const parsed = parseArgs(args, { valueOptions: exportValueOptions });
   const format = readExportFormat(args);
   const issues = await listLatestIssues(root);
   const sessionDirectory = issues[0]?.sessionDirectory;
 
   if (!sessionDirectory) {
-    throw new VernierError("VERNIER_NO_SESSION", `No Vernier session found under ${root}`, "Open your app with Vernier, add an issue, then export a session.");
+    throw new VernierError(
+      "VERNIER_NO_SESSION",
+      `No Vernier session found under ${root}`,
+      "Open your app with Vernier, add an issue, then export a session.",
+    );
   }
 
   if (format === "md" || format === "json") {
-    const source = path.join(sessionDirectory, format === "md" ? "session.md" : "session.json");
+    const source = path.join(
+      sessionDirectory,
+      format === "md" ? "session.md" : "session.json",
+    );
     const out = parsed.option("--out");
 
     if (!out) {
@@ -39,42 +56,69 @@ export async function exportLatestSession(root: string, args: string[]): Promise
   }
 
   const issue = issues[0]!;
-  const destination = path.resolve(root, parsed.option("--out") ?? path.join(".ui-feedback", "exports", `${issue.session.sessionId}.zip`));
+  const destination = path.resolve(
+    root,
+    parsed.option("--out") ??
+      path.join(".ui-feedback", "exports", `${issue.session.sessionId}.zip`),
+  );
   await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, await createZipFromDirectory(sessionDirectory, issue.session));
+  await writeFile(
+    destination,
+    await createZipFromDirectory(sessionDirectory, issue.session),
+  );
 
   return `Exported latest Vernier zip to ${destination}`;
 }
 
 function readExportFormat(args: string[]): "md" | "json" | "zip" {
-  const value = parseArgs(args, { valueOptions: exportValueOptions }).option("--format") ?? "zip";
+  const value =
+    parseArgs(args, { valueOptions: exportValueOptions }).option("--format") ??
+    "zip";
 
   if (value === "md" || value === "json" || value === "zip") {
     return value;
   }
 
-  throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --format value: ${value}`, "Use --format md, --format json, or --format zip.");
+  throw new VernierError(
+    "VERNIER_INVALID_OPTION",
+    `Invalid --format value: ${value}`,
+    "Use --format md, --format json, or --format zip.",
+  );
 }
 
-async function createZipFromDirectory(directory: string, session: VernierSession): Promise<Buffer> {
+async function createZipFromDirectory(
+  directory: string,
+  session: VernierSession,
+): Promise<Buffer> {
   const files = await collectFiles(directory);
   const entries = [
-    ...await Promise.all(
-      files.map(async (file): Promise<ZipEntry> => ({
-        relativePath: file.relativePath,
-        mtime: file.mtime,
-        bytes: await readFile(file.absolutePath)
-      }))
+    ...(await Promise.all(
+      files.map(
+        async (file): Promise<ZipEntry> => ({
+          relativePath: file.relativePath,
+          mtime: file.mtime,
+          bytes: await readFile(file.absolutePath),
+        }),
+      ),
+    )),
+    createExportManifestEntry(
+      session,
+      files.map((file) => file.relativePath),
     ),
-    createExportManifestEntry(session, files.map((file) => file.relativePath))
   ].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 
   return createZipArchive(entries);
 }
 
-function createExportManifestEntry(session: VernierSession, files: string[]): ZipEntry {
+function createExportManifestEntry(
+  session: VernierSession,
+  files: string[],
+): ZipEntry {
   const exportedAt = new Date().toISOString();
-  const archiveFiles = [...files.map((file) => file.replaceAll("\\", "/")), exportManifestName].sort();
+  const archiveFiles = [
+    ...files.map((file) => file.replaceAll("\\", "/")),
+    exportManifestName,
+  ].sort();
   const manifest = {
     kind: "vernier-session-export",
     schemaVersion: 1,
@@ -86,15 +130,16 @@ function createExportManifestEntry(session: VernierSession, files: string[]): Zi
     issueCount: session.issues.length,
     localOnly: true,
     networkUploads: false,
-    privacy: "Screenshots and UI feedback are exported as a local archive only.",
+    privacy:
+      "Screenshots and UI feedback are exported as a local archive only.",
     files: archiveFiles,
-    fileCount: archiveFiles.length
+    fileCount: archiveFiles.length,
   };
 
   return {
     relativePath: exportManifestName,
     mtime: new Date(exportedAt),
-    bytes: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8")
+    bytes: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8"),
   };
 }
 
@@ -147,7 +192,10 @@ function createZipArchive(files: ZipEntry[]): Buffer {
     offset += local.byteLength + name.byteLength + bytes.byteLength;
   }
 
-  const centralSize = centralParts.reduce((sum, part) => sum + part.byteLength, 0);
+  const centralSize = centralParts.reduce(
+    (sum, part) => sum + part.byteLength,
+    0,
+  );
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
   end.writeUInt16LE(0, 4);
@@ -161,15 +209,22 @@ function createZipArchive(files: ZipEntry[]): Buffer {
   return Buffer.concat([...localParts, ...centralParts, end]);
 }
 
-async function collectFiles(directory: string, base = directory): Promise<Array<{ absolutePath: string; relativePath: string; mtime: Date }>> {
+async function collectFiles(
+  directory: string,
+  base = directory,
+): Promise<Array<{ absolutePath: string; relativePath: string; mtime: Date }>> {
   const entries = await readdir(directory, { withFileTypes: true });
-  const files: Array<{ absolutePath: string; relativePath: string; mtime: Date }> = [];
+  const files: Array<{
+    absolutePath: string;
+    relativePath: string;
+    mtime: Date;
+  }> = [];
 
   for (const entry of entries) {
     const absolutePath = path.join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...await collectFiles(absolutePath, base));
+      files.push(...(await collectFiles(absolutePath, base)));
       continue;
     }
 
@@ -181,18 +236,23 @@ async function collectFiles(directory: string, base = directory): Promise<Array<
     files.push({
       absolutePath,
       relativePath: path.relative(base, absolutePath),
-      mtime: fileStat.mtime
+      mtime: fileStat.mtime,
     });
   }
 
-  return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  return files.sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath),
+  );
 }
 
 function dosDateTime(date: Date): { time: number; date: number } {
   const year = Math.max(1980, date.getFullYear());
   return {
-    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
-    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+    time:
+      (date.getHours() << 11) |
+      (date.getMinutes() << 5) |
+      Math.floor(date.getSeconds() / 2),
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
   };
 }
 

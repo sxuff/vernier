@@ -17,7 +17,10 @@ interface Point {
   y: number;
 }
 
-export function createAnnotationLayer(root: HTMLElement, options: AnnotationOptions): AnnotationLayer {
+export function createAnnotationLayer(
+  root: HTMLElement,
+  options: AnnotationOptions,
+): AnnotationLayer {
   let mode = "measure";
   let drawing = false;
   let points: Point[] = [];
@@ -57,7 +60,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
   function scalePoint(point: Point): Point {
     return {
       x: point.x * window.devicePixelRatio,
-      y: point.y * window.devicePixelRatio
+      y: point.y * window.devicePixelRatio,
     };
   }
 
@@ -108,7 +111,7 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     const normalizedBounds = normalizeBounds(bounds);
     const relativePoints = points.map((point) => ({
       x: round(point.x / window.innerWidth),
-      y: round(point.y / window.innerHeight)
+      y: round(point.y / window.innerHeight),
     }));
     const measurement: AnnotationMeasurement = {
       kind: "annotation",
@@ -117,20 +120,20 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
-        devicePixelRatio: window.devicePixelRatio
+        devicePixelRatio: window.devicePixelRatio,
       },
       bounds: normalizedBounds,
       relativeBounds: {
         x: round(normalizedBounds.x / window.innerWidth),
         y: round(normalizedBounds.y / window.innerHeight),
         width: round(normalizedBounds.width / window.innerWidth),
-        height: round(normalizedBounds.height / window.innerHeight)
+        height: round(normalizedBounds.height / window.innerHeight),
       },
       points: points.map((point) => ({
         x: round(point.x),
-        y: round(point.y)
+        y: round(point.y),
       })),
-      relativePoints
+      relativePoints,
     };
 
     options.onDraft(
@@ -139,50 +142,68 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
         measurement.label ? `Label: ${measurement.label}` : null,
         `Viewport: ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}x`,
         `Region: x=${Math.round(normalizedBounds.x)}, y=${Math.round(normalizedBounds.y)}, w=${Math.round(normalizedBounds.width)}, h=${Math.round(normalizedBounds.height)}`,
-        `Relative points: ${JSON.stringify(relativePoints)}`
-      ].filter((line): line is string => line !== null).join("\n"),
-      measurement
+        `Relative points: ${JSON.stringify(relativePoints)}`,
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n"),
+      measurement,
     );
   }
 
-  canvas.addEventListener("pointerdown", (event) => {
-    if (mode === "measure") {
-      return;
-    }
+  canvas.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (mode === "measure") {
+        return;
+      }
 
-    drawing = true;
-    points = [toPoint(event)];
-    canvas.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  }, { signal: options.signal });
+      drawing = true;
+      points = [toPoint(event)];
+      canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    { signal: options.signal },
+  );
 
-  canvas.addEventListener("pointermove", (event) => {
-    if (!drawing) {
-      return;
-    }
+  canvas.addEventListener(
+    "pointermove",
+    (event) => {
+      if (!drawing) {
+        return;
+      }
 
-    points.push(toPoint(event));
-    draw();
-    event.preventDefault();
-  }, { signal: options.signal });
+      points.push(toPoint(event));
+      draw();
+      event.preventDefault();
+    },
+    { signal: options.signal },
+  );
 
-  canvas.addEventListener("pointerup", (event) => {
-    if (!drawing) {
-      return;
-    }
+  canvas.addEventListener(
+    "pointerup",
+    (event) => {
+      if (!drawing) {
+        return;
+      }
 
-    drawing = false;
-    points.push(toPoint(event));
-    draw();
-    finishDraft();
-    event.preventDefault();
-  }, { signal: options.signal });
+      drawing = false;
+      points.push(toPoint(event));
+      draw();
+      finishDraft();
+      event.preventDefault();
+    },
+    { signal: options.signal },
+  );
 
-  window.addEventListener("resize", () => {
-    canvas.width = window.innerWidth * window.devicePixelRatio;
-    canvas.height = window.innerHeight * window.devicePixelRatio;
-    draw();
-  }, { signal: options.signal });
+  window.addEventListener(
+    "resize",
+    () => {
+      canvas.width = window.innerWidth * window.devicePixelRatio;
+      canvas.height = window.innerHeight * window.devicePixelRatio;
+      draw();
+    },
+    { signal: options.signal },
+  );
 
   return { setMode, clear, destroy };
 
@@ -191,7 +212,12 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     canvas.remove();
   }
 
-  function getBounds(boundPoints: Point[]): { x: number; y: number; w: number; h: number } {
+  function getBounds(boundPoints: Point[]): {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } {
     const xs = boundPoints.map((point) => point.x);
     const ys = boundPoints.map((point) => point.y);
     const minX = Math.min(...xs);
@@ -202,12 +228,17 @@ export function createAnnotationLayer(root: HTMLElement, options: AnnotationOpti
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }
 
-  function normalizeBounds(bounds: { x: number; y: number; w: number; h: number }): AnnotationMeasurement["bounds"] {
+  function normalizeBounds(bounds: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }): AnnotationMeasurement["bounds"] {
     return {
       x: round(bounds.w < 0 ? bounds.x + bounds.w : bounds.x),
       y: round(bounds.h < 0 ? bounds.y + bounds.h : bounds.y),
       width: round(Math.abs(bounds.w)),
-      height: round(Math.abs(bounds.h))
+      height: round(Math.abs(bounds.h)),
     };
   }
 

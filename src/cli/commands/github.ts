@@ -1,23 +1,30 @@
+import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import {
   filterIssuesByStatus,
   findLatestIssue,
   listLatestIssues,
   renderGitHubIssueBody,
-  renderGitHubIssueTitle
+  renderGitHubIssueTitle,
 } from "../../core/issues";
 import { parseArgs } from "../lib/args";
 import { VernierError } from "../lib/errors";
 
-export async function handleGitHubCommand(root: string, args: string[]): Promise<void> {
+export async function handleGitHubCommand(
+  root: string,
+  args: string[],
+): Promise<void> {
   const parsed = parseArgs(args, { valueOptions: ["--label"] });
   const [action = "body", reference = "all"] = parsed.positionals();
 
   if (action !== "body" && action !== "create") {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback] [--dry-run]", "Use `vernier github body <issue-id>` or `vernier github create --dry-run` to preview without network.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      "Usage: vernier github body|create [all|<issue-id>] [--label ui-feedback] [--dry-run]",
+      "Use `vernier github body <issue-id>` or `vernier github create --dry-run` to preview without network.",
+    );
   }
 
   const issues = await resolveGitHubIssues(root, reference);
@@ -27,10 +34,17 @@ export async function handleGitHubCommand(root: string, args: string[]): Promise
     return;
   }
 
-  await createGitHubIssues(issues, parsed.option("--label") ?? "ui-feedback", parsed.flag("--dry-run"));
+  await createGitHubIssues(
+    issues,
+    parsed.option("--label") ?? "ui-feedback",
+    parsed.flag("--dry-run"),
+  );
 }
 
-async function resolveGitHubIssues(root: string, reference: string): Promise<Awaited<ReturnType<typeof listLatestIssues>>> {
+async function resolveGitHubIssues(
+  root: string,
+  reference: string,
+): Promise<Awaited<ReturnType<typeof listLatestIssues>>> {
   if (reference === "all") {
     return filterIssuesByStatus(await listLatestIssues(root), "todo");
   }
@@ -38,23 +52,28 @@ async function resolveGitHubIssues(root: string, reference: string): Promise<Awa
   return [await findLatestIssue(root, reference)];
 }
 
-function renderGitHubIssuesPreview(issues: Awaited<ReturnType<typeof listLatestIssues>>): string {
+function renderGitHubIssuesPreview(
+  issues: Awaited<ReturnType<typeof listLatestIssues>>,
+): string {
   if (issues.length === 0) {
     return "No todo issues in latest Vernier session.";
   }
 
-  return issues.flatMap((issue, index) => [
-    index === 0 ? "" : "\n---\n",
-    `Title: ${renderGitHubIssueTitle(issue)}`,
-    "",
-    renderGitHubIssueBody(issue)
-  ]).join("\n").trim();
+  return issues
+    .flatMap((issue, index) => [
+      index === 0 ? "" : "\n---\n",
+      `Title: ${renderGitHubIssueTitle(issue)}`,
+      "",
+      renderGitHubIssueBody(issue),
+    ])
+    .join("\n")
+    .trim();
 }
 
 async function createGitHubIssues(
   issues: Awaited<ReturnType<typeof listLatestIssues>>,
   label: string,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<void> {
   if (issues.length === 0) {
     console.log("No todo issues in latest Vernier session.");
@@ -72,7 +91,16 @@ async function createGitHubIssues(
     for (const issue of issues) {
       const bodyPath = path.join(tempDirectory, `${issue.stableId}.md`);
       await writeFile(bodyPath, `${renderGitHubIssueBody(issue)}\n`);
-      const args = ["issue", "create", "--title", renderGitHubIssueTitle(issue), "--body-file", bodyPath, "--label", label];
+      const args = [
+        "issue",
+        "create",
+        "--title",
+        renderGitHubIssueTitle(issue),
+        "--body-file",
+        bodyPath,
+        "--label",
+        label,
+      ];
       const url = await runProcess("gh", args);
       console.log(`Created GitHub issue for ${issue.stableId}: ${url.trim()}`);
     }
@@ -81,7 +109,10 @@ async function createGitHubIssues(
   }
 }
 
-function renderGitHubCreateDryRun(issues: Awaited<ReturnType<typeof listLatestIssues>>, label: string): string {
+function renderGitHubCreateDryRun(
+  issues: Awaited<ReturnType<typeof listLatestIssues>>,
+  label: string,
+): string {
   return [
     `Dry run: would create ${issues.length} GitHub issue${issues.length === 1 ? "" : "s"}.`,
     `Label: ${label}`,
@@ -91,16 +122,18 @@ function renderGitHubCreateDryRun(issues: Awaited<ReturnType<typeof listLatestIs
       `Issue: ${issue.stableId}`,
       `Title: ${renderGitHubIssueTitle(issue)}`,
       "",
-      renderGitHubIssueBody(issue)
-    ])
-  ].join("\n").trim();
+      renderGitHubIssueBody(issue),
+    ]),
+  ]
+    .join("\n")
+    .trim();
 }
 
 function runProcess(executable: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: process.cwd(),
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
@@ -113,7 +146,13 @@ function runProcess(executable: string, args: string[]): Promise<string> {
     });
     child.on("error", (error) => {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        reject(new VernierError("VERNIER_GH_MISSING", "Could not find the gh CLI on PATH.", "Install and authenticate GitHub CLI, or run `vernier github body` to preview the issue body."));
+        reject(
+          new VernierError(
+            "VERNIER_GH_MISSING",
+            "Could not find the gh CLI on PATH.",
+            "Install and authenticate GitHub CLI, or run `vernier github body` to preview the issue body.",
+          ),
+        );
         return;
       }
 
@@ -125,7 +164,13 @@ function runProcess(executable: string, args: string[]): Promise<string> {
         return;
       }
 
-      reject(new VernierError("VERNIER_GH_FAILED", `${executable} exited with code ${code}`, stderr.trim() || "Run gh auth status to check authentication."));
+      reject(
+        new VernierError(
+          "VERNIER_GH_FAILED",
+          `${executable} exited with code ${code}`,
+          stderr.trim() || "Run gh auth status to check authentication.",
+        ),
+      );
     });
   });
 }

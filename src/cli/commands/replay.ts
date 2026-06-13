@@ -1,6 +1,10 @@
-import { createReadStream } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createReadStream, type Dirent } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { listLatestIssues } from "../../core/issues";
@@ -9,23 +13,36 @@ import { VernierError } from "../lib/errors";
 
 interface ReplayDependencies {
   root: string;
-  listenWithPortFallback(server: ReturnType<typeof createServer>, requestedPort: number): Promise<number>;
+  listenWithPortFallback(
+    server: ReturnType<typeof createServer>,
+    requestedPort: number,
+  ): Promise<number>;
   openUrl(url: string): Promise<void>;
 }
 
-export async function startReplayViewer(args: string[], dependencies: ReplayDependencies): Promise<void> {
+export async function startReplayViewer(
+  args: string[],
+  dependencies: ReplayDependencies,
+): Promise<void> {
   const parsed = parseArgs(args, { valueOptions: ["--port"] });
   const reference = parsed.positionals()[0];
 
   if (reference && reference !== "latest") {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Usage: vernier replay latest [--port 3340|auto] [--no-open]", "Only the latest replay target is supported right now.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      "Usage: vernier replay latest [--port 3340|auto] [--no-open]",
+      "Only the latest replay target is supported right now.",
+    );
   }
 
   const requestedPort = parsePortOption(args, 3340);
   const server = createServer((request, response) => {
     void handleReplayRequest(dependencies.root, request, response);
   });
-  const port = await dependencies.listenWithPortFallback(server, requestedPort === "auto" ? 3340 : requestedPort);
+  const port = await dependencies.listenWithPortFallback(
+    server,
+    requestedPort === "auto" ? 3340 : requestedPort,
+  );
   const url = `http://127.0.0.1:${port}`;
 
   console.log(`[vernier] replay viewer listening on ${url}`);
@@ -35,7 +52,11 @@ export async function startReplayViewer(args: string[], dependencies: ReplayDepe
   }
 }
 
-async function handleReplayRequest(root: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handleReplayRequest(
+  root: string,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
   const issues = await listLatestIssues(root);
   const sessionDirectory = issues[0]?.sessionDirectory;
 
@@ -55,7 +76,12 @@ async function handleReplayRequest(root: string, request: IncomingMessage, respo
     }
 
     if (requestUrl.pathname === "/session.json") {
-      await sendSessionFile(response, sessionDirectory, "session.json", "application/json");
+      await sendSessionFile(
+        response,
+        sessionDirectory,
+        "session.json",
+        "application/json",
+      );
       return;
     }
 
@@ -63,26 +89,35 @@ async function handleReplayRequest(root: string, request: IncomingMessage, respo
       await sendSessionFile(
         response,
         sessionDirectory,
-        path.join("screenshots", decodeURIComponent(requestUrl.pathname.slice("/screenshots/".length))),
-        "image/png"
+        path.join(
+          "screenshots",
+          decodeURIComponent(requestUrl.pathname.slice("/screenshots/".length)),
+        ),
+        "image/png",
       );
       return;
     }
 
     if (requestUrl.pathname.startsWith("/verification/")) {
-      const relativePath = decodeURIComponent(requestUrl.pathname.slice("/verification/".length));
+      const relativePath = decodeURIComponent(
+        requestUrl.pathname.slice("/verification/".length),
+      );
       await sendSessionFile(
         response,
         sessionDirectory,
         path.join("verification", relativePath),
-        replayContentType(relativePath)
+        replayContentType(relativePath),
       );
       return;
     }
 
     sendText(response, 404, "Not found");
   } catch (error) {
-    sendText(response, 404, error instanceof Error ? error.message : "Not found");
+    sendText(
+      response,
+      404,
+      error instanceof Error ? error.message : "Not found",
+    );
   }
 }
 
@@ -90,13 +125,17 @@ async function sendSessionFile(
   response: ServerResponse,
   sessionDirectory: string,
   relativePath: string,
-  contentType: string
+  contentType: string,
 ): Promise<void> {
   const safeRoot = path.resolve(sessionDirectory);
   const filePath = path.resolve(sessionDirectory, relativePath);
 
   if (filePath !== safeRoot && !filePath.startsWith(`${safeRoot}${path.sep}`)) {
-    throw new VernierError("VERNIER_UNSAFE_PATH", "Unsafe replay path", "Replay can only serve files inside the selected Vernier session directory.");
+    throw new VernierError(
+      "VERNIER_UNSAFE_PATH",
+      "Unsafe replay path",
+      "Replay can only serve files inside the selected Vernier session directory.",
+    );
   }
 
   response.statusCode = 200;
@@ -104,9 +143,13 @@ async function sendSessionFile(
   await pipeline(createReadStream(filePath), response);
 }
 
-async function renderReplayHtml(issues: Awaited<ReturnType<typeof listLatestIssues>>): Promise<string> {
+async function renderReplayHtml(
+  issues: Awaited<ReturnType<typeof listLatestIssues>>,
+): Promise<string> {
   const session = issues[0]!.session;
-  const verificationReports = await readVerificationReports(issues[0]!.sessionDirectory);
+  const verificationReports = await readVerificationReports(
+    issues[0]!.sessionDirectory,
+  );
 
   return `<!doctype html>
 <html lang="en">
@@ -181,7 +224,9 @@ async function renderReplayHtml(issues: Awaited<ReturnType<typeof listLatestIssu
 </html>`;
 }
 
-function renderReplayIssueLink(issue: Awaited<ReturnType<typeof listLatestIssues>>[number]): string {
+function renderReplayIssueLink(
+  issue: Awaited<ReturnType<typeof listLatestIssues>>[number],
+): string {
   return `<a class="issue-link" href="#${escapeHtml(issue.stableId)}">
     <strong>${escapeHtml(issue.stableId)} · issue ${issue.issue.id}</strong>
     <span class="muted">${escapeHtml(issue.issue.note || issue.issue.kind)}</span>
@@ -191,7 +236,7 @@ function renderReplayIssueLink(issue: Awaited<ReturnType<typeof listLatestIssues
 
 function renderReplayIssue(
   issue: Awaited<ReturnType<typeof listLatestIssues>>[number],
-  verificationReport: unknown
+  verificationReport: unknown,
 ): string {
   return `<section class="issue" id="${escapeHtml(issue.stableId)}">
     <div class="tag-row">
@@ -241,7 +286,7 @@ function renderVerificationPanel(issueId: string, report: unknown): string {
     ["report.md", "report.md"],
     record.artifacts?.before ? ["before.png", record.artifacts.before] : null,
     record.artifacts?.after ? ["after.png", record.artifacts.after] : null,
-    record.artifacts?.diff ? ["diff.png", record.artifacts.diff] : null
+    record.artifacts?.diff ? ["diff.png", record.artifacts.diff] : null,
   ].filter((item): item is [string, string] => item !== null);
   const diffPreview = record.artifacts?.diff
     ? `<img src="/verification/${encodeURIComponent(issueId)}/${encodeURIComponent(record.artifacts.diff)}" alt="Verification diff for ${escapeHtml(issueId)}" />`
@@ -256,29 +301,36 @@ function renderVerificationPanel(issueId: string, report: unknown): string {
     <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>`;
 }
 
-async function readVerificationReports(sessionDirectory: string): Promise<Map<string, unknown>> {
+async function readVerificationReports(
+  sessionDirectory: string,
+): Promise<Map<string, unknown>> {
   const reports = new Map<string, unknown>();
   const verificationDirectory = path.join(sessionDirectory, "verification");
 
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(verificationDirectory, { withFileTypes: true });
   } catch {
     return reports;
   }
 
-  await Promise.all(entries.map(async (entry) => {
-    if (!entry.isDirectory()) {
-      return;
-    }
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isDirectory()) {
+        return;
+      }
 
-    try {
-      const raw = await readFile(path.join(verificationDirectory, entry.name, "report.json"), "utf8");
-      reports.set(entry.name, JSON.parse(raw));
-    } catch {
-      // Ignore partial verification artifacts.
-    }
-  }));
+      try {
+        const raw = await readFile(
+          path.join(verificationDirectory, entry.name, "report.json"),
+          "utf8",
+        );
+        reports.set(entry.name, JSON.parse(raw));
+      } catch {
+        // Ignore partial verification artifacts.
+      }
+    }),
+  );
 
   return reports;
 }
@@ -295,8 +347,13 @@ function replayContentType(relativePath: string): string {
   return "text/plain; charset=utf-8";
 }
 
-function parsePortOption(args: string[], fallbackPort: number): number | "auto" {
-  const portValue = parseArgs(args, { valueOptions: ["--port"] }).option("--port");
+function parsePortOption(
+  args: string[],
+  fallbackPort: number,
+): number | "auto" {
+  const portValue = parseArgs(args, { valueOptions: ["--port"] }).option(
+    "--port",
+  );
 
   if (!portValue) {
     return fallbackPort;
@@ -309,13 +366,21 @@ function parsePortOption(args: string[], fallbackPort: number): number | "auto" 
   const port = Number(portValue);
 
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --port value: ${portValue}`, "Use a port from 1 to 65535, or --port auto.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      `Invalid --port value: ${portValue}`,
+      "Use a port from 1 to 65535, or --port auto.",
+    );
   }
 
   return port;
 }
 
-function sendText(response: ServerResponse, statusCode: number, message: string): void {
+function sendText(
+  response: ServerResponse,
+  statusCode: number,
+  message: string,
+): void {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
   response.end(message);

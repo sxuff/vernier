@@ -21,15 +21,17 @@ export function getSourceLocation(element: Element): string {
 }
 
 export function resolveSource(element: Element): SourceResolution {
-  return sourceResolvers.reduce<SourceResolution | null>(
-    (resolved, resolver) => resolved ?? resolver.resolve(element),
-    null
-  ) ?? {
-    source: "unresolved",
-    confidence: "low",
-    resolver: "fallback-dom",
-    ownerChain: []
-  };
+  return (
+    sourceResolvers.reduce<SourceResolution | null>(
+      (resolved, resolver) => resolved ?? resolver.resolve(element),
+      null,
+    ) ?? {
+      source: "unresolved",
+      confidence: "low",
+      resolver: "fallback-dom",
+      ownerChain: [],
+    }
+  );
 }
 
 export const sourceResolvers: SourceResolver[] = [
@@ -47,9 +49,9 @@ export const sourceResolvers: SourceResolver[] = [
         confidence: "high",
         resolver: "data-vernier-source",
         componentName: annotatedSource.componentName,
-        ownerChain: annotatedSource.ownerChain
+        ownerChain: annotatedSource.ownerChain,
       };
-    }
+    },
   },
   {
     name: "react-debug-source",
@@ -68,9 +70,9 @@ export const sourceResolvers: SourceResolver[] = [
         confidence: "medium",
         resolver: "react-debug-source",
         componentName: ownerChain.at(-1),
-        ownerChain
+        ownerChain,
       };
-    }
+    },
   },
   {
     name: "data-vernier-component",
@@ -86,9 +88,9 @@ export const sourceResolvers: SourceResolver[] = [
         confidence: "medium",
         resolver: "data-vernier-component",
         componentName: component.componentName,
-        ownerChain: component.ownerChain
+        ownerChain: component.ownerChain,
       };
-    }
+    },
   },
   {
     name: "react-component-name",
@@ -105,16 +107,18 @@ export const sourceResolvers: SourceResolver[] = [
         confidence: "low",
         resolver: "react-component-name",
         componentName,
-        ownerChain
+        ownerChain,
       };
-    }
-  }
+    },
+  },
 ];
 
 export function getReactFiber(sourceElement: Element): unknown {
   const record = sourceElement as unknown as Record<string, unknown>;
   const key = Object.keys(record).find(
-    (candidate) => candidate.startsWith("__reactFiber$") || candidate.startsWith("__reactInternalInstance$")
+    (candidate) =>
+      candidate.startsWith("__reactFiber$") ||
+      candidate.startsWith("__reactInternalInstance$"),
   );
 
   return key ? record[key] : null;
@@ -153,7 +157,9 @@ export function findOwnerChain(sourceFiber: unknown): string[] {
   return chain;
 }
 
-export function fiberDisplayName(fiber: Record<string, unknown>): string | null {
+export function fiberDisplayName(
+  fiber: Record<string, unknown>,
+): string | null {
   const type = fiber.type;
   const elementType = fiber.elementType;
 
@@ -176,7 +182,9 @@ export function fiberDisplayName(fiber: Record<string, unknown>): string | null 
   return null;
 }
 
-export function findAnnotatedSource(sourceElement: Element): { source: string; componentName?: string; ownerChain: string[] } | null {
+export function findAnnotatedSource(
+  sourceElement: Element,
+): { source: string; componentName?: string; ownerChain: string[] } | null {
   let current: Element | null = sourceElement;
 
   while (current) {
@@ -187,7 +195,7 @@ export function findAnnotatedSource(sourceElement: Element): { source: string; c
       return {
         source: sourceAttribute,
         componentName: component.componentName,
-        ownerChain: component.ownerChain
+        ownerChain: component.ownerChain,
       };
     }
 
@@ -197,7 +205,9 @@ export function findAnnotatedSource(sourceElement: Element): { source: string; c
   return null;
 }
 
-export function findAnnotatedComponent(sourceElement: Element): { componentName?: string; ownerChain: string[] } | null {
+export function findAnnotatedComponent(
+  sourceElement: Element,
+): { componentName?: string; ownerChain: string[] } | null {
   let current: Element | null = sourceElement;
 
   while (current) {
@@ -213,13 +223,20 @@ export function findAnnotatedComponent(sourceElement: Element): { componentName?
   return null;
 }
 
-function readAnnotatedComponent(element: Element): { componentName?: string; ownerChain: string[] } {
-  const componentName = element.getAttribute("data-vernier-component") ?? undefined;
-  const ownerChain = parseOwnerChain(element.getAttribute("data-vernier-owner-chain"));
+function readAnnotatedComponent(element: Element): {
+  componentName?: string;
+  ownerChain: string[];
+} {
+  const componentName =
+    element.getAttribute("data-vernier-component") ?? undefined;
+  const ownerChain = parseOwnerChain(
+    element.getAttribute("data-vernier-owner-chain"),
+  );
 
   return {
     componentName: componentName ?? ownerChain.at(-1),
-    ownerChain: ownerChain.length > 0 ? ownerChain : componentName ? [componentName] : []
+    ownerChain:
+      ownerChain.length > 0 ? ownerChain : componentName ? [componentName] : [],
   };
 }
 
@@ -240,7 +257,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isSourceLocation(value: unknown): value is SourceLocation {
-  return isRecord(value) && typeof value.fileName === "string" && typeof value.lineNumber === "number";
+  return (
+    isRecord(value) &&
+    typeof value.fileName === "string" &&
+    typeof value.lineNumber === "number"
+  );
 }
 
 export function trimSourcePath(fileName: string): string {

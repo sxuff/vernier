@@ -7,14 +7,19 @@ export interface OverlayRuntimeOptions {
   sessionEndpoint?: string;
   captureFullPage?: boolean;
   screenshotMaxWidth?: number;
-  captureStrategy?: Extract<CaptureStrategy, "html2canvas" | "modern-screenshot">;
+  captureStrategy?: Extract<
+    CaptureStrategy,
+    "html2canvas" | "modern-screenshot"
+  >;
 }
 
 export interface SessionOutputOptions {
   outDir?: string;
 }
 
-export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = {}): OverlayRuntimeOptions {
+export function normalizeOverlayRuntimeOptions(
+  options: OverlayRuntimeOptions = {},
+): OverlayRuntimeOptions {
   const normalized: OverlayRuntimeOptions = {};
 
   if (typeof options.hotkey === "string" && options.hotkey.trim()) {
@@ -31,7 +36,10 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
     normalized.redact = redact;
   }
 
-  if (typeof options.sessionEndpoint === "string" && options.sessionEndpoint.trim()) {
+  if (
+    typeof options.sessionEndpoint === "string" &&
+    options.sessionEndpoint.trim()
+  ) {
     normalized.sessionEndpoint = options.sessionEndpoint.trim();
   }
 
@@ -39,11 +47,18 @@ export function normalizeOverlayRuntimeOptions(options: OverlayRuntimeOptions = 
     normalized.captureFullPage = options.captureFullPage;
   }
 
-  if (typeof options.screenshotMaxWidth === "number" && Number.isFinite(options.screenshotMaxWidth) && options.screenshotMaxWidth > 0) {
+  if (
+    typeof options.screenshotMaxWidth === "number" &&
+    Number.isFinite(options.screenshotMaxWidth) &&
+    options.screenshotMaxWidth > 0
+  ) {
     normalized.screenshotMaxWidth = Math.floor(options.screenshotMaxWidth);
   }
 
-  if (options.captureStrategy === "html2canvas" || options.captureStrategy === "modern-screenshot") {
+  if (
+    options.captureStrategy === "html2canvas" ||
+    options.captureStrategy === "modern-screenshot"
+  ) {
     normalized.captureStrategy = options.captureStrategy;
   }
 
@@ -55,5 +70,11 @@ function sanitizeStringArray(value: unknown): string[] {
     return [];
   }
 
-  return [...new Set(value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))];
+  return [
+    ...new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean),
+    ),
+  ];
 }

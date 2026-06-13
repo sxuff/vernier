@@ -1,7 +1,13 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { injectVernierOverlay } from "./core/html";
-import type { OverlayRuntimeOptions, SessionOutputOptions } from "./core/overlay-options";
-import { createVernierOverlayScript, vernierOverlayPath } from "./core/overlay-script";
+import type {
+  OverlayRuntimeOptions,
+  SessionOutputOptions,
+} from "./core/overlay-options";
+import {
+  createVernierOverlayScript,
+  vernierOverlayPath,
+} from "./core/overlay-script";
 import { annotateJsxSource } from "./core/source-annotation";
 import { registerSessionMiddleware } from "./middleware";
 
@@ -9,7 +15,9 @@ const virtualOverlayId = "virtual:vernier-overlay";
 const resolvedVirtualOverlayId = `\0${virtualOverlayId}`;
 const servedVirtualOverlayId = `/@id/${virtualOverlayId}`;
 
-export interface VernierPluginOptions extends OverlayRuntimeOptions, SessionOutputOptions {
+export interface VernierPluginOptions
+  extends OverlayRuntimeOptions,
+    SessionOutputOptions {
   enabled?: boolean;
 }
 
@@ -46,8 +54,8 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
           redact: options.redact,
           captureFullPage: options.captureFullPage,
           screenshotMaxWidth: options.screenshotMaxWidth,
-          captureStrategy: options.captureStrategy
-        }
+          captureStrategy: options.captureStrategy,
+        },
       });
     },
     transform(code, id) {
@@ -69,7 +77,7 @@ export function vernier(options: VernierPluginOptions = {}): Plugin {
       }
 
       return injectVernierOverlay(html, servedVirtualOverlayId);
-    }
+    },
   };
 }
 

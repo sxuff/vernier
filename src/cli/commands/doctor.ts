@@ -10,7 +10,9 @@ export async function runDoctor(root: string): Promise<string> {
     gitignore = await readFile(gitignorePath, "utf8");
   } catch {
     lines.push("Warning: .gitignore was not found.");
-    lines.push("Hint: add .ui-feedback/ so captured screenshots are not committed.");
+    lines.push(
+      "Hint: add .ui-feedback/ so captured screenshots are not committed.",
+    );
   }
 
   if (gitignore) {
@@ -18,7 +20,9 @@ export async function runDoctor(root: string): Promise<string> {
       lines.push("OK: .ui-feedback is ignored by .gitignore.");
     } else {
       lines.push("Warning: .ui-feedback is not ignored by .gitignore.");
-      lines.push("Hint: add .ui-feedback/ so captured screenshots are not committed.");
+      lines.push(
+        "Hint: add .ui-feedback/ so captured screenshots are not committed.",
+      );
     }
   }
 
@@ -30,7 +34,9 @@ export async function runDoctor(root: string): Promise<string> {
     lines.push("OK: no .ui-feedback directory yet.");
   }
 
-  lines.push("OK: Vernier captures are local files; no network uploads are performed by Vernier.");
+  lines.push(
+    "OK: Vernier captures are local files; no network uploads are performed by Vernier.",
+  );
 
   return lines.join("\n");
 }
@@ -38,9 +44,7 @@ export async function runDoctor(root: string): Promise<string> {
 function gitignoreIgnoresFeedback(gitignore: string): boolean {
   let ignored = false;
 
-  for (const rawLine of gitignore
-    .split(/\r?\n/)
-    .map((line) => line.trim())) {
+  for (const rawLine of gitignore.split(/\r?\n/).map((line) => line.trim())) {
     if (!rawLine || rawLine.startsWith("#")) {
       continue;
     }
@@ -57,5 +61,12 @@ function gitignoreIgnoresFeedback(gitignore: string): boolean {
 }
 
 function matchesFeedbackIgnore(line: string): boolean {
-  return [".ui-feedback", ".ui-feedback/", ".ui-feedback/**", "/.ui-feedback", "/.ui-feedback/", "/.ui-feedback/**"].includes(line);
+  return [
+    ".ui-feedback",
+    ".ui-feedback/",
+    ".ui-feedback/**",
+    "/.ui-feedback",
+    "/.ui-feedback/",
+    "/.ui-feedback/**",
+  ].includes(line);
 }

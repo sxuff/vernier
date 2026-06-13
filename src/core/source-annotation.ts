@@ -4,7 +4,11 @@ export interface SourceAnnotationOptions {
   root: string;
 }
 
-export function annotateJsxSource(code: string, id: string, options: SourceAnnotationOptions): string | null {
+export function annotateJsxSource(
+  code: string,
+  id: string,
+  options: SourceAnnotationOptions,
+): string | null {
   const cleanId = stripViteQuery(id);
 
   if (!isJsxModule(cleanId) || isThirdPartyModule(cleanId)) {
@@ -17,12 +21,12 @@ export function annotateJsxSource(code: string, id: string, options: SourceAnnot
   let output = "";
   let lastIndex = 0;
   let changed = false;
-  let match: RegExpExecArray | null;
-
-  while ((match = tagPattern.exec(code)) !== null) {
+  let match = tagPattern.exec(code);
+  while (match !== null) {
     const tagStart = match.index;
 
     if (isClosingOrSpecialTag(code, tagStart)) {
+      match = tagPattern.exec(code);
       continue;
     }
 
@@ -30,12 +34,14 @@ export function annotateJsxSource(code: string, id: string, options: SourceAnnot
     const tagEnd = findOpeningTagEnd(code, tagNameEnd);
 
     if (tagEnd < 0) {
+      match = tagPattern.exec(code);
       continue;
     }
 
     const openingTag = code.slice(tagStart, tagEnd);
 
     if (/\sdata-vernier-source\s*=/.test(openingTag)) {
+      match = tagPattern.exec(code);
       continue;
     }
 
@@ -44,6 +50,7 @@ export function annotateJsxSource(code: string, id: string, options: SourceAnnot
     output += code.slice(lastIndex, tagNameEnd) + attribute;
     lastIndex = tagNameEnd;
     changed = true;
+    match = tagPattern.exec(code);
   }
 
   if (!changed) {
@@ -74,7 +81,9 @@ function toSourcePath(id: string, root: string): string {
   }
 
   const srcIndex = normalizedId.lastIndexOf("/src/");
-  return srcIndex >= 0 ? normalizedId.slice(srcIndex + 1) : normalizedId.replace(/^\/+/, "");
+  return srcIndex >= 0
+    ? normalizedId.slice(srcIndex + 1)
+    : normalizedId.replace(/^\/+/, "");
 }
 
 function normalizePath(value: string): string {
@@ -132,7 +141,7 @@ function findOpeningTagEnd(code: string, start: number): number {
       continue;
     }
 
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char;
       continue;
     }
@@ -156,5 +165,5 @@ function findOpeningTagEnd(code: string, start: number): number {
 }
 
 function escapeAttribute(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;");
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
 }

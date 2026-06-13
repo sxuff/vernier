@@ -1,6 +1,9 @@
 import { vernierOverlayPath } from "./overlay-script";
 
-export function injectVernierOverlay(html: string, overlayPath = vernierOverlayPath): string {
+export function injectVernierOverlay(
+  html: string,
+  overlayPath = vernierOverlayPath,
+): string {
   const scriptTag = `<script type="module" src="${overlayPath}"></script>`;
 
   if (html.includes(scriptTag)) {
@@ -13,4 +16,3 @@ export function injectVernierOverlay(html: string, overlayPath = vernierOverlayP
 
   return `${html}${scriptTag}`;
 }
-

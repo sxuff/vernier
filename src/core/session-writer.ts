@@ -1,22 +1,35 @@
-import { cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { VernierSession } from "../schema";
 import { VernierError } from "./errors";
 import type { SessionOutputOptions } from "./overlay-options";
-import type { VernierSession } from "../schema";
 
 const defaultFeedbackDirectory = ".ui-feedback";
 
-export async function writeSession(root: string, session: VernierSession, options: SessionOutputOptions = {}): Promise<string> {
+export async function writeSession(
+  root: string,
+  session: VernierSession,
+  options: SessionOutputOptions = {},
+): Promise<string> {
   const feedbackDirectory = resolveFeedbackDirectory(root, options.outDir);
   const slug = `${session.createdAt.replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}-${slugify(session.route)}`;
   const baseDirectory = path.join(feedbackDirectory, "sessions", slug);
   const screenshotsDirectory = path.join(baseDirectory, "screenshots");
 
   await mkdir(screenshotsDirectory, { recursive: true });
-  await writeFile(path.join(baseDirectory, "session.json"), `${JSON.stringify(createLeanSession(session), null, 2)}\n`);
-  await writeFile(path.join(baseDirectory, "session.md"), renderSessionMarkdown(session));
-  await writeFile(path.join(baseDirectory, "screenshots.json"), `${JSON.stringify(renderScreenshotInventory(session), null, 2)}\n`);
+  await writeFile(
+    path.join(baseDirectory, "session.json"),
+    `${JSON.stringify(createLeanSession(session), null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(baseDirectory, "session.md"),
+    renderSessionMarkdown(session),
+  );
+  await writeFile(
+    path.join(baseDirectory, "screenshots.json"),
+    `${JSON.stringify(renderScreenshotInventory(session), null, 2)}\n`,
+  );
   await writeFile(
     path.join(baseDirectory, "metadata.json"),
     `${JSON.stringify(
@@ -26,20 +39,26 @@ export async function writeSession(root: string, session: VernierSession, option
         createdBy: "vernier",
         createdAt: session.createdAt,
         sessionId: session.sessionId,
-        privacy: `Screenshots and UI feedback are written only to this local ${path.basename(feedbackDirectory)} directory.`
+        privacy: `Screenshots and UI feedback are written only to this local ${path.basename(feedbackDirectory)} directory.`,
       },
       null,
-      2
-    )}\n`
+      2,
+    )}\n`,
   );
 
   for (const issue of session.issues) {
-    await writeDataUrl(path.join(screenshotsDirectory, issue.screenshotName), requireDataUrl(issue.screenshotDataUrl, issue.screenshotName));
+    await writeDataUrl(
+      path.join(screenshotsDirectory, issue.screenshotName),
+      requireDataUrl(issue.screenshotDataUrl, issue.screenshotName),
+    );
   }
 
   await writeDataUrl(
     path.join(screenshotsDirectory, session.fullPageScreenshotName),
-    requireDataUrl(session.fullPageScreenshotDataUrl, session.fullPageScreenshotName)
+    requireDataUrl(
+      session.fullPageScreenshotDataUrl,
+      session.fullPageScreenshotName,
+    ),
   );
   await updateLatestLink(feedbackDirectory, baseDirectory);
 
@@ -58,13 +77,20 @@ function createLeanSession(session: VernierSession): VernierSession {
     issues: issues.map((issue) => {
       const { screenshotDataUrl: _screenshotDataUrl, ...leanIssue } = issue;
       return leanIssue;
-    })
+    }),
   };
 }
 
-export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackDirectory): string {
+export function resolveFeedbackDirectory(
+  root: string,
+  outDir = defaultFeedbackDirectory,
+): string {
   if (path.isAbsolute(outDir)) {
-    throw new VernierError("VERNIER_INVALID_CONFIG", "outDir must be relative to the project root", "Use a relative directory like .ui-feedback or .vernier-feedback.");
+    throw new VernierError(
+      "VERNIER_INVALID_CONFIG",
+      "outDir must be relative to the project root",
+      "Use a relative directory like .ui-feedback or .vernier-feedback.",
+    );
   }
 
   const resolvedRoot = path.resolve(root);
@@ -72,7 +98,11 @@ export function resolveFeedbackDirectory(root: string, outDir = defaultFeedbackD
   const relative = path.relative(resolvedRoot, resolved);
 
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new VernierError("VERNIER_INVALID_CONFIG", "outDir must stay inside the project root", "Choose an output directory inside the current project.");
+    throw new VernierError(
+      "VERNIER_INVALID_CONFIG",
+      "outDir must stay inside the project root",
+      "Choose an output directory inside the current project.",
+    );
   }
 
   return resolved;
@@ -90,7 +120,7 @@ export function renderSessionMarkdown(session: VernierSession): string {
     `URL: ${session.url}`,
     `Viewport: ${session.viewport.width}x${session.viewport.height} @${session.viewport.devicePixelRatio}x`,
     `Issue count: ${session.issues.length}`,
-    ""
+    "",
   ];
 
   for (const issue of session.issues) {
@@ -119,7 +149,7 @@ export function renderSessionMarkdown(session: VernierSession): string {
       "",
       `Screenshot: ./screenshots/${issue.screenshotName}`,
       `Screenshot metadata: ${issue.screenshot.width}x${issue.screenshot.height}, ${issue.screenshot.captureStrategy}, ${issue.screenshot.hash}`,
-      ""
+      "",
     );
   }
 
@@ -127,16 +157,18 @@ export function renderSessionMarkdown(session: VernierSession): string {
     "## Agent instruction",
     "Fix the issues above. Prefer minimal changes. Use existing design tokens.",
     "Map each change back to an issue number and state the file:line touched.",
-    ""
+    "",
   );
 
   return lines.join("\n");
 }
 
-function renderScreenshotInventory(session: VernierSession): Array<VernierSession["fullPageScreenshot"]> {
+function renderScreenshotInventory(
+  session: VernierSession,
+): Array<VernierSession["fullPageScreenshot"]> {
   return [
     session.fullPageScreenshot,
-    ...session.issues.map((issue) => issue.screenshot)
+    ...session.issues.map((issue) => issue.screenshot),
   ];
 }
 
@@ -152,13 +184,15 @@ function formatTarget(issue: VernierSession["issues"][number]): string {
     target.testId ? `data-testid=${target.testId}` : null,
     target.id ? `id=${target.id}` : null,
     target.role ? `role=${target.role}` : null,
-    target.accessibleName ? `name=${target.accessibleName}` : null
+    target.accessibleName ? `name=${target.accessibleName}` : null,
   ].filter(Boolean);
 
   return parts.join(" ");
 }
 
-function formatTargetEvidence(issue: VernierSession["issues"][number]): string[] {
+function formatTargetEvidence(
+  issue: VernierSession["issues"][number],
+): string[] {
   const target = issue.target;
 
   if (!target) {
@@ -166,20 +200,32 @@ function formatTargetEvidence(issue: VernierSession["issues"][number]): string[]
   }
 
   return [
-    target.fallbackSelector ? `Fallback selector: ${target.fallbackSelector}` : null,
-    target.nearestLandmark ? `Nearest landmark: ${target.nearestLandmark}` : null
+    target.fallbackSelector
+      ? `Fallback selector: ${target.fallbackSelector}`
+      : null,
+    target.nearestLandmark
+      ? `Nearest landmark: ${target.nearestLandmark}`
+      : null,
   ].filter((line): line is string => line !== null);
 }
 
-function formatMeasured(measured: string, omitEmbeddedSuggestions = false): string[] {
+function formatMeasured(
+  measured: string,
+  omitEmbeddedSuggestions = false,
+): string[] {
   const lines = measured.split("\n");
-  const suggestionStart = omitEmbeddedSuggestions ? lines.findIndex((line) => line === "Suggestions:") : -1;
-  const measuredLines = suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
+  const suggestionStart = omitEmbeddedSuggestions
+    ? lines.indexOf("Suggestions:")
+    : -1;
+  const measuredLines =
+    suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
 
   return measuredLines.map((line) => `- ${line}`);
 }
 
-function formatStructuredMeasurement(issue: VernierSession["issues"][number]): string[] {
+function formatStructuredMeasurement(
+  issue: VernierSession["issues"][number],
+): string[] {
   if (!issue.measurement) {
     return [];
   }
@@ -189,7 +235,7 @@ function formatStructuredMeasurement(issue: VernierSession["issues"][number]): s
     "Structured evidence:",
     "```json",
     JSON.stringify(issue.measurement, null, 2),
-    "```"
+    "```",
   ];
 }
 
@@ -204,10 +250,11 @@ function formatAssertions(issue: VernierSession["issues"][number]): string[] {
     "",
     "Assertions:",
     ...assertions.map((assertion) => {
-      const tolerance = assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
+      const tolerance =
+        assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
       const status = assertion.passed ? "pass" : "fail";
       return `- ${assertion.property}: actual ${assertion.actual}, expected ${assertion.expected}${tolerance} (${status})`;
-    })
+    }),
   ];
 }
 
@@ -221,14 +268,19 @@ function formatSuggestions(issue: VernierSession["issues"][number]): string[] {
   return [
     "",
     "Suggestions:",
-    ...suggestions.map((suggestion) =>
-      `- [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`
-    )
+    ...suggestions.map(
+      (suggestion) =>
+        `- [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`,
+    ),
   ];
 }
 
 function formatRedaction(issue: VernierSession["issues"][number]): string[] {
-  if (!issue.redaction || (issue.redaction.autoRedactedElements === 0 && !issue.redaction.manualRedaction)) {
+  if (
+    !issue.redaction ||
+    (issue.redaction.autoRedactedElements === 0 &&
+      !issue.redaction.manualRedaction)
+  ) {
     return [];
   }
 
@@ -236,7 +288,7 @@ function formatRedaction(issue: VernierSession["issues"][number]): string[] {
     "",
     "Redaction:",
     `- Auto-redacted elements: ${issue.redaction.autoRedactedElements}`,
-    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`
+    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`,
   ];
 }
 
@@ -244,7 +296,10 @@ function titleCase(value: string): string {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-async function updateLatestLink(feedbackDirectory: string, targetDirectory: string): Promise<void> {
+async function updateLatestLink(
+  feedbackDirectory: string,
+  targetDirectory: string,
+): Promise<void> {
   const latestPath = path.join(feedbackDirectory, "latest");
   let latestKind = "junction";
 
@@ -263,11 +318,11 @@ async function updateLatestLink(feedbackDirectory: string, targetDirectory: stri
       {
         kind: latestKind,
         target: path.relative(feedbackDirectory, targetDirectory),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       },
       null,
-      2
-    )}\n`
+      2,
+    )}\n`,
   );
 }
 
@@ -275,7 +330,11 @@ async function writeDataUrl(filePath: string, dataUrl: string): Promise<void> {
   const base64 = dataUrl.split(",")[1];
 
   if (!base64) {
-    throw new VernierError("VERNIER_INVALID_SESSION", `Invalid data URL for ${filePath}`, "Exported screenshots must be base64 data URLs.");
+    throw new VernierError(
+      "VERNIER_INVALID_SESSION",
+      `Invalid data URL for ${filePath}`,
+      "Exported screenshots must be base64 data URLs.",
+    );
   }
 
   await writeFile(filePath, Buffer.from(base64, "base64"));
@@ -283,7 +342,11 @@ async function writeDataUrl(filePath: string, dataUrl: string): Promise<void> {
 
 function requireDataUrl(dataUrl: string | undefined, fileName: string): string {
   if (!dataUrl) {
-    throw new VernierError("VERNIER_INVALID_SESSION", `Missing screenshot data for ${fileName}`, "Live session writes must include screenshot data URLs so Vernier can create image files.");
+    throw new VernierError(
+      "VERNIER_INVALID_SESSION",
+      `Missing screenshot data for ${fileName}`,
+      "Live session writes must include screenshot data URLs so Vernier can create image files.",
+    );
   }
 
   return dataUrl;

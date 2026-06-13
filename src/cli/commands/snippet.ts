@@ -1,17 +1,27 @@
 import { createReadStream } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createRequire } from "node:module";
 import { pipeline } from "node:stream/promises";
-import { parseArgs } from "../lib/args";
-import { VernierError } from "../lib/errors";
-import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/overlay-options";
+import type {
+  OverlayRuntimeOptions,
+  SessionOutputOptions,
+} from "../../core/overlay-options";
 import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
   vernierModernScreenshotPath,
-  vernierOverlayPath
+  vernierOverlayPath,
 } from "../../core/overlay-script";
-import { handleVernierSessionRequest, vernierSessionPath } from "../../core/session-handler";
+import {
+  handleVernierSessionRequest,
+  vernierSessionPath,
+} from "../../core/session-handler";
+import { parseArgs } from "../lib/args";
+import { VernierError } from "../lib/errors";
 import { listenWithPortFallback } from "./proxy";
 
 export interface SnippetConfig {
@@ -29,12 +39,16 @@ export interface StandaloneServerOptions extends SessionOutputOptions {
 const require = createRequire(import.meta.url);
 const defaultStandalonePort = 3333;
 
-export async function startStandaloneServer(args: string[], config: SnippetConfig): Promise<void> {
+export async function startStandaloneServer(
+  args: string[],
+  config: SnippetConfig,
+): Promise<void> {
   const options = parseStandaloneOptions(args, config);
   const server = createServer((request, response) => {
     void handleStandaloneRequest(options, request, response);
   });
-  const requestedPort = options.port === "auto" ? defaultStandalonePort : options.port;
+  const requestedPort =
+    options.port === "auto" ? defaultStandalonePort : options.port;
   const port = await listenWithPortFallback(server, requestedPort);
   const origin = `http://127.0.0.1:${port}`;
 
@@ -59,33 +73,50 @@ export function printSnippet(args: string[], config: SnippetConfig): string {
     "Then run:",
     `vernier serve --port ${port}`,
     "",
-    "The overlay writes sessions back to Vernier; your app does not need Vite or the proxy."
+    "The overlay writes sessions back to Vernier; your app does not need Vite or the proxy.",
   ].join("\n");
 }
 
-function parseStandaloneOptions(args: string[], config: SnippetConfig): StandaloneServerOptions {
+function parseStandaloneOptions(
+  args: string[],
+  config: SnippetConfig,
+): StandaloneServerOptions {
   const parsed = parseArgs(args, { valueOptions: ["--port", "--config"] });
-  const portValue = parsed.option("--port") ?? process.env.VERNIER_PORT ?? String(config.port ?? defaultStandalonePort);
+  const portValue =
+    parsed.option("--port") ??
+    process.env.VERNIER_PORT ??
+    String(config.port ?? defaultStandalonePort);
   const port = portValue === "auto" ? "auto" : Number(portValue);
 
-  if (port !== "auto" && (!Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --port value: ${portValue}`, "Use a port from 1 to 65535, or --port auto.");
+  if (
+    port !== "auto" &&
+    (!Number.isInteger(port) || port < 1 || port > 65535)
+  ) {
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      `Invalid --port value: ${portValue}`,
+      "Use a port from 1 to 65535, or --port auto.",
+    );
   }
 
   return {
     port,
     root: process.cwd(),
     overlay: config.overlay,
-    outDir: config.outDir
+    outDir: config.outDir,
   };
 }
 
 async function handleStandaloneRequest(
   options: StandaloneServerOptions,
   request: IncomingMessage,
-  response: ServerResponse
+  response: ServerResponse,
 ): Promise<void> {
-  if (await handleVernierSessionRequest(options.root, request, response, { outDir: options.outDir })) {
+  if (
+    await handleVernierSessionRequest(options.root, request, response, {
+      outDir: options.outDir,
+    })
+  ) {
     return;
   }
 
@@ -100,9 +131,9 @@ async function handleStandaloneRequest(
         modernScreenshotImportPath: `${origin}${vernierModernScreenshotPath}`,
         runtimeOptions: {
           ...options.overlay,
-          sessionEndpoint: `${origin}${vernierSessionPath}`
-        }
-      })
+          sessionEndpoint: `${origin}${vernierSessionPath}`,
+        },
+      }),
     );
     return;
   }
@@ -119,7 +150,9 @@ async function handleStandaloneRequest(
 
   response.statusCode = 404;
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
-  response.end("Vernier standalone server only serves overlay assets and session export endpoints.");
+  response.end(
+    "Vernier standalone server only serves overlay assets and session export endpoints.",
+  );
 }
 
 function requestOrigin(request: IncomingMessage): string {
@@ -134,7 +167,11 @@ function sendJavaScript(response: ServerResponse, source: string): void {
   response.end(source);
 }
 
-async function sendFile(response: ServerResponse, filePath: string, contentType: string): Promise<void> {
+async function sendFile(
+  response: ServerResponse,
+  filePath: string,
+  contentType: string,
+): Promise<void> {
   response.statusCode = 200;
   response.setHeader("Content-Type", contentType);
   response.setHeader("Access-Control-Allow-Origin", "*");

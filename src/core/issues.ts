@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { VernierAssertion, VernierIssue, VernierSession } from "../schema";
@@ -6,7 +7,13 @@ import { VernierError } from "./errors";
 import { renderSessionMarkdown } from "./session-writer";
 
 export type IssueStatus = "todo" | "fixed";
-export type AgentTemplate = "generic" | "codex" | "claude" | "cursor" | "aider" | "strict";
+export type AgentTemplate =
+  | "generic"
+  | "codex"
+  | "claude"
+  | "cursor"
+  | "aider"
+  | "strict";
 
 export interface IndexedVernierIssue {
   stableId: string;
@@ -17,7 +24,11 @@ export interface IndexedVernierIssue {
   screenshotPath: string;
 }
 
-export const latestSessionJsonPath = path.join(".ui-feedback", "latest", "session.json");
+export const latestSessionJsonPath = path.join(
+  ".ui-feedback",
+  "latest",
+  "session.json",
+);
 
 export async function readLatestSession(root: string): Promise<VernierSession> {
   const latest = await findLatestSessionFile(root);
@@ -26,16 +37,23 @@ export async function readLatestSession(root: string): Promise<VernierSession> {
   return JSON.parse(raw) as VernierSession;
 }
 
-export async function listLatestIssues(root: string): Promise<IndexedVernierIssue[]> {
+export async function listLatestIssues(
+  root: string,
+): Promise<IndexedVernierIssue[]> {
   const latest = await findLatestSessionFile(root);
   const raw = await readFile(latest.filePath, "utf8");
   const session = JSON.parse(raw) as VernierSession;
   const statuses = await readIssueStatuses(latest.sessionDirectory);
 
-  return session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
+  return session.issues.map((issue) =>
+    indexIssue(latest.sessionDirectory, session, issue, statuses),
+  );
 }
 
-export async function findLatestIssue(root: string, reference: string): Promise<IndexedVernierIssue> {
+export async function findLatestIssue(
+  root: string,
+  reference: string,
+): Promise<IndexedVernierIssue> {
   const issues = await listLatestIssues(root);
   const issue = findIssueByReference(issues, reference);
 
@@ -46,7 +64,11 @@ export async function findLatestIssue(root: string, reference: string): Promise<
   return issue;
 }
 
-export async function markLatestIssue(root: string, reference: string, status: IssueStatus): Promise<IndexedVernierIssue> {
+export async function markLatestIssue(
+  root: string,
+  reference: string,
+  status: IssueStatus,
+): Promise<IndexedVernierIssue> {
   const issues = await listLatestIssues(root);
   const issue = findIssueByReference(issues, reference);
 
@@ -61,12 +83,18 @@ export async function markLatestIssue(root: string, reference: string, status: I
   return { ...issue, status };
 }
 
-export async function updateLatestIssueNote(root: string, reference: string, note: string): Promise<IndexedVernierIssue> {
+export async function updateLatestIssueNote(
+  root: string,
+  reference: string,
+  note: string,
+): Promise<IndexedVernierIssue> {
   const latest = await findLatestSessionFile(root);
   const raw = await readFile(latest.filePath, "utf8");
   const session = JSON.parse(raw) as VernierSession;
   const statuses = await readIssueStatuses(latest.sessionDirectory);
-  const issues = session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
+  const issues = session.issues.map((issue) =>
+    indexIssue(latest.sessionDirectory, session, issue, statuses),
+  );
   const indexed = findIssueByReference(issues, reference);
 
   if (!indexed) {
@@ -75,7 +103,10 @@ export async function updateLatestIssueNote(root: string, reference: string, not
 
   indexed.issue.note = note.trim();
   await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
-  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+  await writeFile(
+    path.join(latest.sessionDirectory, "session.md"),
+    renderSessionMarkdown(session),
+  );
 
   return indexIssue(latest.sessionDirectory, session, indexed.issue, statuses);
 }
@@ -85,13 +116,15 @@ export async function assertLatestIssue(
   reference: string,
   property: string,
   expected: string,
-  tolerance?: number
+  tolerance?: number,
 ): Promise<{ indexed: IndexedVernierIssue; assertion: VernierAssertion }> {
   const latest = await findLatestSessionFile(root);
   const raw = await readFile(latest.filePath, "utf8");
   const session = JSON.parse(raw) as VernierSession;
   const statuses = await readIssueStatuses(latest.sessionDirectory);
-  const issues = session.issues.map((issue) => indexIssue(latest.sessionDirectory, session, issue, statuses));
+  const issues = session.issues.map((issue) =>
+    indexIssue(latest.sessionDirectory, session, issue, statuses),
+  );
   const indexed = findIssueByReference(issues, reference);
 
   if (!indexed) {
@@ -101,54 +134,88 @@ export async function assertLatestIssue(
   const actual = readMeasuredProperty(indexed.issue, property);
 
   if (actual === undefined) {
-    throw new VernierError("VERNIER_UNKNOWN_ASSERTION_PROPERTY", `Cannot assert unknown property: ${property}`, "Use a measured property such as width, height, padding, background-color, or delta.left.");
+    throw new VernierError(
+      "VERNIER_UNKNOWN_ASSERTION_PROPERTY",
+      `Cannot assert unknown property: ${property}`,
+      "Use a measured property such as width, height, padding, background-color, or delta.left.",
+    );
   }
 
   const assertion = createAssertion(property, expected, actual, tolerance);
-  indexed.issue.assertions = [...(indexed.issue.assertions ?? []).filter((candidate) => candidate.property !== property), assertion];
+  indexed.issue.assertions = [
+    ...(indexed.issue.assertions ?? []).filter(
+      (candidate) => candidate.property !== property,
+    ),
+    assertion,
+  ];
   await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
-  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+  await writeFile(
+    path.join(latest.sessionDirectory, "session.md"),
+    renderSessionMarkdown(session),
+  );
 
   return {
-    indexed: indexIssue(latest.sessionDirectory, session, indexed.issue, statuses),
-    assertion
+    indexed: indexIssue(
+      latest.sessionDirectory,
+      session,
+      indexed.issue,
+      statuses,
+    ),
+    assertion,
   };
 }
 
-export async function renameLatestSession(root: string, title: string): Promise<VernierSession> {
+export async function renameLatestSession(
+  root: string,
+  title: string,
+): Promise<VernierSession> {
   const latest = await findLatestSessionFile(root);
   const raw = await readFile(latest.filePath, "utf8");
   const session = JSON.parse(raw) as VernierSession;
   const trimmed = title.trim();
 
   if (!trimmed) {
-    throw new VernierError("VERNIER_INVALID_OPTION", "Session title cannot be empty.", "Pass a short label, for example `vernier rename-session pricing mobile pass`.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      "Session title cannot be empty.",
+      "Pass a short label, for example `vernier rename-session pricing mobile pass`.",
+    );
   }
 
   session.title = trimmed;
   await writeFile(latest.filePath, `${JSON.stringify(session, null, 2)}\n`);
-  await writeFile(path.join(latest.sessionDirectory, "session.md"), renderSessionMarkdown(session));
+  await writeFile(
+    path.join(latest.sessionDirectory, "session.md"),
+    renderSessionMarkdown(session),
+  );
 
   return session;
 }
 
-function findIssueByReference(issues: IndexedVernierIssue[], reference: string): IndexedVernierIssue | undefined {
+function findIssueByReference(
+  issues: IndexedVernierIssue[],
+  reference: string,
+): IndexedVernierIssue | undefined {
   const exact = issues.find(
-    (candidate) => candidate.stableId === reference || String(candidate.issue.id) === reference
+    (candidate) =>
+      candidate.stableId === reference ||
+      String(candidate.issue.id) === reference,
   );
 
   if (exact) {
     return exact;
   }
 
-  const prefixMatches = issues.filter((candidate) => candidate.stableId.startsWith(reference));
+  const prefixMatches = issues.filter((candidate) =>
+    candidate.stableId.startsWith(reference),
+  );
 
   return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
 }
 
 export function filterIssuesByStatus(
   issues: IndexedVernierIssue[],
-  status: IssueStatus | "all"
+  status: IssueStatus | "all",
 ): IndexedVernierIssue[] {
   if (status === "all") {
     return issues;
@@ -166,7 +233,7 @@ export function renderIssueList(issues: IndexedVernierIssue[]): string {
   const lines = [
     `Latest session: ${session.title ? `${session.title}  ` : ""}${session.createdAt}  ${session.route}  ${formatViewport(session)}`,
     "",
-    "ID        Status  No.  Page        Viewport   Type        Summary"
+    "ID        Status  No.  Page        Viewport   Type        Summary",
   ];
 
   for (const issue of issues) {
@@ -178,8 +245,8 @@ export function renderIssueList(issues: IndexedVernierIssue[]): string {
         issue.session.route.padEnd(11),
         viewportLabel(issue.session).padEnd(10),
         issue.issue.kind.padEnd(11),
-        summarizeIssue(issue.issue)
-      ].join(" ")
+        summarizeIssue(issue.issue),
+      ].join(" "),
     );
   }
 
@@ -217,11 +284,14 @@ export function renderIssueDetail(indexed: IndexedVernierIssue): string {
     `Component: ${indexed.issue.target?.componentName ?? "unknown"}`,
     `Element: ${formatTarget(indexed)}`,
     "",
-    `Screenshot: ${indexed.screenshotPath}`
+    `Screenshot: ${indexed.screenshotPath}`,
   ].join("\n");
 }
 
-export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTemplate = "generic"): string {
+export function renderIssueTask(
+  indexed: IndexedVernierIssue,
+  template: AgentTemplate = "generic",
+): string {
   const { issue, session } = indexed;
 
   return [
@@ -256,7 +326,7 @@ export function renderIssueTask(indexed: IndexedVernierIssue, template: AgentTem
     "",
     "Please inspect the related UI code, make the smallest safe fix, and verify at the captured viewport size.",
     "In your summary, map the code change back to this Vernier issue ID.",
-    ...templatePostscript(template)
+    ...templatePostscript(template),
   ].join("\n");
 }
 
@@ -297,11 +367,14 @@ export function renderIssuePacket(indexed: IndexedVernierIssue): string {
     `- Command: vernier verify ${indexed.stableId} --compare`,
     `- Mark fixed: vernier mark ${indexed.stableId} fixed`,
     `- Mark todo: vernier mark ${indexed.stableId} todo`,
-    ""
+    "",
   ].join("\n");
 }
 
-export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentTemplate = "generic"): string {
+export function renderIssuesTask(
+  issues: IndexedVernierIssue[],
+  template: AgentTemplate = "generic",
+): string {
   if (issues.length === 0) {
     return "No issues in latest Vernier session.";
   }
@@ -322,7 +395,8 @@ export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentT
       `Status: ${indexed.status}`,
       "",
       "User note:",
-      indexed.issue.note || "Fix the measured UI issue. Prefer minimal changes.",
+      indexed.issue.note ||
+        "Fix the measured UI issue. Prefer minimal changes.",
       "",
       "Evidence:",
       ...formatMeasuredEvidence(indexed.issue),
@@ -339,11 +413,11 @@ export function renderIssuesTask(issues: IndexedVernierIssue[], template: AgentT
       `- Component: ${indexed.issue.target?.componentName ?? "unknown"}`,
       `- Element context: ${formatTarget(indexed)}`,
       `- Screenshot: ${indexed.screenshotPath}`,
-      ""
+      "",
     ]),
     "Please inspect the related UI code, make the smallest safe fixes, and verify at the captured viewport size.",
     "In your summary, map each code change back to the relevant Vernier issue ID.",
-    ...templatePostscript(template)
+    ...templatePostscript(template),
   ].join("\n");
 }
 
@@ -351,11 +425,12 @@ export function renderIssuePlan(indexed: IndexedVernierIssue): string {
   const { issue, session } = indexed;
   const sourceConfidence = issue.target?.sourceConfidence ?? "unknown";
   const selectorConfidence = issue.target?.selectorConfidence ?? "unknown";
-  const likelySource = issue.source && issue.source !== "unresolved"
-    ? issue.source
-    : issue.target?.componentName
-      ? `component ${issue.target.componentName}`
-      : "source unresolved; search by selector, text, component hints, or ancestry";
+  const likelySource =
+    issue.source && issue.source !== "unresolved"
+      ? issue.source
+      : issue.target?.componentName
+        ? `component ${issue.target.componentName}`
+        : "source unresolved; search by selector, text, component hints, or ancestry";
 
   return [
     `Vernier patch plan for ${indexed.stableId}`,
@@ -374,7 +449,7 @@ export function renderIssuePlan(indexed: IndexedVernierIssue): string {
     "Suggested checks:",
     "- Run the smallest relevant typecheck/build command for the touched package.",
     `- Run: vernier verify ${indexed.stableId} --compare --target <local-app-url>`,
-    `- Mark fixed: vernier mark ${indexed.stableId} fixed`
+    `- Mark fixed: vernier mark ${indexed.stableId} fixed`,
   ].join("\n");
 }
 
@@ -384,10 +459,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
   }
 
   const count = batch ? "issues" : "issue";
-  const common = [
-    `Template: ${template}`,
-    ""
-  ];
+  const common = [`Template: ${template}`, ""];
 
   if (template === "codex") {
     return [
@@ -396,7 +468,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
       `- Treat the Vernier ${count} as concrete UI repair evidence.`,
       "- Inspect the existing code before editing.",
       "- Prefer small, local changes and run relevant checks.",
-      ""
+      "",
     ];
   }
 
@@ -407,7 +479,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
       `- Use the Vernier ${count} as visual evidence and preserve the user's intent.`,
       "- Explain uncertainty when selector/source confidence is low.",
       "- Keep the final summary issue-ID mapped.",
-      ""
+      "",
     ];
   }
 
@@ -417,7 +489,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
       "Cursor instructions:",
       "- Use the selector/source evidence to open the closest relevant files.",
       "- Prefer existing components, CSS variables, utility classes, and design tokens.",
-      ""
+      "",
     ];
   }
 
@@ -427,7 +499,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
       "Aider instructions:",
       "- Identify the likely files first, then make the smallest patch.",
       "- Avoid broad rewrites unless the evidence shows a shared style bug.",
-      ""
+      "",
     ];
   }
 
@@ -437,7 +509,7 @@ function templatePreamble(template: AgentTemplate, batch: boolean): string[] {
     "- Do not change unrelated behavior.",
     "- Do not invent new design values when token/class evidence exists.",
     "- Verify the fix or state exactly why verification was not run.",
-    ""
+    "",
   ];
 }
 
@@ -451,7 +523,7 @@ function templatePostscript(template: AgentTemplate): string[] {
     "Template-specific output:",
     "- List files changed.",
     "- Map each change to the Vernier issue ID.",
-    "- Include the check command and result."
+    "- Include the check command and result.",
   ];
 }
 
@@ -514,11 +586,14 @@ export function renderGitHubIssueBody(indexed: IndexedVernierIssue): string {
     "## Verification",
     "",
     `- Run: \`vernier verify ${indexed.stableId} --compare --target <local-app-url>\``,
-    `- Mark fixed: \`vernier mark ${indexed.stableId} fixed\``
+    `- Mark fixed: \`vernier mark ${indexed.stableId} fixed\``,
   ].join("\n");
 }
 
-export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl: string): string {
+export function renderIssueVerification(
+  indexed: IndexedVernierIssue,
+  targetUrl: string,
+): string {
   const { issue, session } = indexed;
 
   return [
@@ -550,7 +625,7 @@ export function renderIssueVerification(indexed: IndexedVernierIssue, targetUrl:
     "",
     "After inspection:",
     `- Mark fixed: vernier mark ${indexed.stableId} fixed`,
-    `- Keep todo: vernier mark ${indexed.stableId} todo`
+    `- Keep todo: vernier mark ${indexed.stableId} todo`,
   ].join("\n");
 }
 
@@ -567,7 +642,7 @@ function formatTarget(indexed: IndexedVernierIssue): string {
     target.id ? `id=${target.id}` : null,
     target.role ? `role=${target.role}` : null,
     target.accessibleName ? `name=${target.accessibleName}` : null,
-    target.text ? `text=${target.text}` : null
+    target.text ? `text=${target.text}` : null,
   ].filter(Boolean);
 
   return parts.join(" ");
@@ -581,15 +656,22 @@ function formatTargetEvidence(issue: VernierIssue): string[] {
   }
 
   return [
-    target.fallbackSelector ? `Fallback selector: ${target.fallbackSelector}` : null,
-    target.nearestLandmark ? `Nearest landmark: ${target.nearestLandmark}` : null
+    target.fallbackSelector
+      ? `Fallback selector: ${target.fallbackSelector}`
+      : null,
+    target.nearestLandmark
+      ? `Nearest landmark: ${target.nearestLandmark}`
+      : null,
   ].filter((line): line is string => line !== null);
 }
 
 function formatMeasuredEvidence(issue: VernierIssue): string[] {
   const lines = issue.measured.split("\n");
-  const suggestionStart = issue.suggestions?.length ? lines.findIndex((line) => line === "Suggestions:") : -1;
-  const measuredLines = suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
+  const suggestionStart = issue.suggestions?.length
+    ? lines.indexOf("Suggestions:")
+    : -1;
+  const measuredLines =
+    suggestionStart >= 0 ? lines.slice(0, suggestionStart) : lines;
 
   return measuredLines.map((line) => `- ${line}`);
 }
@@ -599,7 +681,11 @@ function formatStructuredMeasurement(issue: VernierIssue): string[] {
     return [];
   }
 
-  return ["", "Structured measurement:", JSON.stringify(issue.measurement, null, 2)];
+  return [
+    "",
+    "Structured measurement:",
+    JSON.stringify(issue.measurement, null, 2),
+  ];
 }
 
 function formatStructuredEvidence(issue: VernierIssue): string[] {
@@ -607,7 +693,9 @@ function formatStructuredEvidence(issue: VernierIssue): string[] {
     return [];
   }
 
-  return [`- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`];
+  return [
+    `- Structured measurement JSON: ${JSON.stringify(issue.measurement)}`,
+  ];
 }
 
 function formatAssertions(issue: VernierIssue, bullet: boolean): string[] {
@@ -622,10 +710,11 @@ function formatAssertions(issue: VernierIssue, bullet: boolean): string[] {
     "",
     `${bullet ? "- " : ""}Assertions:`,
     ...assertions.map((assertion) => {
-      const tolerance = assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
+      const tolerance =
+        assertion.tolerance === undefined ? "" : ` +/-${assertion.tolerance}`;
       const status = assertion.passed ? "pass" : "fail";
       return `${prefix}${assertion.property}: actual ${assertion.actual}, expected ${assertion.expected}${tolerance} (${status})`;
-    })
+    }),
   ];
 }
 
@@ -640,18 +729,25 @@ function formatSuggestions(issue: VernierIssue, bullet: boolean): string[] {
   return [
     "",
     `${bullet ? "- " : ""}Suggestions:`,
-    ...suggestions.map((suggestion) =>
-      `${prefix}[${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`
-    )
+    ...suggestions.map(
+      (suggestion) =>
+        `${prefix}[${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`,
+    ),
   ];
 }
 
-function createAssertion(property: string, expected: string, actual: string, tolerance: number | undefined): VernierAssertion {
+function createAssertion(
+  property: string,
+  expected: string,
+  actual: string,
+  tolerance: number | undefined,
+): VernierAssertion {
   const actualNumber = parseNumeric(actual);
   const expectedNumber = parseNumeric(expected);
-  const passed = actualNumber !== null && expectedNumber !== null
-    ? Math.abs(actualNumber - expectedNumber) <= (tolerance ?? 0)
-    : actual.trim() === expected.trim();
+  const passed =
+    actualNumber !== null && expectedNumber !== null
+      ? Math.abs(actualNumber - expectedNumber) <= (tolerance ?? 0)
+      : actual.trim() === expected.trim();
 
   return {
     property,
@@ -659,11 +755,14 @@ function createAssertion(property: string, expected: string, actual: string, tol
     actual,
     tolerance,
     passed,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 }
 
-function readMeasuredProperty(issue: VernierIssue, property: string): string | undefined {
+function readMeasuredProperty(
+  issue: VernierIssue,
+  property: string,
+): string | undefined {
   const measurement = issue.measurement;
 
   if (!measurement) {
@@ -672,12 +771,16 @@ function readMeasuredProperty(issue: VernierIssue, property: string): string | u
 
   if (measurement.kind === "single") {
     if (property in measurement.bbox) {
-      return String(measurement.bbox[property as keyof typeof measurement.bbox]);
+      return String(
+        measurement.bbox[property as keyof typeof measurement.bbox],
+      );
     }
 
     if (property.startsWith("bbox.")) {
       const key = property.slice("bbox.".length);
-      return key in measurement.bbox ? String(measurement.bbox[key as keyof typeof measurement.bbox]) : undefined;
+      return key in measurement.bbox
+        ? String(measurement.bbox[key as keyof typeof measurement.bbox])
+        : undefined;
     }
 
     if (property.startsWith("computedStyle.")) {
@@ -689,21 +792,30 @@ function readMeasuredProperty(issue: VernierIssue, property: string): string | u
     }
 
     if (measurement.textMetrics && property.startsWith("textMetrics.")) {
-      const key = property.slice("textMetrics.".length) as keyof typeof measurement.textMetrics;
+      const key = property.slice(
+        "textMetrics.".length,
+      ) as keyof typeof measurement.textMetrics;
       const value = measurement.textMetrics[key];
       return value === undefined ? undefined : String(value);
     }
   }
 
   if (measurement.kind === "delta") {
-    const deltaProperty = property.startsWith("delta.") ? property.slice("delta.".length) : property;
-    const value = measurement.delta[deltaProperty as keyof typeof measurement.delta];
-    return typeof value === "number" || typeof value === "string" ? String(value) : undefined;
+    const deltaProperty = property.startsWith("delta.")
+      ? property.slice("delta.".length)
+      : property;
+    const value =
+      measurement.delta[deltaProperty as keyof typeof measurement.delta];
+    return typeof value === "number" || typeof value === "string"
+      ? String(value)
+      : undefined;
   }
 
   if (measurement.kind === "annotation" && property.startsWith("bounds.")) {
     const key = property.slice("bounds.".length);
-    return key in measurement.bounds ? String(measurement.bounds[key as keyof typeof measurement.bounds]) : undefined;
+    return key in measurement.bounds
+      ? String(measurement.bounds[key as keyof typeof measurement.bounds])
+      : undefined;
   }
 
   return undefined;
@@ -722,7 +834,9 @@ function likelyChangeType(issue: VernierIssue): string {
   }
 
   if (measurement.kind === "annotation") {
-    return measurement.label ? `annotation: ${measurement.label}` : "annotation-guided visual fix";
+    return measurement.label
+      ? `annotation: ${measurement.label}`
+      : "annotation-guided visual fix";
   }
 
   if (measurement.kind === "delta") {
@@ -730,7 +844,7 @@ function likelyChangeType(issue: VernierIssue): string {
       Math.abs(measurement.delta.left),
       Math.abs(measurement.delta.top),
       Math.abs(measurement.delta.width),
-      Math.abs(measurement.delta.height)
+      Math.abs(measurement.delta.height),
     ];
 
     if (deltas.some((delta) => delta >= 2)) {
@@ -738,8 +852,14 @@ function likelyChangeType(issue: VernierIssue): string {
     }
   }
 
-  const tokenHints = measurement.kind === "single" ? measurement.designTokenHints : measurement.designTokenHints;
-  const classHints = measurement.kind === "single" ? measurement.classHints : measurement.classHints;
+  const tokenHints =
+    measurement.kind === "single"
+      ? measurement.designTokenHints
+      : measurement.designTokenHints;
+  const classHints =
+    measurement.kind === "single"
+      ? measurement.classHints
+      : measurement.classHints;
 
   if (tokenHints.length > 0 || classHints.length > 0) {
     return "style token/class adjustment";
@@ -749,19 +869,32 @@ function likelyChangeType(issue: VernierIssue): string {
     return "text styling/typography";
   }
 
-  if (measurement.kind === "single" && measurement.layoutContext?.overflow?.clippedByParent) {
+  if (
+    measurement.kind === "single" &&
+    measurement.layoutContext?.overflow?.clippedByParent
+  ) {
     return "overflow/clipping";
   }
 
   return "component styling";
 }
 
-function combinedConfidence(selectorConfidence: string, sourceConfidence: string): "high" | "medium" | "low" {
-  if (selectorConfidence === "high" && (sourceConfidence === "high" || sourceConfidence === "medium")) {
+function combinedConfidence(
+  selectorConfidence: string,
+  sourceConfidence: string,
+): "high" | "medium" | "low" {
+  if (
+    selectorConfidence === "high" &&
+    (sourceConfidence === "high" || sourceConfidence === "medium")
+  ) {
     return "high";
   }
 
-  if (selectorConfidence === "low" || sourceConfidence === "low" || sourceConfidence === "unknown") {
+  if (
+    selectorConfidence === "low" ||
+    sourceConfidence === "low" ||
+    sourceConfidence === "unknown"
+  ) {
     return "low";
   }
 
@@ -776,53 +909,75 @@ function suggestedPlanSteps(indexed: IndexedVernierIssue): string[] {
       : `Search for ${issue.target?.testId ? `data-testid="${issue.target.testId}"` : issue.selector} and nearby text/component hints.`,
     "Compare the captured evidence against the current implementation.",
     "Prefer existing design tokens, utility classes, and authored CSS hints from the structured measurement.",
-    "Make the smallest targeted change."
+    "Make the smallest targeted change.",
   ];
 
   if (issue.target?.selectorConfidence === "low") {
-    steps.splice(1, 0, "Treat the selector as brittle; confirm the target by text, ancestry, screenshot, and source hints before editing.");
+    steps.splice(
+      1,
+      0,
+      "Treat the selector as brittle; confirm the target by text, ancestry, screenshot, and source hints before editing.",
+    );
   }
 
   if (issue.measurement?.kind === "delta") {
-    steps.splice(2, 0, "Check the parent layout system before changing individual offsets.");
+    steps.splice(
+      2,
+      0,
+      "Check the parent layout system before changing individual offsets.",
+    );
   }
 
   return steps;
 }
 
 function formatRedactionEvidence(issue: VernierIssue): string[] {
-  if (!issue.redaction || (issue.redaction.autoRedactedElements === 0 && !issue.redaction.manualRedaction)) {
+  if (
+    !issue.redaction ||
+    (issue.redaction.autoRedactedElements === 0 &&
+      !issue.redaction.manualRedaction)
+  ) {
     return [];
   }
 
   return [
     `- Auto-redacted elements: ${issue.redaction.autoRedactedElements}`,
-    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`
+    `- Manual redaction: ${issue.redaction.manualRedaction ? "yes" : "no"}`,
   ];
 }
 
-async function findLatestSessionFile(root: string): Promise<{ filePath: string; sessionDirectory: string }> {
+async function findLatestSessionFile(
+  root: string,
+): Promise<{ filePath: string; sessionDirectory: string }> {
   const candidates = await findSessionFiles(root);
 
   if (candidates.length === 0) {
-    throw new VernierError("VERNIER_NO_SESSION", `No Vernier session found under ${root}`, "Open your app with Vernier, add an issue, then export a session.");
+    throw new VernierError(
+      "VERNIER_NO_SESSION",
+      `No Vernier session found under ${root}`,
+      "Open your app with Vernier, add an issue, then export a session.",
+    );
   }
 
   candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
   return {
     filePath: candidates[0]!.filePath,
-    sessionDirectory: path.dirname(candidates[0]!.filePath)
+    sessionDirectory: path.dirname(candidates[0]!.filePath),
   };
 }
 
 function unknownIssueError(reference: string): VernierError {
-  return new VernierError("VERNIER_UNKNOWN_ISSUE", `Unknown Vernier issue: ${reference}`, "Run `vernier issues` to list stable issue IDs from the latest session.");
+  return new VernierError(
+    "VERNIER_UNKNOWN_ISSUE",
+    `Unknown Vernier issue: ${reference}`,
+    "Run `vernier issues` to list stable issue IDs from the latest session.",
+  );
 }
 
 async function findSessionFiles(
   directory: string,
-  candidates: Array<{ filePath: string; mtimeMs: number }> = []
+  candidates: Array<{ filePath: string; mtimeMs: number }> = [],
 ): Promise<Array<{ filePath: string; mtimeMs: number }>> {
   const entries = await readdir(directory, { withFileTypes: true });
 
@@ -850,11 +1005,11 @@ async function findSessionFiles(
 
 async function collectFeedbackSessions(
   feedbackDirectory: string,
-  candidates: Array<{ filePath: string; mtimeMs: number }>
+  candidates: Array<{ filePath: string; mtimeMs: number }>,
 ): Promise<void> {
   const sessionsDirectory = path.join(feedbackDirectory, "sessions");
 
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(sessionsDirectory, { withFileTypes: true });
   } catch {
@@ -878,10 +1033,14 @@ async function collectFeedbackSessions(
 }
 
 function shouldSkipDirectory(name: string): boolean {
-  return [".git", "node_modules", "dist", "build", "test-results"].includes(name);
+  return [".git", "node_modules", "dist", "build", "test-results"].includes(
+    name,
+  );
 }
 
-async function readIssueStatuses(sessionDirectory: string): Promise<Record<string, IssueStatus>> {
+async function readIssueStatuses(
+  sessionDirectory: string,
+): Promise<Record<string, IssueStatus>> {
   try {
     const raw = await readFile(issueStatusesPath(sessionDirectory), "utf8");
     const parsed = JSON.parse(raw) as Record<string, string>;
@@ -901,10 +1060,13 @@ async function readIssueStatuses(sessionDirectory: string): Promise<Record<strin
 
 async function writeIssueStatuses(
   sessionDirectory: string,
-  statuses: Record<string, IssueStatus>
+  statuses: Record<string, IssueStatus>,
 ): Promise<void> {
   await mkdir(sessionDirectory, { recursive: true });
-  await writeFile(issueStatusesPath(sessionDirectory), `${JSON.stringify(statuses, null, 2)}\n`);
+  await writeFile(
+    issueStatusesPath(sessionDirectory),
+    `${JSON.stringify(statuses, null, 2)}\n`,
+  );
 }
 
 function issueStatusesPath(sessionDirectory: string): string {
@@ -915,7 +1077,7 @@ function indexIssue(
   sessionDirectory: string,
   session: VernierSession,
   issue: VernierIssue,
-  statuses: Record<string, IssueStatus>
+  statuses: Record<string, IssueStatus>,
 ): IndexedVernierIssue {
   const stableId = issue.stableId ?? createStableIssueId(session, issue);
 
@@ -925,11 +1087,18 @@ function indexIssue(
     session,
     issue,
     sessionDirectory,
-    screenshotPath: path.join(sessionDirectory, "screenshots", issue.screenshotName)
+    screenshotPath: path.join(
+      sessionDirectory,
+      "screenshots",
+      issue.screenshotName,
+    ),
   };
 }
 
-function createStableIssueId(session: VernierSession, issue: VernierIssue): string {
+function createStableIssueId(
+  session: VernierSession,
+  issue: VernierIssue,
+): string {
   const hash = createHash("sha1")
     .update(
       [
@@ -938,8 +1107,8 @@ function createStableIssueId(session: VernierSession, issue: VernierIssue): stri
         String(issue.id),
         issue.kind,
         issue.selector,
-        issue.source
-      ].join("\n")
+        issue.source,
+      ].join("\n"),
     )
     .digest("hex")
     .slice(0, 6);

@@ -8,7 +8,9 @@ export function isDebugEnabled(): boolean {
   return (
     debugEnabled ||
     process.env.VERNIER_DEBUG === "1" ||
-    process.env.DEBUG?.split(",").some((value) => value.trim() === "vernier:*") === true
+    process.env.DEBUG?.split(",").some(
+      (value) => value.trim() === "vernier:*",
+    ) === true
   );
 }
 

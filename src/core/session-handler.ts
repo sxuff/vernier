@@ -1,5 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthoredStyleHint, BoundingBox, DesignTokenHint, LayoutContext, ScreenshotArtifact, StackingContext, TextMetrics, VernierSession } from "../schema";
+import type {
+  AuthoredStyleHint,
+  BoundingBox,
+  DesignTokenHint,
+  LayoutContext,
+  ScreenshotArtifact,
+  StackingContext,
+  TextMetrics,
+  VernierSession,
+} from "../schema";
 import type { SessionOutputOptions } from "./overlay-options";
 import { writeSession } from "./session-writer";
 
@@ -12,7 +21,7 @@ export async function handleVernierSessionRequest(
   root: string,
   request: IncomingMessage,
   response: ServerResponse,
-  options: SessionOutputOptions = {}
+  options: SessionOutputOptions = {},
 ): Promise<boolean> {
   const requestPath = request.url?.split("?")[0];
 
@@ -20,25 +29,40 @@ export async function handleVernierSessionRequest(
     return false;
   }
 
+  const cors = sessionCorsDecision(request);
+
   if (request.method === "OPTIONS") {
-    sendCorsPreflight(response);
+    if (!cors.allowed) {
+      sendJson(response, 403, { error: cors.error }, cors.origin);
+      return true;
+    }
+
+    sendCorsPreflight(response, cors.origin);
     return true;
   }
 
   if (request.method !== "POST") {
-    sendJson(response, 405, { error: "Method not allowed" });
+    sendJson(response, 405, { error: "Method not allowed" }, cors.origin);
+    return true;
+  }
+
+  if (!cors.allowed) {
+    sendJson(response, 403, { error: cors.error }, cors.origin);
     return true;
   }
 
   try {
-    const session = validateSession(parseSessionJson(await readLimitedBody(request, maxBodyBytes)));
+    const session = validateSession(
+      parseSessionJson(await readLimitedBody(request, maxBodyBytes)),
+    );
     const sessionDirectory = await writeSession(root, session, options);
 
-    sendJson(response, 200, { ok: true, sessionDirectory });
+    sendJson(response, 200, { ok: true, sessionDirectory }, cors.origin);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    const status = error instanceof SessionRequestError ? error.statusCode : 500;
-    sendJson(response, status, { error: message });
+    const status =
+      error instanceof SessionRequestError ? error.statusCode : 500;
+    sendJson(response, status, { error: message }, cors.origin);
   }
 
   return true;
@@ -47,13 +71,16 @@ export async function handleVernierSessionRequest(
 class SessionRequestError extends Error {
   constructor(
     message: string,
-    public statusCode: number
+    public statusCode: number,
   ) {
     super(message);
   }
 }
 
-function readLimitedBody(request: IncomingMessage, limitBytes: number): Promise<string> {
+function readLimitedBody(
+  request: IncomingMessage,
+  limitBytes: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let bytes = 0;
@@ -68,7 +95,12 @@ function readLimitedBody(request: IncomingMessage, limitBytes: number): Promise<
 
       if (bytes > limitBytes) {
         rejected = true;
-        reject(new SessionRequestError(`Session payload exceeds ${limitBytes} bytes`, 413));
+        reject(
+          new SessionRequestError(
+            `Session payload exceeds ${limitBytes} bytes`,
+            413,
+          ),
+        );
         request.destroy();
         return;
       }
@@ -131,8 +163,14 @@ function validateSession(value: unknown): VernierSession {
     throw badRequest("issueCount must match issues.length");
   }
 
-  const fullPageScreenshotName = expectSafeFilename(session.fullPageScreenshotName, "fullPageScreenshotName");
-  const fullPageScreenshotDataUrl = expectPngDataUrl(session.fullPageScreenshotDataUrl, "fullPageScreenshotDataUrl");
+  const fullPageScreenshotName = expectSafeFilename(
+    session.fullPageScreenshotName,
+    "fullPageScreenshotName",
+  );
+  const fullPageScreenshotDataUrl = expectPngDataUrl(
+    session.fullPageScreenshotDataUrl,
+    "fullPageScreenshotDataUrl",
+  );
 
   return {
     schemaVersion: 1,
@@ -144,48 +182,100 @@ function validateSession(value: unknown): VernierSession {
     viewport: {
       width: expectPositiveNumber(viewport.width, "viewport.width"),
       height: expectPositiveNumber(viewport.height, "viewport.height"),
-      devicePixelRatio: expectPositiveNumber(viewport.devicePixelRatio, "viewport.devicePixelRatio")
+      devicePixelRatio: expectPositiveNumber(
+        viewport.devicePixelRatio,
+        "viewport.devicePixelRatio",
+      ),
     },
     createdAt,
     issueCount,
     issues: issues.map((issue, index) => validateIssue(issue, index)),
     fullPageScreenshotName,
     fullPageScreenshotDataUrl,
-    fullPageScreenshot: validateScreenshotArtifact(session.fullPageScreenshot, "fullPageScreenshot", fullPageScreenshotName, "full-page", fullPageScreenshotDataUrl)
+    fullPageScreenshot: validateScreenshotArtifact(
+      session.fullPageScreenshot,
+      "fullPageScreenshot",
+      fullPageScreenshotName,
+      "full-page",
+      fullPageScreenshotDataUrl,
+    ),
   };
 }
 
-function validateIssue(value: unknown, index: number): VernierSession["issues"][number] {
+function validateIssue(
+  value: unknown,
+  index: number,
+): VernierSession["issues"][number] {
   const issue = expectRecord(value, `issues[${index}]`);
   const kind = expectString(issue.kind, `issues[${index}].kind`);
 
   if (kind !== "single" && kind !== "delta" && kind !== "annotation") {
-    throw badRequest(`issues[${index}].kind must be single, delta, or annotation`);
+    throw badRequest(
+      `issues[${index}].kind must be single, delta, or annotation`,
+    );
   }
 
-  const screenshotName = expectSafeFilename(issue.screenshotName, `issues[${index}].screenshotName`);
-  const screenshotDataUrl = expectPngDataUrl(issue.screenshotDataUrl, `issues[${index}].screenshotDataUrl`);
+  const screenshotName = expectSafeFilename(
+    issue.screenshotName,
+    `issues[${index}].screenshotName`,
+  );
+  const screenshotDataUrl = expectPngDataUrl(
+    issue.screenshotDataUrl,
+    `issues[${index}].screenshotDataUrl`,
+  );
 
   return {
     id: expectPositiveInteger(issue.id, `issues[${index}].id`),
-    stableId: expectSafeIdentifier(issue.stableId, `issues[${index}].stableId`, "i"),
+    stableId: expectSafeIdentifier(
+      issue.stableId,
+      `issues[${index}].stableId`,
+      "i",
+    ),
     kind,
     measured: expectString(issue.measured, `issues[${index}].measured`),
     selector: expectString(issue.selector, `issues[${index}].selector`),
     source: expectString(issue.source, `issues[${index}].source`),
     target: validateTarget(issue.target, `issues[${index}].target`),
-    measurement: issue.measurement === undefined ? undefined : validateMeasurement(issue.measurement, kind, `issues[${index}].measurement`),
-    suggestions: issue.suggestions === undefined ? undefined : validateSuggestions(issue.suggestions, `issues[${index}].suggestions`),
-    redaction: issue.redaction === undefined ? undefined : validateRedaction(issue.redaction, `issues[${index}].redaction`),
+    measurement:
+      issue.measurement === undefined
+        ? undefined
+        : validateMeasurement(
+            issue.measurement,
+            kind,
+            `issues[${index}].measurement`,
+          ),
+    suggestions:
+      issue.suggestions === undefined
+        ? undefined
+        : validateSuggestions(
+            issue.suggestions,
+            `issues[${index}].suggestions`,
+          ),
+    redaction:
+      issue.redaction === undefined
+        ? undefined
+        : validateRedaction(issue.redaction, `issues[${index}].redaction`),
     note: expectString(issue.note, `issues[${index}].note`),
-    createdAt: expectIsoTimestamp(issue.createdAt, `issues[${index}].createdAt`),
+    createdAt: expectIsoTimestamp(
+      issue.createdAt,
+      `issues[${index}].createdAt`,
+    ),
     screenshotName,
     screenshotDataUrl,
-    screenshot: validateScreenshotArtifact(issue.screenshot, `issues[${index}].screenshot`, screenshotName, "element", screenshotDataUrl)
+    screenshot: validateScreenshotArtifact(
+      issue.screenshot,
+      `issues[${index}].screenshot`,
+      screenshotName,
+      "element",
+      screenshotDataUrl,
+    ),
   };
 }
 
-function validateSuggestions(value: unknown, field: string): VernierSession["issues"][number]["suggestions"] {
+function validateSuggestions(
+  value: unknown,
+  field: string,
+): VernierSession["issues"][number]["suggestions"] {
   if (!Array.isArray(value)) {
     throw badRequest(`${field} must be an array`);
   }
@@ -199,10 +289,16 @@ function validateSuggestions(value: unknown, field: string): VernierSession["iss
 
     return {
       type: expectSuggestionType(suggestion.type, `${field}[${index}].type`),
-      severity: expectSeverity(suggestion.severity, `${field}[${index}].severity`),
+      severity: expectSeverity(
+        suggestion.severity,
+        `${field}[${index}].severity`,
+      ),
       message: expectString(suggestion.message, `${field}[${index}].message`),
-      expected: expectString(suggestion.expected, `${field}[${index}].expected`),
-      actual: expectString(suggestion.actual, `${field}[${index}].actual`)
+      expected: expectString(
+        suggestion.expected,
+        `${field}[${index}].expected`,
+      ),
+      actual: expectString(suggestion.actual, `${field}[${index}].actual`),
     };
   });
 }
@@ -210,7 +306,7 @@ function validateSuggestions(value: unknown, field: string): VernierSession["iss
 function validateMeasurement(
   value: unknown,
   issueKind: "single" | "delta" | "annotation",
-  field: string
+  field: string,
 ): VernierSession["issues"][number]["measurement"] {
   const measurement = expectRecord(value, field);
   const kind = expectString(measurement.kind, `${field}.kind`);
@@ -223,58 +319,151 @@ function validateMeasurement(
     return {
       kind,
       bbox: validateBoundingBox(measurement.bbox, `${field}.bbox`),
-      computedStyle: expectStringRecord(measurement.computedStyle, `${field}.computedStyle`),
+      computedStyle: expectStringRecord(
+        measurement.computedStyle,
+        `${field}.computedStyle`,
+      ),
       text: expectOptionalString(measurement.text, `${field}.text`),
       role: expectOptionalString(measurement.role, `${field}.role`),
-      accessibleName: expectOptionalString(measurement.accessibleName, `${field}.accessibleName`),
-      inlineStyle: measurement.inlineStyle === undefined ? undefined : expectStringRecord(measurement.inlineStyle, `${field}.inlineStyle`),
-      authoredHints: expectArray(measurement.authoredHints, `${field}.authoredHints`).map((hint, index) =>
-        validateAuthoredHint(hint, `${field}.authoredHints[${index}]`)
+      accessibleName: expectOptionalString(
+        measurement.accessibleName,
+        `${field}.accessibleName`,
       ),
-      classHints: expectStringArray(measurement.classHints, `${field}.classHints`),
-      designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
-        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
+      inlineStyle:
+        measurement.inlineStyle === undefined
+          ? undefined
+          : expectStringRecord(measurement.inlineStyle, `${field}.inlineStyle`),
+      authoredHints: expectArray(
+        measurement.authoredHints,
+        `${field}.authoredHints`,
+      ).map((hint, index) =>
+        validateAuthoredHint(hint, `${field}.authoredHints[${index}]`),
       ),
-      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`),
-      textMetrics: measurement.textMetrics === undefined ? undefined : validateTextMetrics(measurement.textMetrics, `${field}.textMetrics`),
-      stackingContext: measurement.stackingContext === undefined ? undefined : validateStackingContext(measurement.stackingContext, `${field}.stackingContext`)
+      classHints: expectStringArray(
+        measurement.classHints,
+        `${field}.classHints`,
+      ),
+      designTokenHints: expectArray(
+        measurement.designTokenHints,
+        `${field}.designTokenHints`,
+      ).map((hint, index) =>
+        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`),
+      ),
+      layoutContext:
+        measurement.layoutContext === undefined
+          ? undefined
+          : validateLayoutContext(
+              measurement.layoutContext,
+              `${field}.layoutContext`,
+            ),
+      textMetrics:
+        measurement.textMetrics === undefined
+          ? undefined
+          : validateTextMetrics(
+              measurement.textMetrics,
+              `${field}.textMetrics`,
+            ),
+      stackingContext:
+        measurement.stackingContext === undefined
+          ? undefined
+          : validateStackingContext(
+              measurement.stackingContext,
+              `${field}.stackingContext`,
+            ),
     };
   }
 
   if (kind === "delta") {
     const delta = expectRecord(measurement.delta, `${field}.delta`);
-    const alignment = measurement.alignment === undefined ? undefined : expectRecord(measurement.alignment, `${field}.alignment`);
+    const alignment =
+      measurement.alignment === undefined
+        ? undefined
+        : expectRecord(measurement.alignment, `${field}.alignment`);
 
     return {
       kind,
       reference: validateTarget(measurement.reference, `${field}.reference`),
       target: validateTarget(measurement.target, `${field}.target`),
-      referenceBbox: validateBoundingBox(measurement.referenceBbox, `${field}.referenceBbox`),
-      targetBbox: validateBoundingBox(measurement.targetBbox, `${field}.targetBbox`),
+      referenceBbox: validateBoundingBox(
+        measurement.referenceBbox,
+        `${field}.referenceBbox`,
+      ),
+      targetBbox: validateBoundingBox(
+        measurement.targetBbox,
+        `${field}.targetBbox`,
+      ),
       delta: {
         left: expectFiniteNumber(delta.left, `${field}.delta.left`),
         top: expectFiniteNumber(delta.top, `${field}.delta.top`),
         width: expectFiniteNumber(delta.width, `${field}.delta.width`),
         height: expectFiniteNumber(delta.height, `${field}.delta.height`),
         color: validateStringPair(delta.color, `${field}.delta.color`),
-        backgroundColor: validateStringPair(delta.backgroundColor, `${field}.delta.backgroundColor`),
-        fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`)
+        backgroundColor: validateStringPair(
+          delta.backgroundColor,
+          `${field}.delta.backgroundColor`,
+        ),
+        fontSize: validateStringPair(delta.fontSize, `${field}.delta.fontSize`),
       },
-      alignment: alignment === undefined ? undefined : {
-        leftAligned: expectBoolean(alignment.leftAligned, `${field}.alignment.leftAligned`),
-        topAligned: expectBoolean(alignment.topAligned, `${field}.alignment.topAligned`),
-        centerAligned: expectBoolean(alignment.centerAligned, `${field}.alignment.centerAligned`),
-        centerDelta: expectFiniteNumber(alignment.centerDelta, `${field}.alignment.centerDelta`),
-        horizontalGap: expectFiniteNumber(alignment.horizontalGap, `${field}.alignment.horizontalGap`),
-        verticalGap: expectFiniteNumber(alignment.verticalGap, `${field}.alignment.verticalGap`)
-      },
-      classHints: expectStringArray(measurement.classHints, `${field}.classHints`),
-      designTokenHints: expectArray(measurement.designTokenHints, `${field}.designTokenHints`).map((hint, index) =>
-        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`)
+      alignment:
+        alignment === undefined
+          ? undefined
+          : {
+              leftAligned: expectBoolean(
+                alignment.leftAligned,
+                `${field}.alignment.leftAligned`,
+              ),
+              topAligned: expectBoolean(
+                alignment.topAligned,
+                `${field}.alignment.topAligned`,
+              ),
+              centerAligned: expectBoolean(
+                alignment.centerAligned,
+                `${field}.alignment.centerAligned`,
+              ),
+              centerDelta: expectFiniteNumber(
+                alignment.centerDelta,
+                `${field}.alignment.centerDelta`,
+              ),
+              horizontalGap: expectFiniteNumber(
+                alignment.horizontalGap,
+                `${field}.alignment.horizontalGap`,
+              ),
+              verticalGap: expectFiniteNumber(
+                alignment.verticalGap,
+                `${field}.alignment.verticalGap`,
+              ),
+            },
+      classHints: expectStringArray(
+        measurement.classHints,
+        `${field}.classHints`,
       ),
-      layoutContext: measurement.layoutContext === undefined ? undefined : validateLayoutContext(measurement.layoutContext, `${field}.layoutContext`),
-      textMetrics: measurement.textMetrics === undefined ? undefined : validateTextMetrics(measurement.textMetrics, `${field}.textMetrics`),
-      stackingContext: measurement.stackingContext === undefined ? undefined : validateStackingContext(measurement.stackingContext, `${field}.stackingContext`)
+      designTokenHints: expectArray(
+        measurement.designTokenHints,
+        `${field}.designTokenHints`,
+      ).map((hint, index) =>
+        validateDesignTokenHint(hint, `${field}.designTokenHints[${index}]`),
+      ),
+      layoutContext:
+        measurement.layoutContext === undefined
+          ? undefined
+          : validateLayoutContext(
+              measurement.layoutContext,
+              `${field}.layoutContext`,
+            ),
+      textMetrics:
+        measurement.textMetrics === undefined
+          ? undefined
+          : validateTextMetrics(
+              measurement.textMetrics,
+              `${field}.textMetrics`,
+            ),
+      stackingContext:
+        measurement.stackingContext === undefined
+          ? undefined
+          : validateStackingContext(
+              measurement.stackingContext,
+              `${field}.stackingContext`,
+            ),
     };
   }
 
@@ -287,12 +476,21 @@ function validateMeasurement(
     viewport: {
       width: expectPositiveNumber(viewport.width, `${field}.viewport.width`),
       height: expectPositiveNumber(viewport.height, `${field}.viewport.height`),
-      devicePixelRatio: expectPositiveNumber(viewport.devicePixelRatio, `${field}.viewport.devicePixelRatio`)
+      devicePixelRatio: expectPositiveNumber(
+        viewport.devicePixelRatio,
+        `${field}.viewport.devicePixelRatio`,
+      ),
     },
     bounds: validateAnnotationBounds(measurement.bounds, `${field}.bounds`),
-    relativeBounds: validateAnnotationBounds(measurement.relativeBounds, `${field}.relativeBounds`),
+    relativeBounds: validateAnnotationBounds(
+      measurement.relativeBounds,
+      `${field}.relativeBounds`,
+    ),
     points: validatePoints(measurement.points, `${field}.points`),
-    relativePoints: validatePoints(measurement.relativePoints, `${field}.relativePoints`)
+    relativePoints: validatePoints(
+      measurement.relativePoints,
+      `${field}.relativePoints`,
+    ),
   };
 }
 
@@ -307,33 +505,42 @@ function validateBoundingBox(value: unknown, field: string): BoundingBox {
     top: expectFiniteNumber(box.top, `${field}.top`),
     right: expectFiniteNumber(box.right, `${field}.right`),
     bottom: expectFiniteNumber(box.bottom, `${field}.bottom`),
-    left: expectFiniteNumber(box.left, `${field}.left`)
+    left: expectFiniteNumber(box.left, `${field}.left`),
   };
 }
 
-function validateAnnotationBounds(value: unknown, field: string): { x: number; y: number; width: number; height: number } {
+function validateAnnotationBounds(
+  value: unknown,
+  field: string,
+): { x: number; y: number; width: number; height: number } {
   const bounds = expectRecord(value, field);
 
   return {
     x: expectFiniteNumber(bounds.x, `${field}.x`),
     y: expectFiniteNumber(bounds.y, `${field}.y`),
     width: expectFiniteNumber(bounds.width, `${field}.width`),
-    height: expectFiniteNumber(bounds.height, `${field}.height`)
+    height: expectFiniteNumber(bounds.height, `${field}.height`),
   };
 }
 
-function validateAuthoredHint(value: unknown, field: string): AuthoredStyleHint {
+function validateAuthoredHint(
+  value: unknown,
+  field: string,
+): AuthoredStyleHint {
   const hint = expectRecord(value, field);
 
   return {
     selector: expectString(hint.selector, `${field}.selector`),
     property: expectString(hint.property, `${field}.property`),
     value: expectString(hint.value, `${field}.value`),
-    source: expectString(hint.source, `${field}.source`)
+    source: expectString(hint.source, `${field}.source`),
   };
 }
 
-function validateDesignTokenHint(value: unknown, field: string): DesignTokenHint {
+function validateDesignTokenHint(
+  value: unknown,
+  field: string,
+): DesignTokenHint {
   const hint = expectRecord(value, field);
 
   return {
@@ -341,7 +548,7 @@ function validateDesignTokenHint(value: unknown, field: string): DesignTokenHint
     computed: expectString(hint.computed, `${field}.computed`),
     token: expectString(hint.token, `${field}.token`),
     value: expectString(hint.value, `${field}.value`),
-    distance: expectFiniteNumber(hint.distance, `${field}.distance`)
+    distance: expectFiniteNumber(hint.distance, `${field}.distance`),
   };
 }
 
@@ -349,18 +556,46 @@ function validateLayoutContext(value: unknown, field: string): LayoutContext {
   const context = expectRecord(value, field);
 
   return {
-    parentSelector: expectOptionalString(context.parentSelector, `${field}.parentSelector`),
-    parentDisplay: expectOptionalString(context.parentDisplay, `${field}.parentDisplay`),
+    parentSelector: expectOptionalString(
+      context.parentSelector,
+      `${field}.parentSelector`,
+    ),
+    parentDisplay: expectOptionalString(
+      context.parentDisplay,
+      `${field}.parentDisplay`,
+    ),
     parentGap: expectOptionalString(context.parentGap, `${field}.parentGap`),
-    parentRowGap: expectOptionalString(context.parentRowGap, `${field}.parentRowGap`),
-    parentColumnGap: expectOptionalString(context.parentColumnGap, `${field}.parentColumnGap`),
-    parentPadding: expectOptionalString(context.parentPadding, `${field}.parentPadding`),
-    gridTemplateColumns: expectOptionalString(context.gridTemplateColumns, `${field}.gridTemplateColumns`),
-    flexDirection: expectOptionalString(context.flexDirection, `${field}.flexDirection`),
-    nearestSiblingDistance: context.nearestSiblingDistance === undefined
-      ? undefined
-      : validateSiblingDistance(context.nearestSiblingDistance, `${field}.nearestSiblingDistance`),
-    overflow: context.overflow === undefined ? undefined : validateOverflowContext(context.overflow, `${field}.overflow`)
+    parentRowGap: expectOptionalString(
+      context.parentRowGap,
+      `${field}.parentRowGap`,
+    ),
+    parentColumnGap: expectOptionalString(
+      context.parentColumnGap,
+      `${field}.parentColumnGap`,
+    ),
+    parentPadding: expectOptionalString(
+      context.parentPadding,
+      `${field}.parentPadding`,
+    ),
+    gridTemplateColumns: expectOptionalString(
+      context.gridTemplateColumns,
+      `${field}.gridTemplateColumns`,
+    ),
+    flexDirection: expectOptionalString(
+      context.flexDirection,
+      `${field}.flexDirection`,
+    ),
+    nearestSiblingDistance:
+      context.nearestSiblingDistance === undefined
+        ? undefined
+        : validateSiblingDistance(
+            context.nearestSiblingDistance,
+            `${field}.nearestSiblingDistance`,
+          ),
+    overflow:
+      context.overflow === undefined
+        ? undefined
+        : validateOverflowContext(context.overflow, `${field}.overflow`),
   };
 }
 
@@ -372,20 +607,37 @@ function validateTextMetrics(value: unknown, field: string): TextMetrics {
     fontSize: expectString(metrics.fontSize, `${field}.fontSize`),
     fontWeight: expectString(metrics.fontWeight, `${field}.fontWeight`),
     lineHeight: expectString(metrics.lineHeight, `${field}.lineHeight`),
-    letterSpacing: expectString(metrics.letterSpacing, `${field}.letterSpacing`),
-    textTransform: expectString(metrics.textTransform, `${field}.textTransform`),
+    letterSpacing: expectString(
+      metrics.letterSpacing,
+      `${field}.letterSpacing`,
+    ),
+    textTransform: expectString(
+      metrics.textTransform,
+      `${field}.textTransform`,
+    ),
     textOverflow: expectString(metrics.textOverflow, `${field}.textOverflow`),
     whiteSpace: expectString(metrics.whiteSpace, `${field}.whiteSpace`),
-    renderedLineCount: expectOptionalPositiveInteger(metrics.renderedLineCount, `${field}.renderedLineCount`)
+    renderedLineCount: expectOptionalPositiveInteger(
+      metrics.renderedLineCount,
+      `${field}.renderedLineCount`,
+    ),
   };
 }
 
-function validateStackingContext(value: unknown, field: string): StackingContext {
+function validateStackingContext(
+  value: unknown,
+  field: string,
+): StackingContext {
   const context = expectRecord(value, field);
-  const ancestors = expectArray(context.stackingAncestors, `${field}.stackingAncestors`);
+  const ancestors = expectArray(
+    context.stackingAncestors,
+    `${field}.stackingAncestors`,
+  );
 
   if (ancestors.length > 8) {
-    throw badRequest(`${field}.stackingAncestors cannot contain more than 8 entries`);
+    throw badRequest(
+      `${field}.stackingAncestors cannot contain more than 8 entries`,
+    );
   }
 
   return {
@@ -394,11 +646,19 @@ function validateStackingContext(value: unknown, field: string): StackingContext
     opacity: expectString(context.opacity, `${field}.opacity`),
     transform: expectString(context.transform, `${field}.transform`),
     isolation: expectString(context.isolation, `${field}.isolation`),
-    stackingAncestors: ancestors.map((ancestor, index) => validateStackingAncestor(ancestor, `${field}.stackingAncestors[${index}]`))
+    stackingAncestors: ancestors.map((ancestor, index) =>
+      validateStackingAncestor(
+        ancestor,
+        `${field}.stackingAncestors[${index}]`,
+      ),
+    ),
   };
 }
 
-function validateStackingAncestor(value: unknown, field: string): StackingContext["stackingAncestors"][number] {
+function validateStackingAncestor(
+  value: unknown,
+  field: string,
+): StackingContext["stackingAncestors"][number] {
   const ancestor = expectRecord(value, field);
 
   return {
@@ -407,7 +667,7 @@ function validateStackingAncestor(value: unknown, field: string): StackingContex
     zIndex: expectString(ancestor.zIndex, `${field}.zIndex`),
     opacity: expectString(ancestor.opacity, `${field}.opacity`),
     transform: expectString(ancestor.transform, `${field}.transform`),
-    isolation: expectString(ancestor.isolation, `${field}.isolation`)
+    isolation: expectString(ancestor.isolation, `${field}.isolation`),
   };
 }
 
@@ -416,13 +676,16 @@ function validateScreenshotArtifact(
   field: string,
   expectedName: string,
   expectedKind: ScreenshotArtifact["kind"],
-  dataUrl: string
+  dataUrl: string,
 ): ScreenshotArtifact {
   const artifact = expectRecord(value, field);
   const name = expectSafeFilename(artifact.name, `${field}.name`);
   const kind = expectScreenshotKind(artifact.kind, `${field}.kind`);
   const mimeType = expectString(artifact.mimeType, `${field}.mimeType`);
-  const byteLength = expectPositiveInteger(artifact.byteLength, `${field}.byteLength`);
+  const byteLength = expectPositiveInteger(
+    artifact.byteLength,
+    `${field}.byteLength`,
+  );
 
   if (name !== expectedName) {
     throw badRequest(`${field}.name must match the screenshot filename`);
@@ -445,37 +708,58 @@ function validateScreenshotArtifact(
     kind,
     width: expectPositiveInteger(artifact.width, `${field}.width`),
     height: expectPositiveInteger(artifact.height, `${field}.height`),
-    devicePixelRatio: expectPositiveNumber(artifact.devicePixelRatio, `${field}.devicePixelRatio`),
-    captureStrategy: expectCaptureStrategy(artifact.captureStrategy, `${field}.captureStrategy`),
+    devicePixelRatio: expectPositiveNumber(
+      artifact.devicePixelRatio,
+      `${field}.devicePixelRatio`,
+    ),
+    captureStrategy: expectCaptureStrategy(
+      artifact.captureStrategy,
+      `${field}.captureStrategy`,
+    ),
     mimeType: "image/png",
     byteLength,
-    hash: expectSha256Hash(artifact.hash, `${field}.hash`)
+    hash: expectSha256Hash(artifact.hash, `${field}.hash`),
   };
 }
 
-function validateSiblingDistance(value: unknown, field: string): NonNullable<LayoutContext["nearestSiblingDistance"]> {
+function validateSiblingDistance(
+  value: unknown,
+  field: string,
+): NonNullable<LayoutContext["nearestSiblingDistance"]> {
   const distance = expectRecord(value, field);
 
   return {
     left: expectOptionalFiniteNumber(distance.left, `${field}.left`),
     right: expectOptionalFiniteNumber(distance.right, `${field}.right`),
     top: expectOptionalFiniteNumber(distance.top, `${field}.top`),
-    bottom: expectOptionalFiniteNumber(distance.bottom, `${field}.bottom`)
+    bottom: expectOptionalFiniteNumber(distance.bottom, `${field}.bottom`),
   };
 }
 
-function validateOverflowContext(value: unknown, field: string): NonNullable<LayoutContext["overflow"]> {
+function validateOverflowContext(
+  value: unknown,
+  field: string,
+): NonNullable<LayoutContext["overflow"]> {
   const overflow = expectRecord(value, field);
 
   return {
     x: expectString(overflow.x, `${field}.x`),
     y: expectString(overflow.y, `${field}.y`),
-    clippedByParent: expectBoolean(overflow.clippedByParent, `${field}.clippedByParent`),
-    horizontalPageScroll: expectBoolean(overflow.horizontalPageScroll, `${field}.horizontalPageScroll`)
+    clippedByParent: expectBoolean(
+      overflow.clippedByParent,
+      `${field}.clippedByParent`,
+    ),
+    horizontalPageScroll: expectBoolean(
+      overflow.horizontalPageScroll,
+      `${field}.horizontalPageScroll`,
+    ),
   };
 }
 
-function validateStringPair(value: unknown, field: string): [string, string] | undefined {
+function validateStringPair(
+  value: unknown,
+  field: string,
+): [string, string] | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -489,18 +773,24 @@ function validateStringPair(value: unknown, field: string): [string, string] | u
   return pair as [string, string];
 }
 
-function validatePoints(value: unknown, field: string): Array<{ x: number; y: number }> {
+function validatePoints(
+  value: unknown,
+  field: string,
+): Array<{ x: number; y: number }> {
   return expectArray(value, field).map((point, index) => {
     const record = expectRecord(point, `${field}[${index}]`);
 
     return {
       x: expectFiniteNumber(record.x, `${field}[${index}].x`),
-      y: expectFiniteNumber(record.y, `${field}[${index}].y`)
+      y: expectFiniteNumber(record.y, `${field}[${index}].y`),
     };
   });
 }
 
-function validateTarget(value: unknown, field: string): VernierSession["issues"][number]["target"] {
+function validateTarget(
+  value: unknown,
+  field: string,
+): VernierSession["issues"][number]["target"] {
   const target = expectRecord(value, field);
   const ancestry = expectArray(target.ancestry, `${field}.ancestry`);
 
@@ -510,28 +800,60 @@ function validateTarget(value: unknown, field: string): VernierSession["issues"]
 
   return {
     selector: expectString(target.selector, `${field}.selector`),
-    fallbackSelector: expectOptionalString(target.fallbackSelector, `${field}.fallbackSelector`),
-    selectorConfidence: expectConfidence(target.selectorConfidence, `${field}.selectorConfidence`),
-    selectorReason: expectString(target.selectorReason, `${field}.selectorReason`),
+    fallbackSelector: expectOptionalString(
+      target.fallbackSelector,
+      `${field}.fallbackSelector`,
+    ),
+    selectorConfidence: expectConfidence(
+      target.selectorConfidence,
+      `${field}.selectorConfidence`,
+    ),
+    selectorReason: expectString(
+      target.selectorReason,
+      `${field}.selectorReason`,
+    ),
     tag: expectString(target.tag, `${field}.tag`),
     id: expectOptionalString(target.id, `${field}.id`),
     classes: expectStringArray(target.classes, `${field}.classes`),
     text: expectOptionalString(target.text, `${field}.text`),
     role: expectOptionalString(target.role, `${field}.role`),
-    accessibleName: expectOptionalString(target.accessibleName, `${field}.accessibleName`),
+    accessibleName: expectOptionalString(
+      target.accessibleName,
+      `${field}.accessibleName`,
+    ),
     testId: expectOptionalString(target.testId, `${field}.testId`),
-    nearestTestId: expectOptionalString(target.nearestTestId, `${field}.nearestTestId`),
-    nearestLandmark: expectOptionalString(target.nearestLandmark, `${field}.nearestLandmark`),
+    nearestTestId: expectOptionalString(
+      target.nearestTestId,
+      `${field}.nearestTestId`,
+    ),
+    nearestLandmark: expectOptionalString(
+      target.nearestLandmark,
+      `${field}.nearestLandmark`,
+    ),
     source: expectString(target.source, `${field}.source`),
-    sourceConfidence: expectConfidence(target.sourceConfidence, `${field}.sourceConfidence`),
-    sourceResolver: expectString(target.sourceResolver, `${field}.sourceResolver`),
-    componentName: expectOptionalString(target.componentName, `${field}.componentName`),
+    sourceConfidence: expectConfidence(
+      target.sourceConfidence,
+      `${field}.sourceConfidence`,
+    ),
+    sourceResolver: expectString(
+      target.sourceResolver,
+      `${field}.sourceResolver`,
+    ),
+    componentName: expectOptionalString(
+      target.componentName,
+      `${field}.componentName`,
+    ),
     ownerChain: expectStringArray(target.ownerChain, `${field}.ownerChain`),
-    ancestry: ancestry.map((item, index) => validateAncestor(item, `${field}.ancestry[${index}]`))
+    ancestry: ancestry.map((item, index) =>
+      validateAncestor(item, `${field}.ancestry[${index}]`),
+    ),
   };
 }
 
-function validateAncestor(value: unknown, field: string): VernierSession["issues"][number]["target"]["ancestry"][number] {
+function validateAncestor(
+  value: unknown,
+  field: string,
+): VernierSession["issues"][number]["target"]["ancestry"][number] {
   const ancestor = expectRecord(value, field);
 
   return {
@@ -540,7 +862,7 @@ function validateAncestor(value: unknown, field: string): VernierSession["issues
     classes: expectStringArray(ancestor.classes, `${field}.classes`),
     role: expectOptionalString(ancestor.role, `${field}.role`),
     testId: expectOptionalString(ancestor.testId, `${field}.testId`),
-    text: expectOptionalString(ancestor.text, `${field}.text`)
+    text: expectOptionalString(ancestor.text, `${field}.text`),
   };
 }
 
@@ -554,7 +876,11 @@ function expectIsoTimestamp(value: unknown, field: string): string {
   return timestamp;
 }
 
-function expectSafeIdentifier(value: unknown, field: string, prefix: string): string {
+function expectSafeIdentifier(
+  value: unknown,
+  field: string,
+  prefix: string,
+): string {
   const identifier = expectString(value, field);
 
   if (!new RegExp(`^${prefix}-[a-z0-9]{6,32}$`).test(identifier)) {
@@ -588,7 +914,10 @@ function expectString(value: unknown, field: string): string {
   return value;
 }
 
-function expectOptionalString(value: unknown, field: string): string | undefined {
+function expectOptionalString(
+  value: unknown,
+  field: string,
+): string | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -606,7 +935,10 @@ function expectStringArray(value: unknown, field: string): string[] {
   return items as string[];
 }
 
-function expectStringRecord(value: unknown, field: string): Record<string, string> {
+function expectStringRecord(
+  value: unknown,
+  field: string,
+): Record<string, string> {
   const record = expectRecord(value, field);
   const result: Record<string, string> = {};
 
@@ -629,7 +961,10 @@ function expectBoolean(value: unknown, field: string): boolean {
   return value;
 }
 
-function expectConfidence(value: unknown, field: string): "high" | "medium" | "low" {
+function expectConfidence(
+  value: unknown,
+  field: string,
+): "high" | "medium" | "low" {
   if (value !== "high" && value !== "medium" && value !== "low") {
     throw badRequest(`${field} must be high, medium, or low`);
   }
@@ -637,16 +972,28 @@ function expectConfidence(value: unknown, field: string): "high" | "medium" | "l
   return value;
 }
 
-function validateRedaction(value: unknown, field: string): NonNullable<VernierSession["issues"][number]["redaction"]> {
+function validateRedaction(
+  value: unknown,
+  field: string,
+): NonNullable<VernierSession["issues"][number]["redaction"]> {
   const redaction = expectRecord(value, field);
 
   return {
-    autoRedactedElements: expectNonNegativeInteger(redaction.autoRedactedElements, `${field}.autoRedactedElements`),
-    manualRedaction: expectBoolean(redaction.manualRedaction, `${field}.manualRedaction`)
+    autoRedactedElements: expectNonNegativeInteger(
+      redaction.autoRedactedElements,
+      `${field}.autoRedactedElements`,
+    ),
+    manualRedaction: expectBoolean(
+      redaction.manualRedaction,
+      `${field}.manualRedaction`,
+    ),
   };
 }
 
-function expectAnnotationMode(value: unknown, field: string): "pen" | "box" | "redact" {
+function expectAnnotationMode(
+  value: unknown,
+  field: string,
+): "pen" | "box" | "redact" {
   if (value !== "pen" && value !== "box" && value !== "redact") {
     throw badRequest(`${field} must be pen, box, or redact`);
   }
@@ -654,7 +1001,12 @@ function expectAnnotationMode(value: unknown, field: string): "pen" | "box" | "r
   return value;
 }
 
-function expectSuggestionType(value: unknown, field: string): NonNullable<VernierSession["issues"][number]["suggestions"]>[number]["type"] {
+function expectSuggestionType(
+  value: unknown,
+  field: string,
+): NonNullable<
+  VernierSession["issues"][number]["suggestions"]
+>[number]["type"] {
   if (
     value !== "low-contrast" &&
     value !== "tap-target" &&
@@ -671,7 +1023,10 @@ function expectSuggestionType(value: unknown, field: string): NonNullable<Vernie
   return value;
 }
 
-function expectSeverity(value: unknown, field: string): "low" | "medium" | "high" {
+function expectSeverity(
+  value: unknown,
+  field: string,
+): "low" | "medium" | "high" {
   if (value !== "low" && value !== "medium" && value !== "high") {
     throw badRequest(`${field} must be low, medium, or high`);
   }
@@ -679,7 +1034,10 @@ function expectSeverity(value: unknown, field: string): "low" | "medium" | "high
   return value;
 }
 
-function expectScreenshotKind(value: unknown, field: string): ScreenshotArtifact["kind"] {
+function expectScreenshotKind(
+  value: unknown,
+  field: string,
+): ScreenshotArtifact["kind"] {
   if (value !== "element" && value !== "full-page") {
     throw badRequest(`${field} must be element or full-page`);
   }
@@ -687,9 +1045,19 @@ function expectScreenshotKind(value: unknown, field: string): ScreenshotArtifact
   return value;
 }
 
-function expectCaptureStrategy(value: unknown, field: string): ScreenshotArtifact["captureStrategy"] {
-  if (value !== "html2canvas" && value !== "modern-screenshot" && value !== "playwright" && value !== "browser-native") {
-    throw badRequest(`${field} must be html2canvas, modern-screenshot, playwright, or browser-native`);
+function expectCaptureStrategy(
+  value: unknown,
+  field: string,
+): ScreenshotArtifact["captureStrategy"] {
+  if (
+    value !== "html2canvas" &&
+    value !== "modern-screenshot" &&
+    value !== "playwright" &&
+    value !== "browser-native"
+  ) {
+    throw badRequest(
+      `${field} must be html2canvas, modern-screenshot, playwright, or browser-native`,
+    );
   }
 
   return value;
@@ -711,7 +1079,10 @@ function expectFiniteNumber(value: unknown, field: string): number {
   return value;
 }
 
-function expectOptionalFiniteNumber(value: unknown, field: string): number | undefined {
+function expectOptionalFiniteNumber(
+  value: unknown,
+  field: string,
+): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -727,7 +1098,10 @@ function expectPositiveInteger(value: unknown, field: string): number {
   return value as number;
 }
 
-function expectOptionalPositiveInteger(value: unknown, field: string): number | undefined {
+function expectOptionalPositiveInteger(
+  value: unknown,
+  field: string,
+): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -746,7 +1120,12 @@ function expectNonNegativeInteger(value: unknown, field: string): number {
 function expectSafeFilename(value: unknown, field: string): string {
   const filename = expectString(value, field);
 
-  if (!/^[a-zA-Z0-9._-]+$/.test(filename) || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+  if (
+    !/^[a-zA-Z0-9._-]+$/.test(filename) ||
+    filename.includes("..") ||
+    filename.includes("/") ||
+    filename.includes("\\")
+  ) {
     throw badRequest(`${field} must be a safe filename`);
   }
 
@@ -771,7 +1150,8 @@ function expectPngDataUrl(value: unknown, field: string): string {
 }
 
 function pngByteLength(dataUrl: string): number {
-  const base64 = dataUrl.match(/^data:image\/png;base64,([a-zA-Z0-9+/=]+)$/)?.[1] ?? "";
+  const base64 =
+    dataUrl.match(/^data:image\/png;base64,([a-zA-Z0-9+/=]+)$/)?.[1] ?? "";
   return Buffer.byteLength(base64, "base64");
 }
 
@@ -789,17 +1169,109 @@ function badRequest(message: string): SessionRequestError {
   return new SessionRequestError(message, 400);
 }
 
-function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
+interface SessionCorsDecision {
+  allowed: boolean;
+  origin?: string;
+  error?: string;
+}
+
+function sessionCorsDecision(request: IncomingMessage): SessionCorsDecision {
+  const origin = request.headers.origin;
+
+  if (!origin) {
+    return { allowed: true };
+  }
+
+  const host = request.headers.host;
+
+  if (!host) {
+    return {
+      allowed: false,
+      origin,
+      error: "Session requests with Origin must include Host",
+    };
+  }
+
+  const originUrl = parseUrl(origin);
+  const hostUrl = parseUrl(`http://${host}`);
+
+  if (
+    !originUrl ||
+    !hostUrl ||
+    !["http:", "https:"].includes(originUrl.protocol)
+  ) {
+    return {
+      allowed: false,
+      origin,
+      error: "Session request Origin is not allowed",
+    };
+  }
+
+  const sameHost =
+    normalizeHostname(originUrl.hostname) ===
+    normalizeHostname(hostUrl.hostname);
+  const bothLocal =
+    isLocalhost(originUrl.hostname) && isLocalhost(hostUrl.hostname);
+
+  if (sameHost || bothLocal) {
+    return { allowed: true, origin };
+  }
+
+  return {
+    allowed: false,
+    origin,
+    error: "Session request Origin is not allowed",
+  };
+}
+
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHostname(value: string): string {
+  return value.replace(/^\[|\]$/g, "").toLowerCase();
+}
+
+function isLocalhost(value: string): boolean {
+  const hostname = normalizeHostname(value);
+
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  );
+}
+
+function sendJson(
+  response: ServerResponse,
+  statusCode: number,
+  payload: unknown,
+  origin?: string,
+): void {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json");
-  response.setHeader("Access-Control-Allow-Origin", "*");
+  setCorsHeaders(response, origin);
   response.end(JSON.stringify(payload));
 }
 
-function sendCorsPreflight(response: ServerResponse): void {
+function sendCorsPreflight(response: ServerResponse, origin?: string): void {
   response.statusCode = 204;
-  response.setHeader("Access-Control-Allow-Origin", "*");
+  setCorsHeaders(response, origin);
   response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.end();
+}
+
+function setCorsHeaders(
+  response: ServerResponse,
+  origin: string | undefined,
+): void {
+  if (!origin) {
+    return;
+  }
+
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Vary", "Origin");
 }

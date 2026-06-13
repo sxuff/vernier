@@ -1,23 +1,30 @@
+import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createRequire } from "node:module";
 import { connect as connectNet } from "node:net";
-import { spawn } from "node:child_process";
-import { Duplex, Readable } from "node:stream";
+import { type Duplex, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { connect as connectTls } from "node:tls";
-import { parseArgs } from "../lib/args";
-import { debugLog } from "../lib/debug";
-import { VernierError } from "../lib/errors";
 import { injectVernierOverlay } from "../../core/html";
-import type { OverlayRuntimeOptions, SessionOutputOptions } from "../../core/overlay-options";
+import type {
+  OverlayRuntimeOptions,
+  SessionOutputOptions,
+} from "../../core/overlay-options";
 import {
   createVernierOverlayScript,
   vernierHtml2CanvasPath,
   vernierModernScreenshotPath,
-  vernierOverlayPath
+  vernierOverlayPath,
 } from "../../core/overlay-script";
 import { handleVernierSessionRequest } from "../../core/session-handler";
+import { parseArgs } from "../lib/args";
+import { debugLog } from "../lib/debug";
+import { VernierError } from "../lib/errors";
 
 export interface ProxyOptions extends SessionOutputOptions {
   target: URL;
@@ -39,7 +46,10 @@ const defaultPort = 3333;
 const maxProxyBodyBytes = 30 * 1024 * 1024;
 const maxPortFallbackAttempts = 20;
 
-export function parseProxyOptions(args: string[], config: ProxyConfig = {}): ProxyOptions {
+export function parseProxyOptions(
+  args: string[],
+  config: ProxyConfig = {},
+): ProxyOptions {
   const targetValue = resolveTargetOption(args, config);
   const port = parsePortOption(args, resolveDefaultPort(config));
 
@@ -48,39 +58,72 @@ export function parseProxyOptions(args: string[], config: ProxyConfig = {}): Pro
     port,
     root: process.cwd(),
     overlay: config.overlay,
-    outDir: config.outDir
+    outDir: config.outDir,
   };
 }
 
-function parsePortOption(args: string[], fallbackPort: number | "auto"): number | "auto" {
-  const portValue = parseArgs(args, { valueOptions: ["--port"] }).option("--port") ?? process.env.VERNIER_PORT ?? String(fallbackPort);
+function parsePortOption(
+  args: string[],
+  fallbackPort: number | "auto",
+): number | "auto" {
+  const portValue =
+    parseArgs(args, { valueOptions: ["--port"] }).option("--port") ??
+    process.env.VERNIER_PORT ??
+    String(fallbackPort);
   const port = portValue === "auto" ? "auto" : Number(portValue);
 
-  if (port !== "auto" && (!Number.isInteger(port) || port < 1 || port > 65535)) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --port value: ${portValue}`, "Use a port from 1 to 65535, or --port auto.");
+  if (
+    port !== "auto" &&
+    (!Number.isInteger(port) || port < 1 || port > 65535)
+  ) {
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      `Invalid --port value: ${portValue}`,
+      "Use a port from 1 to 65535, or --port auto.",
+    );
   }
 
   return port;
 }
 
-export function resolveTargetOption(args: string[], config: ProxyConfig): string {
-  const parsed = parseArgs(args, { valueOptions: ["--target", "--port", "--config"] });
-  return parsed.option("--target") ?? parsed.positionals().find(isUrlLike) ?? process.env.VERNIER_TARGET ?? config.target ?? defaultTarget;
+export function resolveTargetOption(
+  args: string[],
+  config: ProxyConfig,
+): string {
+  const parsed = parseArgs(args, {
+    valueOptions: ["--target", "--port", "--config"],
+  });
+  return (
+    parsed.option("--target") ??
+    parsed.positionals().find(isUrlLike) ??
+    process.env.VERNIER_TARGET ??
+    config.target ??
+    defaultTarget
+  );
 }
 
 function resolveDefaultPort(config: ProxyConfig): number | "auto" {
-  return process.env.VERNIER_PORT === undefined ? config.port ?? defaultPort : defaultPort;
+  return process.env.VERNIER_PORT === undefined
+    ? (config.port ?? defaultPort)
+    : defaultPort;
 }
 
 export function parseUrlOption(value: string, field: string): URL {
   try {
     return new URL(value);
   } catch {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid ${field} URL: ${value}`, "Use an absolute local URL, for example http://localhost:5173.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      `Invalid ${field} URL: ${value}`,
+      "Use an absolute local URL, for example http://localhost:5173.",
+    );
   }
 }
 
-export async function startProxyServer(options: ProxyOptions, settings: { open: boolean }): Promise<void> {
+export async function startProxyServer(
+  options: ProxyOptions,
+  settings: { open: boolean },
+): Promise<void> {
   const server = createServer((request, response) => {
     void handleProxyRequest(options, request, response);
   });
@@ -96,7 +139,10 @@ export async function startProxyServer(options: ProxyOptions, settings: { open: 
   console.log(`[vernier] proxy listening on ${proxyUrl}`);
   console.log(`[vernier] forwarding to ${options.target.origin}`);
   console.log(`[vernier] sessions write to ${options.root}`);
-  debugLog("proxy", `target=${options.target.toString()} port=${port} root=${options.root} outDir=${options.outDir ?? ".ui-feedback"}`);
+  debugLog(
+    "proxy",
+    `target=${options.target.toString()} port=${port} root=${options.root} outDir=${options.outDir ?? ".ui-feedback"}`,
+  );
 
   if (settings.open) {
     debugLog("proxy", `opening ${proxyUrl}`);
@@ -104,7 +150,10 @@ export async function startProxyServer(options: ProxyOptions, settings: { open: 
   }
 }
 
-export function listenWithPortFallback(server: ReturnType<typeof createServer>, requestedPort: number): Promise<number> {
+export function listenWithPortFallback(
+  server: ReturnType<typeof createServer>,
+  requestedPort: number,
+): Promise<number> {
   return new Promise((resolve, reject) => {
     let port = requestedPort;
     let attempts = 0;
@@ -141,9 +190,13 @@ export function listenWithPortFallback(server: ReturnType<typeof createServer>, 
 async function handleProxyRequest(
   options: ProxyOptions,
   request: IncomingMessage,
-  response: ServerResponse
+  response: ServerResponse,
 ): Promise<void> {
-  if (await handleVernierSessionRequest(options.root, request, response, { outDir: options.outDir })) {
+  if (
+    await handleVernierSessionRequest(options.root, request, response, {
+      outDir: options.outDir,
+    })
+  ) {
     debugLog("session", `${request.method ?? "GET"} ${request.url ?? ""}`);
     return;
   }
@@ -157,8 +210,8 @@ async function handleProxyRequest(
       createVernierOverlayScript({
         html2canvasImportPath: vernierHtml2CanvasPath,
         modernScreenshotImportPath: vernierModernScreenshotPath,
-        runtimeOptions: options.overlay
-      })
+        runtimeOptions: options.overlay,
+      }),
     );
     return;
   }
@@ -182,7 +235,10 @@ async function handleProxyRequest(
       return;
     }
 
-    debugLog("proxy", `target error: ${error instanceof Error ? error.message : String(error)}`);
+    debugLog(
+      "proxy",
+      `target error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     sendProxyError(response, options.target, error);
   }
 }
@@ -191,14 +247,17 @@ function handleProxyUpgrade(
   options: ProxyOptions,
   request: IncomingMessage,
   socket: Duplex,
-  head: Buffer
+  head: Buffer,
 ): void {
   const targetUrl = new URL(request.url ?? "/", options.target);
   debugLog("proxy", `upgrade ${request.url ?? ""} -> ${targetUrl.toString()}`);
-  const targetPort = Number(targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80));
-  const upstream = targetUrl.protocol === "https:"
-    ? connectTls(targetPort, targetUrl.hostname)
-    : connectNet(targetPort, targetUrl.hostname);
+  const targetPort = Number(
+    targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
+  );
+  const upstream =
+    targetUrl.protocol === "https:"
+      ? connectTls(targetPort, targetUrl.hostname)
+      : connectNet(targetPort, targetUrl.hostname);
 
   upstream.on("connect", () => {
     upstream.write(createUpgradeRequest(request, targetUrl));
@@ -223,9 +282,14 @@ function handleProxyUpgrade(
   });
 }
 
-function createUpgradeRequest(request: IncomingMessage, targetUrl: URL): string {
+function createUpgradeRequest(
+  request: IncomingMessage,
+  targetUrl: URL,
+): string {
   const pathAndQuery = `${targetUrl.pathname}${targetUrl.search}`;
-  const lines = [`${request.method ?? "GET"} ${pathAndQuery} HTTP/${request.httpVersion}`];
+  const lines = [
+    `${request.method ?? "GET"} ${pathAndQuery} HTTP/${request.httpVersion}`,
+  ];
   const rawHeaders = request.rawHeaders;
 
   lines.push(`Host: ${targetUrl.host}`);
@@ -248,16 +312,22 @@ function createUpgradeRequest(request: IncomingMessage, targetUrl: URL): string 
 async function forwardRequest(
   options: ProxyOptions,
   request: IncomingMessage,
-  response: ServerResponse
+  response: ServerResponse,
 ): Promise<void> {
   const targetUrl = new URL(request.url ?? "/", options.target);
-  debugLog("proxy", `forward ${request.method ?? "GET"} ${targetUrl.toString()}`);
-  const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readRequestBody(request);
+  debugLog(
+    "proxy",
+    `forward ${request.method ?? "GET"} ${targetUrl.toString()}`,
+  );
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : await readRequestBody(request);
   const upstream = await fetch(targetUrl, {
     method: request.method,
     headers: toForwardHeaders(request, options.target),
     body,
-    redirect: "manual"
+    redirect: "manual",
   });
   const contentType = upstream.headers.get("content-type") ?? "";
   const isHtml = contentType.includes("text/html");
@@ -271,7 +341,10 @@ async function forwardRequest(
   }
 
   if (contentType.includes("text/event-stream") && upstream.body) {
-    await pipeline(Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]), response);
+    await pipeline(
+      Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]),
+      response,
+    );
     return;
   }
 
@@ -306,7 +379,11 @@ function toForwardHeaders(request: IncomingMessage, target: URL): Headers {
   return headers;
 }
 
-function copyResponseHeaders(upstream: Response, response: ServerResponse, options: ProxyOptions): void {
+function copyResponseHeaders(
+  upstream: Response,
+  response: ServerResponse,
+  options: ProxyOptions,
+): void {
   const setCookies = readSetCookieHeaders(upstream);
 
   upstream.headers.forEach((value, key) => {
@@ -322,16 +399,28 @@ function copyResponseHeaders(upstream: Response, response: ServerResponse, optio
       return;
     }
 
-    response.setHeader(key, key.toLowerCase() === "location" ? rewriteLocationHeader(value, options) : value);
+    response.setHeader(
+      key,
+      key.toLowerCase() === "location"
+        ? rewriteLocationHeader(value, options)
+        : value,
+    );
   });
 
   if (setCookies.length > 0) {
-    response.setHeader("set-cookie", setCookies.map((cookie) => rewriteSetCookieHeader(cookie, options.target)));
+    response.setHeader(
+      "set-cookie",
+      setCookies.map((cookie) =>
+        rewriteSetCookieHeader(cookie, options.target),
+      ),
+    );
   }
 }
 
 function readSetCookieHeaders(upstream: Response): string[] {
-  const headers = upstream.headers as Headers & { getSetCookie?: () => string[] };
+  const headers = upstream.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
   const setCookies = headers.getSetCookie?.();
 
   if (setCookies && setCookies.length > 0) {
@@ -356,13 +445,18 @@ function rewriteSetCookieHeader(cookie: string, target: URL): string {
       }
 
       const domain = rest.join("=").trim().replace(/^\./, "").toLowerCase();
-      return domain === targetHost || targetHost.endsWith(`.${domain}`) ? "" : trimmed;
+      return domain === targetHost || targetHost.endsWith(`.${domain}`)
+        ? ""
+        : trimmed;
     })
     .filter(Boolean)
     .join("; ");
 }
 
-function rewriteLocationHeader(location: string, options: ProxyOptions): string {
+function rewriteLocationHeader(
+  location: string,
+  options: ProxyOptions,
+): string {
   let locationUrl: URL;
 
   try {
@@ -391,7 +485,7 @@ function isHopByHopHeader(header: string): boolean {
     "te",
     "trailer",
     "transfer-encoding",
-    "upgrade"
+    "upgrade",
   ].includes(header.toLowerCase());
 }
 
@@ -410,7 +504,12 @@ function readRequestBody(request: IncomingMessage): Promise<ArrayBuffer> {
 
       if (bytes > maxProxyBodyBytes) {
         rejected = true;
-        reject(new ProxyRequestError(`Proxy request body exceeds ${maxProxyBodyBytes} bytes`, 413));
+        reject(
+          new ProxyRequestError(
+            `Proxy request body exceeds ${maxProxyBodyBytes} bytes`,
+            413,
+          ),
+        );
         request.destroy();
         return;
       }
@@ -423,7 +522,9 @@ function readRequestBody(request: IncomingMessage): Promise<ArrayBuffer> {
       }
 
       const body = Buffer.concat(chunks);
-      resolve(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+      resolve(
+        body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      );
     });
     request.on("error", reject);
   });
@@ -432,7 +533,7 @@ function readRequestBody(request: IncomingMessage): Promise<ArrayBuffer> {
 class ProxyRequestError extends Error {
   constructor(
     message: string,
-    public statusCode: number
+    public statusCode: number,
   ) {
     super(message);
   }
@@ -444,14 +545,23 @@ function sendJavaScript(response: ServerResponse, source: string): void {
   response.end(source);
 }
 
-function sendText(response: ServerResponse, statusCode: number, message: string): void {
+function sendText(
+  response: ServerResponse,
+  statusCode: number,
+  message: string,
+): void {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
   response.end(message);
 }
 
-function sendProxyError(response: ServerResponse, target: URL, error: unknown): void {
-  const message = error instanceof Error ? error.message : "Unknown proxy error";
+function sendProxyError(
+  response: ServerResponse,
+  target: URL,
+  error: unknown,
+): void {
+  const message =
+    error instanceof Error ? error.message : "Unknown proxy error";
 
   response.statusCode = 502;
   response.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -486,7 +596,11 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-async function sendFile(response: ServerResponse, filePath: string, contentType: string): Promise<void> {
+async function sendFile(
+  response: ServerResponse,
+  filePath: string,
+  contentType: string,
+): Promise<void> {
   response.statusCode = 200;
   response.setHeader("Content-Type", contentType);
   await pipeline(createReadStream(filePath), response);

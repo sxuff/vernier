@@ -8,7 +8,10 @@ interface ParseArgsOptions {
   valueOptions?: string[];
 }
 
-export function parseArgs(args: string[], options: ParseArgsOptions = {}): ParsedArgs {
+export function parseArgs(
+  args: string[],
+  options: ParseArgsOptions = {},
+): ParsedArgs {
   const valueOptions = new Set(options.valueOptions ?? []);
   const flags = new Set<string>();
   const values = new Map<string, string>();
@@ -55,6 +58,6 @@ export function parseArgs(args: string[], options: ParseArgsOptions = {}): Parse
     },
     positionals() {
       return [...positionals];
-    }
+    },
   };
 }

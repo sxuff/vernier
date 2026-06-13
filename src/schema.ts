@@ -175,9 +175,16 @@ export interface AnnotationMeasurement {
   relativePoints: Array<{ x: number; y: number }>;
 }
 
-export type VernierMeasurement = SingleMeasurement | DeltaMeasurement | AnnotationMeasurement;
+export type VernierMeasurement =
+  | SingleMeasurement
+  | DeltaMeasurement
+  | AnnotationMeasurement;
 
-export type CaptureStrategy = "html2canvas" | "modern-screenshot" | "playwright" | "browser-native";
+export type CaptureStrategy =
+  | "html2canvas"
+  | "modern-screenshot"
+  | "playwright"
+  | "browser-native";
 
 export interface VernierAssertion {
   property: string;
@@ -189,7 +196,15 @@ export interface VernierAssertion {
 }
 
 export interface VernierSuggestion {
-  type: "low-contrast" | "tap-target" | "missing-accessible-name" | "focus-ring" | "text-overflow" | "clipping" | "stacking-context" | "token-hint";
+  type:
+    | "low-contrast"
+    | "tap-target"
+    | "missing-accessible-name"
+    | "focus-ring"
+    | "text-overflow"
+    | "clipping"
+    | "stacking-context"
+    | "token-hint";
   severity: "low" | "medium" | "high";
   message: string;
   expected: string;

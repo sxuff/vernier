@@ -50,7 +50,9 @@ function getSegment(segmentElement: Element): string {
     return tagName;
   }
 
-  const siblings = Array.from(parent.children).filter((sibling) => sibling.tagName === segmentElement.tagName);
+  const siblings = Array.from(parent.children).filter(
+    (sibling) => sibling.tagName === segmentElement.tagName,
+  );
   const index = siblings.indexOf(segmentElement) + 1;
 
   return siblings.length <= 1 ? tagName : `${tagName}:nth-of-type(${index})`;

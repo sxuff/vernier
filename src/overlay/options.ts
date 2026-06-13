@@ -16,12 +16,12 @@ const defaultStyleProperties = [
   "margin",
   "width",
   "height",
-  "border-radius"
+  "border-radius",
 ];
 
 const defaultRedactionSelectors = [
   'input[type="password"]',
-  "[data-vernier-redact]"
+  "[data-vernier-redact]",
 ];
 
 export function getOverlayOptions(): OverlayRuntimeOptions {
@@ -48,7 +48,10 @@ export function getScreenshotMaxWidth(): number | null {
   return getOverlayOptions().screenshotMaxWidth ?? null;
 }
 
-export function getCaptureStrategy(): Extract<CaptureStrategy, "html2canvas" | "modern-screenshot"> {
+export function getCaptureStrategy(): Extract<
+  CaptureStrategy,
+  "html2canvas" | "modern-screenshot"
+> {
   return getOverlayOptions().captureStrategy ?? "html2canvas";
 }
 
@@ -100,12 +103,17 @@ function parseHotkey(value: string): ParsedHotkey | null {
   return {
     key,
     ctrl: modifiers.has("ctrl") || modifiers.has("control"),
-    meta: modifiers.has("meta") || modifiers.has("cmd") || modifiers.has("command"),
+    meta:
+      modifiers.has("meta") || modifiers.has("cmd") || modifiers.has("command"),
     alt: modifiers.has("alt") || modifiers.has("option"),
-    shift: modifiers.has("shift")
+    shift: modifiers.has("shift"),
   };
 }
 
 function defaultHotkey(event: KeyboardEvent): boolean {
-  return (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f";
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    event.key.toLowerCase() === "f"
+  );
 }

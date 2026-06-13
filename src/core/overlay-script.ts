@@ -1,5 +1,8 @@
 import { vernierOverlayBundle } from "./generated/overlay-bundle";
-import { normalizeOverlayRuntimeOptions, type OverlayRuntimeOptions } from "./overlay-options";
+import {
+  normalizeOverlayRuntimeOptions,
+  type OverlayRuntimeOptions,
+} from "./overlay-options";
 
 export interface OverlayScriptOptions {
   html2canvasImportPath: string;
@@ -9,9 +12,12 @@ export interface OverlayScriptOptions {
 
 export const vernierOverlayPath = "/__vernier/overlay.js";
 export const vernierHtml2CanvasPath = "/__vernier/vendor/html2canvas.js";
-export const vernierModernScreenshotPath = "/__vernier/vendor/modern-screenshot.js";
+export const vernierModernScreenshotPath =
+  "/__vernier/vendor/modern-screenshot.js";
 
-export function createVernierOverlayScript(options: OverlayScriptOptions): string {
+export function createVernierOverlayScript(
+  options: OverlayScriptOptions,
+): string {
   const runtimeOptions = normalizeOverlayRuntimeOptions(options.runtimeOptions);
 
   return [
@@ -20,6 +26,6 @@ export function createVernierOverlayScript(options: OverlayScriptOptions): strin
     "const html2canvas = __vernierHtml2canvas;",
     "const modernScreenshot = { domToCanvas: __vernierDomToCanvas };",
     `window.__VERNIER_OPTIONS__ = ${JSON.stringify(runtimeOptions)};`,
-    vernierOverlayBundle
+    vernierOverlayBundle,
   ].join("\n");
 }

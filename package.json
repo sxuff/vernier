@@ -1,9 +1,8 @@
 {
   "name": "vernier",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A dev-time UI overlay that measures web app problems and exports agent-readable sessions.",
   "type": "module",
-  "private": true,
   "workspaces": [
     "examples/react-vite"
   ],
@@ -23,18 +22,25 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "prebuild": "node scripts/build-overlay-bundle.mjs",
+    "prepublishOnly": "npm run verify:m0",
     "build": "tsup",
     "dev:example": "npm --prefix examples/react-vite run dev",
     "dev:proxy": "npm run build && node dist/cli.js",
     "proxy:5173": "node dist/cli.js --target http://localhost:5173 --port 3333",
     "proxy:3000": "node dist/cli.js --target http://localhost:3000 --port 3333",
     "typecheck": "tsc --noEmit && tsc --noEmit -p examples/react-vite/tsconfig.json",
-    "test:unit": "node tests/session-writer.test.mjs && node tests/session-handler.test.mjs && node tests/overlay-options.test.mjs && node tests/source-resolver.test.mjs && node tests/source-annotation.test.mjs && node tests/suggestions.test.mjs && node tests/measure.test.mjs && node tests/args.test.mjs && node tests/debug-errors.test.mjs && node tests/core-errors.test.mjs && node tests/handoff-golden.test.mjs && node tests/doctor.test.mjs",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "npm run typecheck && npm run build && npm run test:unit",
+    "test:unit": "node --test \"tests/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:proxy": "node tests/proxy-smoke.mjs",
-    "verify:m0": "npm run typecheck && npm run build && npm run test:unit && npm --prefix examples/react-vite run build"
+    "verify:m0": "npm run typecheck && npm run lint && npm run build && npm run test:unit && npm --prefix examples/react-vite run build"
   },
   "keywords": [
     "vite",
@@ -44,24 +50,28 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "vite": "^7.0.0"
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
     "modern-screenshot": "^4.7.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
     "@playwright/test": "^1.56.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "esbuild": "^0.27.7",
+    "@vitejs/plugin-react": "^6.0.2",
+    "esbuild": "^0.28.1",
     "playwright": "^1.56.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.9.0",
-    "vite": "^7.0.0"
+    "vite": "^8.0.16"
   }
 }

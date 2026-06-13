@@ -2,7 +2,9 @@
 
 Vernier is a dev-time UI measurement overlay. It lets you point at UI problems, records real measurements, and exports an agent-readable feedback session.
 
-Current status: MVP plus adapter/proxy architecture.
+Current status: local-first dev tool, ready for private/package testing.
+
+Requires Node.js 20 or newer.
 
 ## Use With Vite
 
@@ -69,6 +71,8 @@ http://127.0.0.1:3333
 
 The proxy injects Vernier into HTML responses and forwards everything else to your target app, including redirects, cookies, SSE streams, and WebSocket upgrades used by HMR.
 
+Known proxy limitation: HTML responses are buffered before Vernier injects the overlay. Server-Sent Events are streamed through, but streaming HTML responses such as React `renderToPipeableStream` will not stream progressively through the Vernier proxy.
+
 Your target app must already be running. If the target app is down, Vernier keeps running and shows a 502 page explaining that the target refused the connection.
 
 Vernier mounts its browser chrome in a Shadow DOM host so app-level CSS resets and component styles do not distort the overlay, and Vernier styles do not leak back into your app.
@@ -95,7 +99,8 @@ Optional defaults can live in `vernier.config.json`:
     "bboxTolerancePx": 2
   },
   "overlay": {
-    "captureFullPage": false
+    "captureFullPage": false,
+    "captureStrategy": "modern-screenshot"
   },
   "agents": {
     "default": "codex"
@@ -104,6 +109,8 @@ Optional defaults can live in `vernier.config.json`:
 ```
 
 Flags win over environment variables, environment variables win over config, and config wins over built-in defaults. Supported environment defaults are `VERNIER_TARGET`, `VERNIER_PORT`, `VERNIER_PORTS`, `VERNIER_AGENT`, and `VERNIER_DEBUG=1`.
+
+Supported overlay screenshot strategies are `html2canvas` and `modern-screenshot`. `html2canvas` remains the default; use `modern-screenshot` when you want the newer DOM-to-canvas renderer.
 
 ## Workflow
 
@@ -131,6 +138,13 @@ Vernier writes:
 .ui-feedback/latest/screenshots/
 ```
 
+Vernier is local-only:
+
+- Screenshots, session JSON, verification artifacts, and replay assets are written to local disk.
+- Vernier does not upload screenshots or session data.
+- `metadata.json` records `localOnly: true` and `networkUploads: false` for exported sessions.
+- The session write endpoint validates payload shape, caps body/screenshot sizes, accepts only safe screenshot filenames, confines writes to the project output directory, and rejects non-local cross-site browser origins.
+
 Annotations store viewport data and normalized relative points so future adapters can re-anchor or replay them across browser sizes.
 
 Screenshots automatically mask password inputs and elements marked with `data-vernier-redact`. Vernier shows a one-time local screenshot warning before the first export. Set `overlay.captureFullPage` to `false` when you want the exported overview screenshot cropped to the current viewport instead of the whole page.
@@ -143,6 +157,8 @@ For non-React apps or compiled frameworks, add `data-vernier-source="src/compone
 
 ```bash
 npm install
+npm test
+npm run lint
 npm run verify:m0
 npm run test:e2e
 npm run test:proxy

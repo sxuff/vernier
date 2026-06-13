@@ -1,5 +1,16 @@
-import type { ElementTarget, ScreenshotArtifact, VernierMeasurement, VernierSuggestion } from "../schema";
-import { getCaptureStrategy, getRedactionSelectors, getScreenshotMaxWidth, getSessionEndpoint, shouldCaptureFullPage } from "./options";
+import type {
+  ElementTarget,
+  ScreenshotArtifact,
+  VernierMeasurement,
+  VernierSuggestion,
+} from "../schema";
+import {
+  getCaptureStrategy,
+  getRedactionSelectors,
+  getScreenshotMaxWidth,
+  getSessionEndpoint,
+  shouldCaptureFullPage,
+} from "./options";
 import { createElementTarget, createViewportTarget } from "./target";
 
 declare const html2canvas: (
@@ -13,7 +24,7 @@ declare const html2canvas: (
     height?: number;
     windowWidth?: number;
     windowHeight?: number;
-  }
+  },
 ) => Promise<HTMLCanvasElement>;
 
 declare const modernScreenshot: {
@@ -25,7 +36,7 @@ declare const modernScreenshot: {
       height?: number;
       scale?: number;
       onCloneNode?: (cloned: Node) => void | Promise<void>;
-    }
+    },
   ): Promise<HTMLCanvasElement>;
 };
 
@@ -64,10 +75,20 @@ interface DraftIssue {
 }
 
 interface SessionController {
-  setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement, suggestions?: VernierSuggestion[]): void;
+  setMeasurementDraft(
+    kind: "single" | "delta",
+    element: Element,
+    measured: string,
+    measurement: VernierMeasurement,
+    suggestions?: VernierSuggestion[],
+  ): void;
   setAnnotationDraft(measured: string, measurement: VernierMeasurement): void;
   addDraftIssue(): Promise<SessionIssue | null>;
-  updateIssueNote(id: number, note: string, label?: string): SessionIssue | null;
+  updateIssueNote(
+    id: number,
+    note: string,
+    label?: string,
+  ): SessionIssue | null;
   deleteIssue(id: number): void;
   clearIssues(): void;
   getIssues(): SessionIssue[];
@@ -76,11 +97,19 @@ interface SessionController {
   exportSession(): Promise<void>;
 }
 
-export function createSessionController(noteInput: HTMLTextAreaElement): SessionController {
+export function createSessionController(
+  noteInput: HTMLTextAreaElement,
+): SessionController {
   const issues: SessionIssue[] = [];
   let draft: DraftIssue | null = null;
 
-  function setMeasurementDraft(kind: "single" | "delta", element: Element, measured: string, measurement: VernierMeasurement, suggestions?: VernierSuggestion[]): void {
+  function setMeasurementDraft(
+    kind: "single" | "delta",
+    element: Element,
+    measured: string,
+    measurement: VernierMeasurement,
+    suggestions?: VernierSuggestion[],
+  ): void {
     const target = createElementTarget(element);
 
     draft = {
@@ -91,11 +120,14 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       target,
       measurement,
       suggestions,
-      screenshotTarget: element
+      screenshotTarget: element,
     };
   }
 
-  function setAnnotationDraft(measured: string, measurement: VernierMeasurement): void {
+  function setAnnotationDraft(
+    measured: string,
+    measurement: VernierMeasurement,
+  ): void {
     draft = {
       kind: "annotation",
       measured,
@@ -103,7 +135,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       source: "unresolved",
       target: createViewportTarget(),
       measurement,
-      screenshotTarget: document.documentElement
+      screenshotTarget: document.documentElement,
     };
   }
 
@@ -115,7 +147,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     const id = issues.length + 1;
     const stableId = createStableId();
     const screenshotName = `issue-${stableId}.png`;
-    const screenshot = await captureScreenshot(draft.screenshotTarget, screenshotName, "element");
+    const screenshot = await captureScreenshot(
+      draft.screenshotTarget,
+      screenshotName,
+      "element",
+    );
     const issue: SessionIssue = {
       id,
       stableId,
@@ -133,8 +169,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       screenshot: screenshot.artifact,
       redaction: {
         autoRedactedElements: screenshot.autoRedactedElements,
-        manualRedaction: draft.measurement.kind === "annotation" && draft.measurement.mode === "redact"
-      }
+        manualRedaction:
+          draft.measurement.kind === "annotation" &&
+          draft.measurement.mode === "redact",
+      },
     };
 
     issues.push(issue);
@@ -148,7 +186,11 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return [...issues];
   }
 
-  function updateIssueNote(id: number, note: string, label?: string): SessionIssue | null {
+  function updateIssueNote(
+    id: number,
+    note: string,
+    label?: string,
+  ): SessionIssue | null {
     const issue = issues.find((candidate) => candidate.id === id);
 
     if (!issue) {
@@ -158,7 +200,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     issue.note = note.trim();
     if (issue.measurement.kind === "annotation") {
       issue.measurement.label = label || undefined;
-      issue.measured = withAnnotationLabel(issue.measured, issue.measurement.label);
+      issue.measured = withAnnotationLabel(
+        issue.measured,
+        issue.measurement.label,
+      );
     }
 
     return issue;
@@ -198,15 +243,15 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
         viewport: {
           width: window.innerWidth,
           height: window.innerHeight,
-          devicePixelRatio: window.devicePixelRatio
+          devicePixelRatio: window.devicePixelRatio,
         },
         createdAt: new Date().toISOString(),
         issueCount: issues.length,
         issues,
         fullPageScreenshotName: fullPageScreenshot.artifact.name,
         fullPageScreenshotDataUrl: fullPageScreenshot.dataUrl,
-        fullPageScreenshot: fullPageScreenshot.artifact
-      })
+        fullPageScreenshot: fullPageScreenshot.artifact,
+      }),
     });
 
     if (!response.ok) {
@@ -232,8 +277,8 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
         "Target:",
         `Selector: ${issue.selector}`,
         `Source: ${issue.source}`,
-        ""
-      ])
+        "",
+      ]),
     ].join("\n");
   }
 
@@ -245,15 +290,19 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       "Run the smallest relevant checks and summarize verification.",
       "",
       createMarkdownPreview().trim(),
-      ""
+      "",
     ].join("\n");
   }
 
   async function captureScreenshot(
     element: Element,
     name: string,
-    kind: ScreenshotArtifact["kind"]
-  ): Promise<{ dataUrl: string; artifact: ScreenshotArtifact; autoRedactedElements: number }> {
+    kind: ScreenshotArtifact["kind"],
+  ): Promise<{
+    dataUrl: string;
+    artifact: ScreenshotArtifact;
+    autoRedactedElements: number;
+  }> {
     const strategy = getCaptureStrategy();
     let canvas: HTMLCanvasElement;
     const autoRedactedElements = countAutoRedactionTargets(element);
@@ -261,22 +310,30 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     try {
       canvas = await captureWithStrategy(strategy, element, kind);
     } catch (error) {
-      throw new Error(`Screenshot capture failed: ${formatCaptureError(error)}`);
+      throw new Error(
+        `Screenshot capture failed: ${formatCaptureError(error)}`,
+      );
     }
 
     const outputCanvas = resizeScreenshotCanvas(canvas);
     const dataUrl = outputCanvas.toDataURL("image/png");
     return {
       dataUrl,
-      artifact: await createScreenshotArtifact(name, kind, strategy, outputCanvas, dataUrl),
-      autoRedactedElements
+      artifact: await createScreenshotArtifact(
+        name,
+        kind,
+        strategy,
+        outputCanvas,
+        dataUrl,
+      ),
+      autoRedactedElements,
     };
   }
 
   async function captureWithStrategy(
     strategy: ScreenshotArtifact["captureStrategy"],
     element: Element,
-    kind: ScreenshotArtifact["kind"]
+    kind: ScreenshotArtifact["kind"],
   ): Promise<HTMLCanvasElement> {
     if (strategy === "modern-screenshot") {
       return modernScreenshot.domToCanvas(element as HTMLElement, {
@@ -287,7 +344,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
           if (cloned instanceof Element && isAutoRedactionTarget(cloned)) {
             redactElement(cloned);
           }
-        }
+        },
       });
     }
 
@@ -300,15 +357,18 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       ...viewportCropOptions(kind),
       onclone(clonedDocument) {
         applyAutoRedaction(clonedDocument);
-      }
+      },
     });
   }
 
-  function modernScreenshotSizeOptions(kind: ScreenshotArtifact["kind"], element: Element): { width?: number; height?: number } {
+  function modernScreenshotSizeOptions(
+    kind: ScreenshotArtifact["kind"],
+    element: Element,
+  ): { width?: number; height?: number } {
     if (kind === "full-page" && !shouldCaptureFullPage()) {
       return {
         width: window.innerWidth,
-        height: window.innerHeight
+        height: window.innerHeight,
       };
     }
 
@@ -319,16 +379,25 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     const rect = element.getBoundingClientRect();
     return {
       width: Math.max(1, Math.round(rect.width)),
-      height: Math.max(1, Math.round(rect.height))
+      height: Math.max(1, Math.round(rect.height)),
     };
   }
 
-  async function captureFullPageScreenshot(): Promise<{ dataUrl: string; artifact: ScreenshotArtifact }> {
+  async function captureFullPageScreenshot(): Promise<{
+    dataUrl: string;
+    artifact: ScreenshotArtifact;
+  }> {
     try {
-      const captured = await captureScreenshot(document.documentElement, "full-page.png", "full-page");
+      const captured = await captureScreenshot(
+        document.documentElement,
+        "full-page.png",
+        "full-page",
+      );
       return { dataUrl: captured.dataUrl, artifact: captured.artifact };
     } catch (error) {
-      throw new Error(`Full-page screenshot capture failed: ${formatCaptureError(error)}`);
+      throw new Error(
+        `Full-page screenshot capture failed: ${formatCaptureError(error)}`,
+      );
     }
   }
 
@@ -350,7 +419,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       width: window.innerWidth,
       height: window.innerHeight,
       windowWidth: window.innerWidth,
-      windowHeight: window.innerHeight
+      windowHeight: window.innerHeight,
     };
   }
 
@@ -359,7 +428,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     kind: ScreenshotArtifact["kind"],
     captureStrategy: ScreenshotArtifact["captureStrategy"],
     canvas: HTMLCanvasElement,
-    dataUrl: string
+    dataUrl: string,
   ): Promise<ScreenshotArtifact> {
     const bytes = dataUrlBytes(dataUrl);
 
@@ -372,7 +441,7 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       captureStrategy,
       mimeType: "image/png",
       byteLength: bytes.byteLength,
-      hash: await sha256(bytes)
+      hash: await sha256(bytes),
     };
   }
 
@@ -388,7 +457,9 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     return bytes;
   }
 
-  function resizeScreenshotCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  function resizeScreenshotCanvas(
+    canvas: HTMLCanvasElement,
+  ): HTMLCanvasElement {
     const maxWidth = getScreenshotMaxWidth();
 
     if (!maxWidth || canvas.width <= maxWidth) {
@@ -415,7 +486,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   async function sha256(bytes: Uint8Array): Promise<string> {
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
-    const digest = await crypto.subtle.digest("SHA-256", copy.buffer as ArrayBuffer);
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      copy.buffer as ArrayBuffer,
+    );
     const hashBytes = Array.from(new Uint8Array(digest));
 
     return `sha256-${hashBytes.map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
@@ -439,13 +513,15 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
       }
     });
 
-    const rootMatches = root instanceof Element && selectors.some((selector) => {
-      try {
-        return root.matches(selector);
-      } catch {
-        return false;
-      }
-    });
+    const rootMatches =
+      root instanceof Element &&
+      selectors.some((selector) => {
+        try {
+          return root.matches(selector);
+        } catch {
+          return false;
+        }
+      });
 
     return rootMatches ? [root, ...targets] : targets;
   }
@@ -469,7 +545,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
   function redactElement(element: Element): void {
     const htmlElement = element as HTMLElement;
 
-    if (htmlElement instanceof HTMLInputElement || htmlElement instanceof HTMLTextAreaElement) {
+    if (
+      htmlElement instanceof HTMLInputElement ||
+      htmlElement instanceof HTMLTextAreaElement
+    ) {
       htmlElement.value = "";
       htmlElement.setAttribute("value", "");
     }
@@ -490,8 +569,13 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     });
   }
 
-  function withAnnotationLabel(measured: string, label: string | undefined): string {
-    const lines = measured.split("\n").filter((line) => !line.startsWith("Label: "));
+  function withAnnotationLabel(
+    measured: string,
+    label: string | undefined,
+  ): string {
+    const lines = measured
+      .split("\n")
+      .filter((line) => !line.startsWith("Label: "));
 
     if (label) {
       lines.splice(1, 0, `Label: ${label}`);
@@ -504,7 +588,10 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     const random = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const length = prefix === "i" ? 6 : 12;
 
-    return `${prefix}-${random.replace(/[^a-zA-Z0-9]/g, "").slice(0, length).toLowerCase()}`;
+    return `${prefix}-${random
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, length)
+      .toLowerCase()}`;
   }
 
   return {
@@ -517,6 +604,6 @@ export function createSessionController(noteInput: HTMLTextAreaElement): Session
     getIssues,
     createMarkdownPreview,
     createAgentPrompt,
-    exportSession
+    exportSession,
   };
 }

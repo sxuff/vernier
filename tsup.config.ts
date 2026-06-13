@@ -8,7 +8,7 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     target: "es2022",
-    external: ["vite"]
+    external: ["vite"],
   },
   {
     entry: ["src/cli.ts"],
@@ -17,6 +17,6 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     target: "es2022",
-    external: ["vite", "playwright"]
-  }
+    external: ["vite", "playwright"],
+  },
 ]);

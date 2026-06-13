@@ -25,10 +25,23 @@ interface StorybookViewport {
 
 export async function captureStorybook(args: string[]): Promise<string> {
   const parsed = parseArgs(args, { valueOptions: storybookValueOptions });
-  const url = parseUrlOption(parsed.option("--url") ?? parsed.positionals()[0] ?? "http://localhost:6006", "Storybook URL");
-  const stories = filterStories(await readStorybookIndex(url), parsed.option("--stories") ?? undefined);
+  const url = parseUrlOption(
+    parsed.option("--url") ??
+      parsed.positionals()[0] ??
+      "http://localhost:6006",
+    "Storybook URL",
+  );
+  const stories = filterStories(
+    await readStorybookIndex(url),
+    parsed.option("--stories") ?? undefined,
+  );
   const viewports = readStorybookViewports(args);
-  const artifactDirectory = path.join(process.cwd(), ".ui-feedback", "storybook", new Date().toISOString().replace(/[:.]/g, "-"));
+  const artifactDirectory = path.join(
+    process.cwd(),
+    ".ui-feedback",
+    "storybook",
+    new Date().toISOString().replace(/[:.]/g, "-"),
+  );
   const screenshotsDirectory = path.join(artifactDirectory, "screenshots");
   const records: Array<{
     id: string;
@@ -47,7 +60,11 @@ export async function captureStorybook(args: string[]): Promise<string> {
   let browser: Browser | null = null;
 
   if (stories.length === 0) {
-    throw new VernierError("VERNIER_NO_STORIES", "No Storybook stories matched.", "Check --stories IDs or the Storybook index.");
+    throw new VernierError(
+      "VERNIER_NO_STORIES",
+      "No Storybook stories matched.",
+      "Check --stories IDs or the Storybook index.",
+    );
   }
 
   await mkdir(screenshotsDirectory, { recursive: true });
@@ -60,16 +77,21 @@ export async function captureStorybook(args: string[]): Promise<string> {
         const page = await browser.newPage({
           viewport: {
             width: viewport.width,
-            height: viewport.height
+            height: viewport.height,
           },
-          deviceScaleFactor: viewport.devicePixelRatio
+          deviceScaleFactor: viewport.devicePixelRatio,
         });
 
         try {
           const storyUrl = createStoryUrl(url, story.id);
-          const response = await page.goto(storyUrl, { waitUntil: "networkidle" });
+          const response = await page.goto(storyUrl, {
+            waitUntil: "networkidle",
+          });
           const screenshotName = `${slugify(story.id)}-${viewportArtifactName(viewport)}.png`;
-          await page.screenshot({ path: path.join(screenshotsDirectory, screenshotName), fullPage: true });
+          await page.screenshot({
+            path: path.join(screenshotsDirectory, screenshotName),
+            fullPage: true,
+          });
           records.push({
             id: story.id,
             title: story.title,
@@ -81,7 +103,7 @@ export async function captureStorybook(args: string[]): Promise<string> {
             viewport,
             screenshotName,
             status: response?.status() ?? null,
-            pageTitle: await page.title()
+            pageTitle: await page.title(),
           });
         } finally {
           await page.close();
@@ -99,7 +121,7 @@ export async function captureStorybook(args: string[]): Promise<string> {
     `Storybook: ${url.toString()}`,
     `Stories: ${stories.map((story) => story.id).join(", ")}`,
     `Viewports: ${viewports.map(formatViewport).join(", ")}`,
-    `Artifacts: ${artifactDirectory}`
+    `Artifacts: ${artifactDirectory}`,
   ].join("\n");
 }
 
@@ -116,12 +138,20 @@ async function readStorybookIndex(url: URL): Promise<StorybookStory[]> {
     return parseStorybookIndex(await response.json());
   }
 
-  throw new VernierError("VERNIER_STORYBOOK_INDEX", `Could not read Storybook index from ${url.toString()}`, "Start Storybook and confirm /index.json or /stories.json is reachable.");
+  throw new VernierError(
+    "VERNIER_STORYBOOK_INDEX",
+    `Could not read Storybook index from ${url.toString()}`,
+    "Start Storybook and confirm /index.json or /stories.json is reachable.",
+  );
 }
 
 function parseStorybookIndex(value: unknown): StorybookStory[] {
   const record = isRecord(value) ? value : {};
-  const entries = isRecord(record.entries) ? Object.values(record.entries) : isRecord(record.stories) ? Object.values(record.stories) : [];
+  const entries = isRecord(record.entries)
+    ? Object.values(record.entries)
+    : isRecord(record.stories)
+      ? Object.values(record.stories)
+      : [];
 
   return entries
     .filter(isRecord)
@@ -130,27 +160,48 @@ function parseStorybookIndex(value: unknown): StorybookStory[] {
       title: typeof entry.title === "string" ? entry.title : "Untitled",
       name: typeof entry.name === "string" ? entry.name : "Default",
       type: typeof entry.type === "string" ? entry.type : undefined,
-      importPath: typeof entry.importPath === "string" ? entry.importPath : undefined,
-      tags: Array.isArray(entry.tags) ? entry.tags.filter((tag): tag is string => typeof tag === "string") : []
+      importPath:
+        typeof entry.importPath === "string" ? entry.importPath : undefined,
+      tags: Array.isArray(entry.tags)
+        ? entry.tags.filter((tag): tag is string => typeof tag === "string")
+        : [],
     }))
     .filter((story) => story.id && (!story.type || story.type === "story"));
 }
 
-function filterStories(stories: StorybookStory[], selectedIds: string | undefined): StorybookStory[] {
+function filterStories(
+  stories: StorybookStory[],
+  selectedIds: string | undefined,
+): StorybookStory[] {
   if (!selectedIds) {
     return stories;
   }
 
-  const selected = new Set(selectedIds.split(",").map((id) => id.trim()).filter(Boolean));
+  const selected = new Set(
+    selectedIds
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
   return stories.filter((story) => selected.has(story.id));
 }
 
 function readStorybookViewports(args: string[]): StorybookViewport[] {
-  const value = parseArgs(args, { valueOptions: storybookValueOptions }).option("--viewports") ?? "desktop";
-  const viewports = value.split(",").map((item) => parseViewport(item.trim())).filter((item): item is StorybookViewport => item !== null);
+  const value =
+    parseArgs(args, { valueOptions: storybookValueOptions }).option(
+      "--viewports",
+    ) ?? "desktop";
+  const viewports = value
+    .split(",")
+    .map((item) => parseViewport(item.trim()))
+    .filter((item): item is StorybookViewport => item !== null);
 
   if (viewports.length === 0) {
-    throw new VernierError("VERNIER_INVALID_OPTION", `Invalid --viewports value: ${value}`, "Use names like mobile,tablet,desktop or sizes like 390x844,1440x900@2.");
+    throw new VernierError(
+      "VERNIER_INVALID_OPTION",
+      `Invalid --viewports value: ${value}`,
+      "Use names like mobile,tablet,desktop or sizes like 390x844,1440x900@2.",
+    );
   }
 
   return viewports;
@@ -179,7 +230,14 @@ function parseViewport(value: string): StorybookViewport | null {
   const height = Number(match[2]);
   const devicePixelRatio = match[3] ? Number(match[3]) : 1;
 
-  if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(devicePixelRatio) || width <= 0 || height <= 0 || devicePixelRatio <= 0) {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    !Number.isFinite(devicePixelRatio) ||
+    width <= 0 ||
+    height <= 0 ||
+    devicePixelRatio <= 0
+  ) {
     return null;
   }
 
@@ -208,38 +266,51 @@ async function writeStorybookReport(
     screenshotName: string;
     status: number | null;
     pageTitle: string;
-  }>
+  }>,
 ): Promise<void> {
   const report = {
     createdAt: new Date().toISOString(),
     storybookUrl,
     screenshotCount: records.length,
-    records
+    records,
   };
 
-  await writeFile(path.join(artifactDirectory, "storybook.json"), `${JSON.stringify(report, null, 2)}\n`);
-  await writeFile(path.join(artifactDirectory, "storybook.md"), `${[
-    "# Vernier Storybook Capture",
-    "",
-    `Storybook: ${storybookUrl}`,
-    `Screenshot count: ${records.length}`,
-    "",
-    ...records.map((record) => [
-      `## ${record.title} / ${record.name}`,
-      `Story ID: ${record.id}`,
-      `URL: ${record.url}`,
-      `Status: ${record.status ?? "unknown"}`,
-      `Viewport: ${formatViewport(record.viewport)}`,
-      record.importPath ? `Import path: ${record.importPath}` : null,
-      record.tags.length > 0 ? `Tags: ${record.tags.join(", ")}` : null,
-      `Screenshot: ./screenshots/${record.screenshotName}`,
-      ""
-    ].filter((line): line is string => line !== null).join("\n"))
-  ].join("\n")}\n`);
+  await writeFile(
+    path.join(artifactDirectory, "storybook.json"),
+    `${JSON.stringify(report, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(artifactDirectory, "storybook.md"),
+    `${[
+      "# Vernier Storybook Capture",
+      "",
+      `Storybook: ${storybookUrl}`,
+      `Screenshot count: ${records.length}`,
+      "",
+      ...records.map((record) =>
+        [
+          `## ${record.title} / ${record.name}`,
+          `Story ID: ${record.id}`,
+          `URL: ${record.url}`,
+          `Status: ${record.status ?? "unknown"}`,
+          `Viewport: ${formatViewport(record.viewport)}`,
+          record.importPath ? `Import path: ${record.importPath}` : null,
+          record.tags.length > 0 ? `Tags: ${record.tags.join(", ")}` : null,
+          `Screenshot: ./screenshots/${record.screenshotName}`,
+          "",
+        ]
+          .filter((line): line is string => line !== null)
+          .join("\n"),
+      ),
+    ].join("\n")}\n`,
+  );
 }
 
 function viewportArtifactName(viewport: StorybookViewport): string {
-  return `${viewport.label}-${viewport.width}x${viewport.height}@${viewport.devicePixelRatio}x`.replace(/[^a-zA-Z0-9@._-]/g, "-");
+  return `${viewport.label}-${viewport.width}x${viewport.height}@${viewport.devicePixelRatio}x`.replace(
+    /[^a-zA-Z0-9@._-]/g,
+    "-",
+  );
 }
 
 function formatViewport(viewport: StorybookViewport): string {
@@ -247,7 +318,12 @@ function formatViewport(viewport: StorybookViewport): string {
 }
 
 function slugify(value: string): string {
-  return value.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "story";
+  return (
+    value
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || "story"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

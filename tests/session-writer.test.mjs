@@ -1,7 +1,7 @@
-import { mkdtemp, readFile, readdir, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { writeSession, resolveFeedbackDirectory } from "../dist/index.js";
+import { resolveFeedbackDirectory, writeSession } from "../dist/index.js";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "vernier-session-writer-"));
 const createdAt = "2026-06-11T12:34:56.789Z";
@@ -12,33 +12,97 @@ const second = createSession("s-testsession2", "i-testissue2", createdAt);
 const firstDirectory = await writeSession(root, first);
 const secondDirectory = await writeSession(root, second);
 
-assert(firstDirectory !== secondDirectory, "same-route sessions should write to unique directories");
-await assertFile(path.join(firstDirectory, "session.json"), "first session should not be overwritten");
-await assertFile(path.join(secondDirectory, "session.json"), "second session should be written");
+assert(
+  firstDirectory !== secondDirectory,
+  "same-route sessions should write to unique directories",
+);
+await assertFile(
+  path.join(firstDirectory, "session.json"),
+  "first session should not be overwritten",
+);
+await assertFile(
+  path.join(secondDirectory, "session.json"),
+  "second session should be written",
+);
 
 const sessions = await readdir(path.join(root, ".ui-feedback", "sessions"));
-assert(sessions.length === 2, `expected two session directories, got ${sessions.length}`);
+assert(
+  sessions.length === 2,
+  `expected two session directories, got ${sessions.length}`,
+);
 
-const latestSession = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "session.json"), "utf8"));
-assert(latestSession.sessionId === second.sessionId, "latest should point at the newest session");
-assert(!("fullPageScreenshotDataUrl" in latestSession), "session.json should not embed the full-page screenshot data URL");
-assert(!("screenshotDataUrl" in latestSession.issues[0]), "session.json should not embed issue screenshot data URLs");
+const latestSession = JSON.parse(
+  await readFile(
+    path.join(root, ".ui-feedback", "latest", "session.json"),
+    "utf8",
+  ),
+);
+assert(
+  latestSession.sessionId === second.sessionId,
+  "latest should point at the newest session",
+);
+assert(
+  !("fullPageScreenshotDataUrl" in latestSession),
+  "session.json should not embed the full-page screenshot data URL",
+);
+assert(
+  !("screenshotDataUrl" in latestSession.issues[0]),
+  "session.json should not embed issue screenshot data URLs",
+);
 
-const latestMetadata = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest.json"), "utf8"));
-assert(latestMetadata.kind === "junction" || latestMetadata.kind === "copy", "latest metadata should record link strategy");
-assert(latestMetadata.target.startsWith("sessions"), "latest metadata target should be relative to .ui-feedback");
+const latestMetadata = JSON.parse(
+  await readFile(path.join(root, ".ui-feedback", "latest.json"), "utf8"),
+);
+assert(
+  latestMetadata.kind === "junction" || latestMetadata.kind === "copy",
+  "latest metadata should record link strategy",
+);
+assert(
+  latestMetadata.target.startsWith("sessions"),
+  "latest metadata target should be relative to .ui-feedback",
+);
 
-const markdown = await readFile(path.join(root, ".ui-feedback", "latest", "session.md"), "utf8");
-assert(markdown.includes("Schema version: 1"), "markdown should include schema version");
-assert(markdown.includes(`Session ID: ${second.sessionId}`), "markdown should include session id");
+const markdown = await readFile(
+  path.join(root, ".ui-feedback", "latest", "session.md"),
+  "utf8",
+);
+assert(
+  markdown.includes("Schema version: 1"),
+  "markdown should include schema version",
+);
+assert(
+  markdown.includes(`Session ID: ${second.sessionId}`),
+  "markdown should include session id",
+);
 
-const inventory = JSON.parse(await readFile(path.join(root, ".ui-feedback", "latest", "screenshots.json"), "utf8"));
-assert(inventory.length === 2, "screenshot inventory should include full-page and issue screenshots");
+const inventory = JSON.parse(
+  await readFile(
+    path.join(root, ".ui-feedback", "latest", "screenshots.json"),
+    "utf8",
+  ),
+);
+assert(
+  inventory.length === 2,
+  "screenshot inventory should include full-page and issue screenshots",
+);
 
-const customDirectory = await writeSession(root, createSession("s-customsession", "i-customissue", createdAt), { outDir: ".vernier-feedback" });
-assert(customDirectory.includes(".vernier-feedback"), "custom outDir should be used for session writes");
-await assertFile(path.join(root, ".vernier-feedback", "latest", "session.json"), "custom outDir should have a latest session");
-assertStructuredError(() => resolveFeedbackDirectory(root, "../escape"), "VERNIER_INVALID_CONFIG");
+const customDirectory = await writeSession(
+  root,
+  createSession("s-customsession", "i-customissue", createdAt),
+  { outDir: ".vernier-feedback" },
+);
+assert(
+  customDirectory.includes(".vernier-feedback"),
+  "custom outDir should be used for session writes",
+);
+await assertFile(
+  path.join(root, ".vernier-feedback", "latest", "session.json"),
+  "custom outDir should have a latest session",
+);
+assertStructuredError(
+  () => resolveFeedbackDirectory(root, "../escape"),
+  "VERNIER_INVALID_CONFIG",
+);
 
 console.log("session writer verified");
 
@@ -66,8 +130,16 @@ function assertStructuredError(action, code) {
 
 function createSession(sessionId, issueId, timestamp) {
   const png = "data:image/png;base64,iVBORw0KGgo=";
-  const issueScreenshot = createScreenshotArtifact("issue-1.png", "element", png);
-  const fullPageScreenshot = createScreenshotArtifact("full-page.png", "full-page", png);
+  const issueScreenshot = createScreenshotArtifact(
+    "issue-1.png",
+    "element",
+    png,
+  );
+  const fullPageScreenshot = createScreenshotArtifact(
+    "full-page.png",
+    "full-page",
+    png,
+  );
 
   return {
     schemaVersion: 1,
@@ -78,7 +150,7 @@ function createSession(sessionId, issueId, timestamp) {
     viewport: {
       width: 1280,
       height: 720,
-      devicePixelRatio: 1
+      devicePixelRatio: 1,
     },
     createdAt: timestamp,
     issueCount: 1,
@@ -100,18 +172,18 @@ function createSession(sessionId, issueId, timestamp) {
           sourceConfidence: "low",
           sourceResolver: "fallback-dom",
           ownerChain: [],
-          ancestry: []
+          ancestry: [],
         },
         note: "session writer fixture",
         createdAt: timestamp,
         screenshotName: "issue-1.png",
         screenshotDataUrl: png,
-        screenshot: issueScreenshot
-      }
+        screenshot: issueScreenshot,
+      },
     ],
     fullPageScreenshotName: "full-page.png",
     fullPageScreenshotDataUrl: png,
-    fullPageScreenshot
+    fullPageScreenshot,
   };
 }
 
@@ -125,6 +197,6 @@ function createScreenshotArtifact(name, kind, dataUrl) {
     captureStrategy: "html2canvas",
     mimeType: "image/png",
     byteLength: Buffer.byteLength(dataUrl.split(",")[1], "base64"),
-    hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000"
+    hash: "sha256-0000000000000000000000000000000000000000000000000000000000000000",
   };
 }

@@ -9,7 +9,10 @@ export interface PickerOptions {
   signal?: AbortSignal;
 }
 
-export function createPicker(root: HTMLElement, options: PickerOptions): Picker {
+export function createPicker(
+  root: HTMLElement,
+  options: PickerOptions,
+): Picker {
   let hoveredElement: Element | null = null;
   let frozenElement: Element | null = null;
   let anchorElement: Element | null = null;
@@ -31,12 +34,21 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
   label.style.borderRadius = "4px";
   label.style.background = "#1f6feb";
   label.style.color = "#ffffff";
-  label.style.font = "600 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace";
+  label.style.font =
+    "600 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace";
   label.style.pointerEvents = "none";
   label.hidden = true;
 
-  const anchorHighlight = createBox("vernierAnchorHighlight", "#ff8a00", "rgba(255, 138, 0, 0.08)");
-  const targetHighlight = createBox("vernierTargetHighlight", "#1f6feb", "rgba(31, 111, 235, 0.08)");
+  const anchorHighlight = createBox(
+    "vernierAnchorHighlight",
+    "#ff8a00",
+    "rgba(255, 138, 0, 0.08)",
+  );
+  const targetHighlight = createBox(
+    "vernierTargetHighlight",
+    "#1f6feb",
+    "rgba(31, 111, 235, 0.08)",
+  );
   const guideLayer = document.createElement("div");
   guideLayer.dataset.vernierGuideLayer = "true";
   guideLayer.hidden = true;
@@ -56,7 +68,12 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     const rootNode = root.getRootNode();
     const host = rootNode instanceof ShadowRoot ? rootNode.host : null;
 
-    return element === null || element === root || root.contains(element) || element === host;
+    return (
+      element === null ||
+      element === root ||
+      root.contains(element) ||
+      element === host
+    );
   }
 
   function getCandidate(event: MouseEvent): Element | null {
@@ -130,7 +147,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
         renderGuides(anchorElement, candidate);
       }
     },
-    { capture: true, signal: options.signal }
+    { capture: true, signal: options.signal },
   );
 
   window.addEventListener(
@@ -168,7 +185,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
       event.preventDefault();
       event.stopImmediatePropagation();
     },
-    { capture: true, signal: options.signal }
+    { capture: true, signal: options.signal },
   );
 
   window.addEventListener(
@@ -181,7 +198,7 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
       event.preventDefault();
       clear();
     },
-    { capture: true, signal: options.signal }
+    { capture: true, signal: options.signal },
   );
 
   return { clear, destroy };
@@ -195,7 +212,11 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     guideLayer.remove();
   }
 
-  function createBox(dataKey: string, color: string, background: string): HTMLDivElement {
+  function createBox(
+    dataKey: string,
+    color: string,
+    background: string,
+  ): HTMLDivElement {
     const box = document.createElement("div");
     box.dataset[dataKey] = "true";
     box.hidden = true;
@@ -240,11 +261,21 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     element.style.height = `${rect.height}px`;
   }
 
-  function drawEdgeGuide(x: number, rect: DOMRect, labelText: string, color: string): void {
+  function drawEdgeGuide(
+    x: number,
+    rect: DOMRect,
+    labelText: string,
+    color: string,
+  ): void {
     const top = Math.max(0, rect.top - 18);
     const height = rect.height + 36;
     const line = createGuideLine(x, top, 0, height, color, "dashed");
-    const marker = createGuideLabel(labelText, x + 4, Math.max(0, rect.top - 18), color);
+    const marker = createGuideLabel(
+      labelText,
+      x + 4,
+      Math.max(0, rect.top - 18),
+      color,
+    );
 
     line.dataset.vernierAlignmentGuide = "edge";
     guideLayer.append(line, marker);
@@ -257,17 +288,35 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     const minTop = Math.min(referenceRect.top, targetRect.top);
     const maxBottom = Math.max(referenceRect.bottom, targetRect.bottom);
     const color = Math.abs(delta) <= 1 ? "#18a058" : "#8b5cf6";
-    const line = createGuideLine(targetCenter, minTop, 0, maxBottom - minTop, color, "solid");
-    const labelElement = createGuideLabel(`center ${formatSigned(delta)}px`, targetCenter + 6, Math.max(0, minTop - 22), color);
+    const line = createGuideLine(
+      targetCenter,
+      minTop,
+      0,
+      maxBottom - minTop,
+      color,
+      "solid",
+    );
+    const labelElement = createGuideLabel(
+      `center ${formatSigned(delta)}px`,
+      targetCenter + 6,
+      Math.max(0, minTop - 22),
+      color,
+    );
 
     line.dataset.vernierAlignmentGuide = "center";
     guideLayer.append(line, labelElement);
   }
 
-  function drawHorizontalRuler(referenceRect: DOMRect, targetRect: DOMRect): void {
+  function drawHorizontalRuler(
+    referenceRect: DOMRect,
+    targetRect: DOMRect,
+  ): void {
     const referenceRight = referenceRect.right;
     const targetLeft = targetRect.left;
-    const y = Math.min(window.innerHeight - 18, Math.max(18, Math.min(referenceRect.bottom, targetRect.bottom) + 14));
+    const y = Math.min(
+      window.innerHeight - 18,
+      Math.max(18, Math.min(referenceRect.bottom, targetRect.bottom) + 14),
+    );
     const gap = Math.round(targetLeft - referenceRight);
     const start = gap >= 0 ? referenceRight : referenceRect.left;
     const end = gap >= 0 ? targetLeft : targetRect.left;
@@ -277,14 +326,31 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
 
     const line = createGuideLine(left, y, width, 0, color, "solid");
     line.dataset.vernierRuler = "horizontal";
-    guideLayer.append(line, createRulerCap(left, y, "vertical", color), createRulerCap(left + width, y, "vertical", color));
-    guideLayer.append(createGuideLabel(`gap ${formatSigned(gap)}px`, left + width / 2, y + 6, color));
+    guideLayer.append(
+      line,
+      createRulerCap(left, y, "vertical", color),
+      createRulerCap(left + width, y, "vertical", color),
+    );
+    guideLayer.append(
+      createGuideLabel(
+        `gap ${formatSigned(gap)}px`,
+        left + width / 2,
+        y + 6,
+        color,
+      ),
+    );
   }
 
-  function drawVerticalRuler(referenceRect: DOMRect, targetRect: DOMRect): void {
+  function drawVerticalRuler(
+    referenceRect: DOMRect,
+    targetRect: DOMRect,
+  ): void {
     const referenceBottom = referenceRect.bottom;
     const targetTop = targetRect.top;
-    const x = Math.min(window.innerWidth - 80, Math.max(18, Math.max(referenceRect.right, targetRect.right) + 14));
+    const x = Math.min(
+      window.innerWidth - 80,
+      Math.max(18, Math.max(referenceRect.right, targetRect.right) + 14),
+    );
     const gap = Math.round(targetTop - referenceBottom);
     const start = gap >= 0 ? referenceBottom : referenceRect.top;
     const end = gap >= 0 ? targetTop : targetRect.top;
@@ -294,11 +360,29 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
 
     const line = createGuideLine(x, top, 0, height, color, "solid");
     line.dataset.vernierRuler = "vertical";
-    guideLayer.append(line, createRulerCap(x, top, "horizontal", color), createRulerCap(x, top + height, "horizontal", color));
-    guideLayer.append(createGuideLabel(`gap ${formatSigned(gap)}px`, x + 8, top + height / 2, color));
+    guideLayer.append(
+      line,
+      createRulerCap(x, top, "horizontal", color),
+      createRulerCap(x, top + height, "horizontal", color),
+    );
+    guideLayer.append(
+      createGuideLabel(
+        `gap ${formatSigned(gap)}px`,
+        x + 8,
+        top + height / 2,
+        color,
+      ),
+    );
   }
 
-  function createGuideLine(x: number, y: number, width: number, height: number, color: string, style: "solid" | "dashed"): HTMLDivElement {
+  function createGuideLine(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string,
+    style: "solid" | "dashed",
+  ): HTMLDivElement {
     const line = document.createElement("div");
     line.style.position = "fixed";
     line.style.left = `${x}px`;
@@ -316,18 +400,28 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     return line;
   }
 
-  function createRulerCap(x: number, y: number, direction: "horizontal" | "vertical", color: string): HTMLDivElement {
+  function createRulerCap(
+    x: number,
+    y: number,
+    direction: "horizontal" | "vertical",
+    color: string,
+  ): HTMLDivElement {
     return createGuideLine(
       direction === "horizontal" ? x - 5 : x,
       direction === "horizontal" ? y : y - 5,
       direction === "horizontal" ? 10 : 1,
       direction === "horizontal" ? 1 : 10,
       color,
-      "solid"
+      "solid",
     );
   }
 
-  function createGuideLabel(text: string, x: number, y: number, color: string): HTMLDivElement {
+  function createGuideLabel(
+    text: string,
+    x: number,
+    y: number,
+    color: string,
+  ): HTMLDivElement {
     const labelElement = document.createElement("div");
     labelElement.dataset.vernierGuideLabel = text;
     labelElement.textContent = text;
@@ -340,7 +434,8 @@ export function createPicker(root: HTMLElement, options: PickerOptions): Picker 
     labelElement.style.borderRadius = "4px";
     labelElement.style.background = color;
     labelElement.style.color = "#ffffff";
-    labelElement.style.font = "700 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace";
+    labelElement.style.font =
+      "700 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace";
     labelElement.style.whiteSpace = "nowrap";
     labelElement.style.boxShadow = "0 1px 4px rgba(23, 32, 51, 0.22)";
     labelElement.style.pointerEvents = "none";

@@ -1,4 +1,14 @@
-import type { AuthoredStyleHint, BoundingBox, DeltaMeasurement, DesignTokenHint, LayoutContext, SingleMeasurement, StackingContext, TextMetrics, VernierSuggestion } from "../schema";
+import type {
+  AuthoredStyleHint,
+  BoundingBox,
+  DeltaMeasurement,
+  DesignTokenHint,
+  LayoutContext,
+  SingleMeasurement,
+  StackingContext,
+  TextMetrics,
+  VernierSuggestion,
+} from "../schema";
 import { getStylePropertyNames } from "./options";
 import { getStableSelector } from "./selector";
 import { getSourceLocation } from "./source";
@@ -25,7 +35,7 @@ export function measureElement(element: Element): MeasurementDraft {
     `Selector: ${selector}`,
     `Source: ${source}`,
     `Bbox: x=${formatNumber(rect.x)}, y=${formatNumber(rect.y)}, w=${formatNumber(rect.width)}, h=${formatNumber(rect.height)}`,
-    "Styles:"
+    "Styles:",
   ];
 
   for (const property of stylePropertyNames()) {
@@ -45,25 +55,31 @@ export function measureElement(element: Element): MeasurementDraft {
     designTokenHints: designTokenHints(computedStyle),
     layoutContext: layoutContext(element),
     textMetrics: textMetrics(element),
-    stackingContext: stackingContext(element)
+    stackingContext: stackingContext(element),
   };
   const suggestions = createElementSuggestions(element, measurement);
 
   if (suggestions.length > 0) {
     lines.push(
       "Suggestions:",
-      ...suggestions.map((suggestion) => `  [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`)
+      ...suggestions.map(
+        (suggestion) =>
+          `  [${suggestion.severity}] ${suggestion.type}: ${suggestion.message} Expected ${suggestion.expected}; actual ${suggestion.actual}.`,
+      ),
     );
   }
 
   return {
     text: lines.join("\n"),
     measurement,
-    suggestions
+    suggestions,
   };
 }
 
-export function measureDelta(firstElement: Element, secondElement: Element): MeasurementDraft {
+export function measureDelta(
+  firstElement: Element,
+  secondElement: Element,
+): MeasurementDraft {
   const firstTarget = createElementTarget(firstElement);
   const secondTarget = createElementTarget(secondElement);
   const firstRect = firstElement.getBoundingClientRect();
@@ -74,7 +90,11 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
   const topDelta = roundNumber(secondRect.top - firstRect.top);
   const widthDelta = roundNumber(secondRect.width - firstRect.width);
   const heightDelta = roundNumber(secondRect.height - firstRect.height);
-  const centerDelta = roundNumber((secondRect.left + secondRect.width / 2) - (firstRect.left + firstRect.width / 2));
+  const centerDelta = roundNumber(
+    secondRect.left +
+      secondRect.width / 2 -
+      (firstRect.left + firstRect.width / 2),
+  );
   const horizontalGap = roundNumber(secondRect.left - firstRect.right);
   const verticalGap = roundNumber(secondRect.top - firstRect.bottom);
   const firstColor = toHexColor(firstStyles.color);
@@ -97,7 +117,7 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
       `Vertical gap: ${formatSigned(verticalGap)}px`,
       `Color delta: ${firstColor} -> ${secondColor}`,
       `Background delta: ${firstBackground} -> ${secondBackground}`,
-      `Font-size delta: ${firstFontSize} -> ${secondFontSize}`
+      `Font-size delta: ${firstFontSize} -> ${secondFontSize}`,
     ].join("\n"),
     measurement: {
       kind: "delta",
@@ -112,7 +132,7 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         height: heightDelta,
         color: [firstColor, secondColor],
         backgroundColor: [firstBackground, secondBackground],
-        fontSize: [firstFontSize, secondFontSize]
+        fontSize: [firstFontSize, secondFontSize],
       },
       alignment: {
         leftAligned: Math.abs(leftDelta) <= 1,
@@ -120,18 +140,18 @@ export function measureDelta(firstElement: Element, secondElement: Element): Mea
         centerAligned: Math.abs(centerDelta) <= 1,
         centerDelta,
         horizontalGap,
-        verticalGap
+        verticalGap,
       },
       layoutContext: layoutContext(secondElement),
       classHints: classHints(secondElement),
       designTokenHints: designTokenHints({
         color: secondColor,
         "background-color": secondBackground,
-        "font-size": secondFontSize
+        "font-size": secondFontSize,
       }),
       textMetrics: textMetrics(secondElement),
-      stackingContext: stackingContext(secondElement)
-    }
+      stackingContext: stackingContext(secondElement),
+    },
   };
 }
 
@@ -144,11 +164,13 @@ export function boundingBox(rect: DOMRect): BoundingBox {
     top: roundNumber(rect.top),
     right: roundNumber(rect.right),
     bottom: roundNumber(rect.bottom),
-    left: roundNumber(rect.left)
+    left: roundNumber(rect.left),
   };
 }
 
-export function pickComputedStyles(styles: CSSStyleDeclaration): Record<string, string> {
+export function pickComputedStyles(
+  styles: CSSStyleDeclaration,
+): Record<string, string> {
   const result: Record<string, string> = {};
 
   for (const property of stylePropertyNames()) {
@@ -158,7 +180,9 @@ export function pickComputedStyles(styles: CSSStyleDeclaration): Record<string, 
   return result;
 }
 
-export function inlineStyle(element: Element): Record<string, string> | undefined {
+export function inlineStyle(
+  element: Element,
+): Record<string, string> | undefined {
   if (!(element instanceof HTMLElement) || element.style.length === 0) {
     return undefined;
   }
@@ -173,7 +197,10 @@ export function inlineStyle(element: Element): Record<string, string> | undefine
   return result;
 }
 
-export function authoredStyleHints(element: Element, properties: string[]): AuthoredStyleHint[] {
+export function authoredStyleHints(
+  element: Element,
+  properties: string[],
+): AuthoredStyleHint[] {
   const hints: AuthoredStyleHint[] = [];
 
   for (const sheet of Array.from(document.styleSheets)) {
@@ -206,7 +233,7 @@ export function authoredStyleHints(element: Element, properties: string[]): Auth
             selector: rule.selectorText,
             property,
             value,
-            source: sheet.href ?? "inline stylesheet"
+            source: sheet.href ?? "inline stylesheet",
           });
         }
       }
@@ -218,14 +245,21 @@ export function authoredStyleHints(element: Element, properties: string[]): Auth
 
 export function classHints(element: Element): string[] {
   return Array.from(element.classList)
-    .filter((className) =>
-      /^(bg|text|border|ring|fill|stroke|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap|rounded|w|h|min-w|min-h|max-w|max-h|font|leading|tracking|shadow|grid|flex|items|justify|content|self|col|row)-/.test(className) ||
-      /^(btn|button|card|panel|surface|token|color|space|radius|size)-/.test(className)
+    .filter(
+      (className) =>
+        /^(bg|text|border|ring|fill|stroke|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap|rounded|w|h|min-w|min-h|max-w|max-h|font|leading|tracking|shadow|grid|flex|items|justify|content|self|col|row)-/.test(
+          className,
+        ) ||
+        /^(btn|button|card|panel|surface|token|color|space|radius|size)-/.test(
+          className,
+        ),
     )
     .slice(0, 24);
 }
 
-export function designTokenHints(computedStyle: Record<string, string>): DesignTokenHint[] {
+export function designTokenHints(
+  computedStyle: Record<string, string>,
+): DesignTokenHint[] {
   const tokens = cssVariableTokens();
   const hints: DesignTokenHint[] = [];
 
@@ -238,7 +272,7 @@ export function designTokenHints(computedStyle: Record<string, string>): DesignT
         computed,
         token: best.token,
         value: best.value,
-        distance: best.distance
+        distance: best.distance,
       });
     }
   }
@@ -275,7 +309,10 @@ export function cssVariableTokens(): Array<{ token: string; value: string }> {
     .map(([token, value]) => ({ token, value }));
 }
 
-export function collectRuleTokens(rules: CSSRuleList, tokens: Map<string, string>): void {
+export function collectRuleTokens(
+  rules: CSSRuleList,
+  tokens: Map<string, string>,
+): void {
   for (const rule of Array.from(rules)) {
     if (rule instanceof CSSStyleRule) {
       for (let index = 0; index < rule.style.length; index += 1) {
@@ -296,7 +333,10 @@ export function collectRuleTokens(rules: CSSRuleList, tokens: Map<string, string
   }
 }
 
-export function nearestToken(computed: string, tokens: Array<{ token: string; value: string }>): { token: string; value: string; distance: number } | null {
+export function nearestToken(
+  computed: string,
+  tokens: Array<{ token: string; value: string }>,
+): { token: string; value: string; distance: number } | null {
   let best: { token: string; value: string; distance: number } | null = null;
 
   for (const token of tokens) {
@@ -319,11 +359,13 @@ export function tokenDistance(left: string, right: string): number | null {
   const rightColor = parseColor(right);
 
   if (leftColor && rightColor) {
-    return Math.round(Math.sqrt(
-      (leftColor.red - rightColor.red) ** 2 +
-      (leftColor.green - rightColor.green) ** 2 +
-      (leftColor.blue - rightColor.blue) ** 2
-    ));
+    return Math.round(
+      Math.sqrt(
+        (leftColor.red - rightColor.red) ** 2 +
+          (leftColor.green - rightColor.green) ** 2 +
+          (leftColor.blue - rightColor.blue) ** 2,
+      ),
+    );
   }
 
   const leftPx = parsePixelValue(left);
@@ -341,7 +383,9 @@ export function parsePixelValue(value: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-export function parseColor(value: string): { red: number; green: number; blue: number } | null {
+export function parseColor(
+  value: string,
+): { red: number; green: number; blue: number } | null {
   const normalized = value.trim().toLowerCase();
   const hex = normalized.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/);
 
@@ -349,11 +393,13 @@ export function parseColor(value: string): { red: number; green: number; blue: n
     return {
       red: Number.parseInt(hex[1]!.slice(0, 2), 16),
       green: Number.parseInt(hex[1]!.slice(2, 4), 16),
-      blue: Number.parseInt(hex[1]!.slice(4, 6), 16)
+      blue: Number.parseInt(hex[1]!.slice(4, 6), 16),
     };
   }
 
-  const rgb = normalized.match(/^rgba?\((\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:\s*\/\s*([.\d]+%?)|,\s*([.\d]+))?\)$/);
+  const rgb = normalized.match(
+    /^rgba?\((\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:\s*\/\s*([.\d]+%?)|,\s*([.\d]+))?\)$/,
+  );
 
   if (!rgb) {
     return null;
@@ -362,7 +408,7 @@ export function parseColor(value: string): { red: number; green: number; blue: n
   return {
     red: Number(rgb[1]),
     green: Number(rgb[2]),
-    blue: Number(rgb[3])
+    blue: Number(rgb[3]),
   };
 }
 
@@ -380,11 +426,13 @@ export function layoutContext(element: Element): LayoutContext {
     gridTemplateColumns: parentStyles?.gridTemplateColumns,
     flexDirection: parentStyles?.flexDirection,
     nearestSiblingDistance: nearestSiblingDistance(element),
-    overflow: overflowContext(element)
+    overflow: overflowContext(element),
   };
 }
 
-export function nearestSiblingDistance(element: Element): LayoutContext["nearestSiblingDistance"] {
+export function nearestSiblingDistance(
+  element: Element,
+): LayoutContext["nearestSiblingDistance"] {
   const rect = element.getBoundingClientRect();
   const distances: NonNullable<LayoutContext["nearestSiblingDistance"]> = {};
 
@@ -396,16 +444,25 @@ export function nearestSiblingDistance(element: Element): LayoutContext["nearest
     const siblingRect = sibling.getBoundingClientRect();
 
     if (siblingRect.right <= rect.left) {
-      distances.left = minDistance(distances.left, rect.left - siblingRect.right);
+      distances.left = minDistance(
+        distances.left,
+        rect.left - siblingRect.right,
+      );
     }
     if (siblingRect.left >= rect.right) {
-      distances.right = minDistance(distances.right, siblingRect.left - rect.right);
+      distances.right = minDistance(
+        distances.right,
+        siblingRect.left - rect.right,
+      );
     }
     if (siblingRect.bottom <= rect.top) {
       distances.top = minDistance(distances.top, rect.top - siblingRect.bottom);
     }
     if (siblingRect.top >= rect.bottom) {
-      distances.bottom = minDistance(distances.bottom, siblingRect.top - rect.bottom);
+      distances.bottom = minDistance(
+        distances.bottom,
+        siblingRect.top - rect.bottom,
+      );
     }
   }
 
@@ -427,10 +484,14 @@ export function overflowContext(element: Element): LayoutContext["overflow"] {
     y: parentStyles?.overflowY ?? "visible",
     clippedByParent: Boolean(
       clipsOverflow &&
-      parentRect &&
-      (rect.left < parentRect.left || rect.right > parentRect.right || rect.top < parentRect.top || rect.bottom > parentRect.bottom)
+        parentRect &&
+        (rect.left < parentRect.left ||
+          rect.right > parentRect.right ||
+          rect.top < parentRect.top ||
+          rect.bottom > parentRect.bottom),
     ),
-    horizontalPageScroll: document.documentElement.scrollWidth > window.innerWidth
+    horizontalPageScroll:
+      document.documentElement.scrollWidth > window.innerWidth,
   };
 }
 
@@ -442,9 +503,13 @@ export function textMetrics(element: Element): TextMetrics | undefined {
   const styles = window.getComputedStyle(element);
   const lineHeight = styles.lineHeight;
   const lineHeightPixels = parsePixelValue(lineHeight);
-  const renderedLineCount = lineHeightPixels && lineHeightPixels > 0
-    ? Math.max(1, Math.round(element.getBoundingClientRect().height / lineHeightPixels))
-    : undefined;
+  const renderedLineCount =
+    lineHeightPixels && lineHeightPixels > 0
+      ? Math.max(
+          1,
+          Math.round(element.getBoundingClientRect().height / lineHeightPixels),
+        )
+      : undefined;
 
   return {
     fontFamily: styles.fontFamily,
@@ -455,7 +520,7 @@ export function textMetrics(element: Element): TextMetrics | undefined {
     textTransform: styles.textTransform,
     textOverflow: styles.textOverflow,
     whiteSpace: styles.whiteSpace,
-    renderedLineCount
+    renderedLineCount,
   };
 }
 
@@ -468,11 +533,13 @@ export function stackingContext(element: Element): StackingContext {
     opacity: styles.opacity,
     transform: styles.transform,
     isolation: styles.isolation,
-    stackingAncestors: stackingAncestors(element)
+    stackingAncestors: stackingAncestors(element),
   };
 }
 
-export function stackingAncestors(element: Element): StackingContext["stackingAncestors"] {
+export function stackingAncestors(
+  element: Element,
+): StackingContext["stackingAncestors"] {
   const ancestors: StackingContext["stackingAncestors"] = [];
   let current = element.parentElement;
 
@@ -486,7 +553,7 @@ export function stackingAncestors(element: Element): StackingContext["stackingAn
         zIndex: styles.zIndex,
         opacity: styles.opacity,
         transform: styles.transform,
-        isolation: styles.isolation
+        isolation: styles.isolation,
       });
     }
 
@@ -498,7 +565,8 @@ export function stackingAncestors(element: Element): StackingContext["stackingAn
 
 export function createsStackingContext(styles: CSSStyleDeclaration): boolean {
   return (
-    (styles.position === "fixed" || styles.position === "sticky") ||
+    styles.position === "fixed" ||
+    styles.position === "sticky" ||
     (styles.position !== "static" && styles.zIndex !== "auto") ||
     Number(styles.opacity) < 1 ||
     styles.transform !== "none" ||
@@ -507,11 +575,19 @@ export function createsStackingContext(styles: CSSStyleDeclaration): boolean {
     styles.mixBlendMode !== "normal" ||
     styles.isolation === "isolate" ||
     styles.contain.includes("paint") ||
-    styles.willChange.split(",").map((value) => value.trim()).some((value) => ["transform", "opacity", "filter", "perspective"].includes(value))
+    styles.willChange
+      .split(",")
+      .map((value) => value.trim())
+      .some((value) =>
+        ["transform", "opacity", "filter", "perspective"].includes(value),
+      )
   );
 }
 
-export function minDistance(current: number | undefined, candidate: number): number {
+export function minDistance(
+  current: number | undefined,
+  candidate: number,
+): number {
   const rounded = roundNumber(candidate);
   return current === undefined ? rounded : Math.min(current, rounded);
 }
@@ -536,10 +612,12 @@ export function accessibleName(element: Element): string | undefined {
     }
   }
 
-  return (element as HTMLElement).getAttribute?.("aria-label") ??
+  return (
+    (element as HTMLElement).getAttribute?.("aria-label") ??
     (element as HTMLElement).getAttribute?.("alt") ??
     (element as HTMLElement).getAttribute?.("title") ??
-    textSummary(element);
+    textSummary(element)
+  );
 }
 
 export function formatNumber(value: number): string {
@@ -557,7 +635,11 @@ export function roundNumber(value: number): number {
 }
 
 export function toHexColor(value: string): string {
-  const match = value.trim().match(/^rgba?\(\s*(\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:(?:\s*\/\s*|,\s*)([.\d]+%?))?\s*\)$/);
+  const match = value
+    .trim()
+    .match(
+      /^rgba?\(\s*(\d+)(?:,\s*|\s+)(\d+)(?:,\s*|\s+)(\d+)(?:(?:\s*\/\s*|,\s*)([.\d]+%?))?\s*\)$/,
+    );
 
   if (!match) {
     return value;

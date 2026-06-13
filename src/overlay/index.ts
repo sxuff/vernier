@@ -3,7 +3,12 @@ import { measureDelta, measureElement } from "./measure";
 import { matchesOverlayHotkey } from "./options";
 import { createPicker } from "./picker";
 import { createSessionController } from "./session";
-import { createOverlayRoot, renderIssueList, renderMeasurementPanel, setButtonEnabled } from "./ui";
+import {
+  createOverlayRoot,
+  renderIssueList,
+  renderMeasurementPanel,
+  setButtonEnabled,
+} from "./ui";
 
 export function startVernierOverlay(): void {
   if (document.querySelector("[data-vernier-host]")) {
@@ -23,8 +28,12 @@ export function startVernierOverlay(): void {
   let selectedIssueId: number | null = null;
   let exportWarningAcknowledged = hasAcknowledgedExportWarning();
 
-  window.addEventListener("pagehide", () => teardownController.abort(), { once: true });
-  teardownController.signal.addEventListener("abort", () => host.remove(), { once: true });
+  window.addEventListener("pagehide", () => teardownController.abort(), {
+    once: true,
+  });
+  teardownController.signal.addEventListener("abort", () => host.remove(), {
+    once: true,
+  });
   updateControls();
   const annotation = createAnnotationLayer(overlay.root, {
     signal: teardownController.signal,
@@ -34,20 +43,31 @@ export function startVernierOverlay(): void {
     onDraft(measured, measurement) {
       renderMeasurementPanel(overlay.panel, measured);
       session.setAnnotationDraft(measured, measurement);
-    }
+    },
   });
   const picker = createPicker(overlay.root, {
     signal: teardownController.signal,
     onSelect(element) {
       const measurement = measureElement(element);
       renderMeasurementPanel(overlay.panel, measurement.text);
-      session.setMeasurementDraft("single", element, measurement.text, measurement.measurement, measurement.suggestions);
+      session.setMeasurementDraft(
+        "single",
+        element,
+        measurement.text,
+        measurement.measurement,
+        measurement.suggestions,
+      );
     },
     onCompare(firstElement, secondElement) {
       const measurement = measureDelta(firstElement, secondElement);
       renderMeasurementPanel(overlay.panel, measurement.text);
-      session.setMeasurementDraft("delta", secondElement, measurement.text, measurement.measurement);
-    }
+      session.setMeasurementDraft(
+        "delta",
+        secondElement,
+        measurement.text,
+        measurement.measurement,
+      );
+    },
   });
   shadowRoot.append(overlay.root);
   document.documentElement.append(host);
@@ -70,12 +90,17 @@ export function startVernierOverlay(): void {
         annotation.clear();
         picker.clear();
         selectedIssueId = issue.id;
-        renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
+        renderIssueList(
+          overlay.issueList,
+          session.getIssues(),
+          selectedIssueId,
+        );
         updateControls();
         overlay.status.textContent = `Added issue ${issue.id}`;
       })
       .catch((error: unknown) => {
-        overlay.status.textContent = error instanceof Error ? error.message : "Add failed";
+        overlay.status.textContent =
+          error instanceof Error ? error.message : "Add failed";
       });
   });
 
@@ -87,7 +112,9 @@ export function startVernierOverlay(): void {
     }
 
     const issueId = Number(target.dataset.vernierIssueId);
-    const issue = session.getIssues().find((candidate) => candidate.id === issueId);
+    const issue = session
+      .getIssues()
+      .find((candidate) => candidate.id === issueId);
 
     if (!issue) {
       return;
@@ -95,7 +122,10 @@ export function startVernierOverlay(): void {
 
     selectedIssueId = issue.id;
     overlay.noteInput.value = issue.note;
-    overlay.annotationLabelSelect.value = issue.measurement.kind === "annotation" ? issue.measurement.label ?? "" : "";
+    overlay.annotationLabelSelect.value =
+      issue.measurement.kind === "annotation"
+        ? (issue.measurement.label ?? "")
+        : "";
     renderMeasurementPanel(overlay.panel, issue.measured);
     renderIssueList(overlay.issueList, session.getIssues(), selectedIssueId);
     updateControls();
@@ -108,8 +138,14 @@ export function startVernierOverlay(): void {
       return;
     }
 
-    const issue = session.updateIssueNote(selectedIssueId, overlay.noteInput.value, overlay.annotationLabelSelect.value);
-    overlay.status.textContent = issue ? `Saved issue ${issue.id}` : "Selected issue no longer exists";
+    const issue = session.updateIssueNote(
+      selectedIssueId,
+      overlay.noteInput.value,
+      overlay.annotationLabelSelect.value,
+    );
+    overlay.status.textContent = issue
+      ? `Saved issue ${issue.id}`
+      : "Selected issue no longer exists";
   });
 
   overlay.deleteIssueButton.addEventListener("click", () => {
@@ -145,7 +181,8 @@ export function startVernierOverlay(): void {
     if (!exportWarningAcknowledged) {
       exportWarningAcknowledged = true;
       rememberExportWarning();
-      overlay.status.textContent = "Vernier will save local screenshots under .ui-feedback. Review sensitive data before committing.";
+      overlay.status.textContent =
+        "Vernier will save local screenshots under .ui-feedback. Review sensitive data before committing.";
       overlay.exportButton.textContent = "Export anyway";
       return;
     }
@@ -158,7 +195,8 @@ export function startVernierOverlay(): void {
         overlay.exportButton.textContent = "Export";
       })
       .catch((error: unknown) => {
-        overlay.status.textContent = error instanceof Error ? error.message : "Export failed";
+        overlay.status.textContent =
+          error instanceof Error ? error.message : "Export failed";
       });
   });
 
@@ -184,14 +222,18 @@ export function startVernierOverlay(): void {
     setActive(overlay.root.hidden);
   }
 
-  window.addEventListener("keydown", (event) => {
-    if (!matchesOverlayHotkey(event)) {
-      return;
-    }
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!matchesOverlayHotkey(event)) {
+        return;
+      }
 
-    event.preventDefault();
-    toggle();
-  }, { signal: teardownController.signal });
+      event.preventDefault();
+      toggle();
+    },
+    { signal: teardownController.signal },
+  );
 
   console.info("[vernier] active");
 
@@ -239,7 +281,10 @@ export function startVernierOverlay(): void {
 
   function hasAcknowledgedExportWarning(): boolean {
     try {
-      return window.localStorage.getItem("vernierExportWarningAcknowledged") === "true";
+      return (
+        window.localStorage.getItem("vernierExportWarningAcknowledged") ===
+        "true"
+      );
     } catch {
       return false;
     }

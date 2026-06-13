@@ -44,7 +44,8 @@ export function createOverlayRoot(): OverlayRoot {
   toolbar.style.background = "var(--vernier-surface)";
   toolbar.style.color = "var(--vernier-text)";
   toolbar.style.boxShadow = "var(--vernier-shadow)";
-  toolbar.style.font = "600 13px/1.2 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  toolbar.style.font =
+    "600 13px/1.2 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   toolbar.style.pointerEvents = "auto";
 
   const indicator = document.createElement("span");
@@ -70,7 +71,7 @@ export function createOverlayRoot(): OverlayRoot {
     ["measure", "Measure"],
     ["pen", "Pen"],
     ["box", "Box"],
-    ["redact", "Redact"]
+    ["redact", "Redact"],
   ]) {
     const option = document.createElement("option");
     option.value = value;
@@ -94,7 +95,8 @@ export function createOverlayRoot(): OverlayRoot {
   panel.style.background = "var(--vernier-surface)";
   panel.style.color = "var(--vernier-text)";
   panel.style.boxShadow = "var(--vernier-shadow)";
-  panel.style.font = "12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace";
+  panel.style.font =
+    "12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace";
   panel.style.pointerEvents = "auto";
 
   const panelContent = document.createElement("pre");
@@ -130,7 +132,7 @@ export function createOverlayRoot(): OverlayRoot {
     ["wrong-color", "Wrong color"],
     ["misaligned", "Misaligned"],
     ["broken-mobile", "Broken mobile"],
-    ["missing-hover", "Missing hover"]
+    ["missing-hover", "Missing hover"],
   ]) {
     const option = document.createElement("option");
     option.value = value;
@@ -149,11 +151,21 @@ export function createOverlayRoot(): OverlayRoot {
   addIssueButton.style.borderRadius = "6px";
   addIssueButton.style.background = "var(--vernier-button)";
   addIssueButton.style.color = "var(--vernier-text)";
-  addIssueButton.style.font = "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  addIssueButton.style.font =
+    "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-  const saveIssueButton = createPanelButton("Save selected", "vernierSaveIssue");
-  const deleteIssueButton = createPanelButton("Delete selected", "vernierDeleteIssue");
-  const clearIssuesButton = createPanelButton("Clear all", "vernierClearIssues");
+  const saveIssueButton = createPanelButton(
+    "Save selected",
+    "vernierSaveIssue",
+  );
+  const deleteIssueButton = createPanelButton(
+    "Delete selected",
+    "vernierDeleteIssue",
+  );
+  const clearIssuesButton = createPanelButton(
+    "Clear all",
+    "vernierClearIssues",
+  );
 
   const exportButton = document.createElement("button");
   exportButton.dataset.vernierExport = "true";
@@ -165,10 +177,17 @@ export function createOverlayRoot(): OverlayRoot {
   exportButton.style.borderRadius = "6px";
   exportButton.style.background = "#172033";
   exportButton.style.color = "#ffffff";
-  exportButton.style.font = "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  exportButton.style.font =
+    "600 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-  const copyPromptButton = createPanelButton("Copy prompt", "vernierCopyPrompt");
-  const copyMarkdownButton = createPanelButton("Copy markdown", "vernierCopyMarkdown");
+  const copyPromptButton = createPanelButton(
+    "Copy prompt",
+    "vernierCopyPrompt",
+  );
+  const copyMarkdownButton = createPanelButton(
+    "Copy markdown",
+    "vernierCopyMarkdown",
+  );
 
   const copyFallback = document.createElement("textarea");
   copyFallback.dataset.vernierCopyFallback = "true";
@@ -178,7 +197,8 @@ export function createOverlayRoot(): OverlayRoot {
   copyFallback.style.width = "100%";
   copyFallback.style.margin = "8px 0 0";
   copyFallback.style.resize = "vertical";
-  copyFallback.style.font = "12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace";
+  copyFallback.style.font =
+    "12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace";
   copyFallback.style.border = "1px solid var(--vernier-border)";
   copyFallback.style.borderRadius = "6px";
   copyFallback.style.background = "var(--vernier-input)";
@@ -189,7 +209,8 @@ export function createOverlayRoot(): OverlayRoot {
   issueList.style.margin = "0 0 12px 18px";
   issueList.style.padding = "0";
   issueList.style.color = "var(--vernier-muted)";
-  issueList.style.font = "12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  issueList.style.font =
+    "12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
   const status = document.createElement("div");
   status.dataset.vernierStatus = "true";
@@ -221,7 +242,7 @@ export function createOverlayRoot(): OverlayRoot {
     exportButton,
     handoffActions,
     status,
-    copyFallback
+    copyFallback,
   );
   toolbar.append(indicator, label, modeSelect);
   root.append(themeStyle, toolbar, panel);
@@ -243,7 +264,7 @@ export function createOverlayRoot(): OverlayRoot {
     copyMarkdownButton,
     copyFallback,
     issueList,
-    status
+    status,
   };
 
   function createPanelButton(text: string, dataKey: string): HTMLButtonElement {
@@ -258,19 +279,26 @@ export function createOverlayRoot(): OverlayRoot {
     button.style.borderRadius = "6px";
     button.style.background = "var(--vernier-input)";
     button.style.color = "var(--vernier-text)";
-    button.style.font = "600 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    button.style.font =
+      "600 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
     return button;
   }
 }
 
-export function setButtonEnabled(button: HTMLButtonElement, enabled: boolean): void {
+export function setButtonEnabled(
+  button: HTMLButtonElement,
+  enabled: boolean,
+): void {
   button.disabled = !enabled;
   button.style.opacity = enabled ? "1" : "0.48";
   button.style.cursor = enabled ? "pointer" : "not-allowed";
 }
 
-export function renderMeasurementPanel(panel: HTMLElement, measurement: string): void {
+export function renderMeasurementPanel(
+  panel: HTMLElement,
+  measurement: string,
+): void {
   panel.hidden = false;
   const content = panel.querySelector("[data-vernier-panel-content]");
 
@@ -282,7 +310,7 @@ export function renderMeasurementPanel(panel: HTMLElement, measurement: string):
 export function renderIssueList(
   list: HTMLElement,
   issues: Array<{ id: number; kind: string; selector: string }>,
-  selectedIssueId: number | null
+  selectedIssueId: number | null,
 ): void {
   list.textContent = "";
   list.dataset.vernierIssueCount = String(issues.length);
@@ -296,12 +324,19 @@ export function renderIssueList(
     button.style.width = "100%";
     button.style.margin = "0 0 6px";
     button.style.padding = "6px";
-    button.style.border = issue.id === selectedIssueId ? "1px solid #1f6feb" : "1px solid var(--vernier-border)";
+    button.style.border =
+      issue.id === selectedIssueId
+        ? "1px solid #1f6feb"
+        : "1px solid var(--vernier-border)";
     button.style.borderRadius = "6px";
-    button.style.background = issue.id === selectedIssueId ? "var(--vernier-selected)" : "var(--vernier-input)";
+    button.style.background =
+      issue.id === selectedIssueId
+        ? "var(--vernier-selected)"
+        : "var(--vernier-input)";
     button.style.color = "var(--vernier-text)";
     button.style.textAlign = "left";
-    button.style.font = "12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    button.style.font =
+      "12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     item.style.listStyle = "none";
     item.append(button);
     list.append(item);
